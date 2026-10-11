@@ -1,7 +1,7 @@
 # Shipyard for macOS, as a Homebrew cask. This repository is its own tap:
 #
-#   brew tap cosscom/shipyard https://github.com/cosscom/shipyard
-#   brew install --cask cosscom/shipyard/shipyard
+#   brew tap tinhthanh/shipyard https://github.com/tinhthanh/shipyard
+#   brew install --cask tinhthanh/shipyard/shipyard
 #
 # The dmg's name carries no version and the app updates itself (Restart to
 # update), so the cask follows releases/latest and has nothing to bump at
@@ -11,7 +11,7 @@ cask "shipyard" do
   version :latest
   sha256 :no_check
 
-  url "https://github.com/cosscom/shipyard/releases/latest/download/Berth-macos-universal.dmg"
+  url "https://github.com/tinhthanh/shipyard/releases/latest/download/Berth-macos-universal.dmg"
   name "Shipyard"
   desc "Run coding agents on your dev boxes"
   homepage "https://www.berthd.app/"

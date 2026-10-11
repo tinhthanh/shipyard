@@ -15,7 +15,7 @@
 # Every download is checked against the release's checksums.txt before it
 # runs. If the release (or the version asked for) doesn't exist, it says
 # so, and prints how to install berthd over SSH from a source build instead.
-# Source: https://github.com/cosscom/shipyard/blob/main/site/install.sh
+# Source: https://github.com/tinhthanh/shipyard/blob/main/site/install.sh
 #
 # Options (or the environment variable after each):
 #   --version vX.Y.Z   a release instead of the latest      BERTH_VERSION
@@ -37,7 +37,7 @@
 # otherwise stops, saying the command to run.
 set -eu
 
-repo="cosscom/shipyard"
+repo="tinhthanh/shipyard"
 version=${BERTH_VERSION:-latest}
 listen=${BERTHD_LISTEN:-}
 pair=1

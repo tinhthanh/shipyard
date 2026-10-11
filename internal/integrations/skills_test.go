@@ -210,29 +210,18 @@ func TestProjectSkillInstallRefusesSymlinks(t *testing.T) {
 	}
 }
 
-// GitHub drops berth:// links from a PR's description, so the berth skill
-// has agents add the Review in Shipyard button, which goes through the site,
-// between the markers berthd looks for.
-func TestTheBerthSkillAddsTheReviewButton(t *testing.T) {
+// This fork keeps PR descriptions free of links through berthd.app: the
+// review button's bounce page is the upstream author's site, so the berth
+// skill must not have agents add it.
+func TestTheBerthSkillAddsNoReviewButton(t *testing.T) {
 	b, err := SkillContent("berth")
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(b)
-	for _, want := range []string{
-		"[![Review in Shipyard](https://berthd.app/badges/review.svg)](https://berthd.app/review?repo=OWNER/NAME&pr=N&as=EMAIL&path=/x)",
-		"<!-- shipyard-review-button -->",
-		"<!-- /shipyard-review-button -->",
-		"berthd login users",
-		"berthd review-button --as EMAIL --path /x",
-		"URL-encode",
-		"never a secret",
-	} {
-		if !strings.Contains(s, want) {
-			t.Errorf("the berth skill does not say %q", want)
+	for _, unwanted := range []string{"berthd.app", "shipyard-review-button", ": berth://review?"} {
+		if strings.Contains(s, unwanted) {
+			t.Errorf("the berth skill still mentions %q", unwanted)
 		}
-	}
-	if strings.Contains(s, ": berth://review?") {
-		t.Error("the berth skill still has agents paste a bare berth:// link, which GitHub drops")
 	}
 }

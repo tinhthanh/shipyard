@@ -21,7 +21,7 @@ export const IS_MAC = !IS_LINUX;
 // The Linux app is an alpha: it says so beside its name.
 export const LINUX_ALPHA = IS_LINUX;
 
-export const LINUX_BUGS = "https://github.com/cosscom/shipyard/issues/new?labels=linux&title=Linux%3A+";
+export const LINUX_BUGS = "https://github.com/tinhthanh/shipyard/issues/new?labels=linux&title=Linux%3A+";
 
 // How the Linux app's keys meet a terminal's (hooks/use-shortcuts.ts).
 export const LINUX_TERMINAL_KEYS =

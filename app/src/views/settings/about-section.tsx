@@ -112,7 +112,7 @@ function HelpGroup() {
   );
 }
 
-const RELEASES = "https://github.com/cosscom/shipyard/releases";
+const RELEASES = "https://github.com/tinhthanh/shipyard/releases";
 
 // UpdatesGroup says where the app's own updates stand. Shipyard checks when it
 // opens and every few hours, and downloads quietly; the only step left to
