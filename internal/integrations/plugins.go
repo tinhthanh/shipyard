@@ -65,13 +65,39 @@ type PluginSetup struct {
 	Label string `json:"label,omitempty"`
 }
 
+// PluginSettings are switches the person sets for a plugin's tools in the
+// app, such as which Chrome profiles agents may use. The plugin lists them,
+// with their current values, from one of its pinned MCP binaries; berth
+// keeps the values outside the plugin's folder, so changing one needs no new
+// review and survives updates. The binary reads them from the file named by
+// $BERTH_PLUGIN_SETTINGS.
+type PluginSettings struct {
+	// Server names the MCP server whose binary lists the settings.
+	Server string `json:"server"`
+	// List are the args that print {"settings": [PluginSetting...]}.
+	List []string `json:"list"`
+	// Label heads the settings in the app.
+	Label string `json:"label,omitempty"`
+}
+
+// PluginSetting is one switch a plugin lists.
+type PluginSetting struct {
+	Key         string `json:"key"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Value       bool   `json:"value"`
+	// Warning, when set, is shown before the person turns the switch on.
+	Warning string `json:"warning,omitempty"`
+}
+
 // PluginTools is what an allowed plugin gives agents.
 type PluginTools struct {
-	ID     string
-	Dir    string
-	MCP    map[string]PluginMCPServer
-	Skills map[string]PluginSkill
-	Setup  *PluginSetup
+	ID       string
+	Dir      string
+	MCP      map[string]PluginMCPServer
+	Skills   map[string]PluginSkill
+	Setup    *PluginSetup
+	Settings *PluginSettings
 }
 
 // pluginToolName is the shape of plugin ids, server and skill names: they
@@ -106,9 +132,10 @@ func readPluginTools(dir string) (PluginTools, error) {
 		return t, err
 	}
 	var m struct {
-		MCP    map[string]PluginMCPServer `json:"mcp"`
-		Skills map[string]PluginSkill     `json:"skills"`
-		Setup  *PluginSetup               `json:"setup"`
+		MCP      map[string]PluginMCPServer `json:"mcp"`
+		Skills   map[string]PluginSkill     `json:"skills"`
+		Setup    *PluginSetup               `json:"setup"`
+		Settings *PluginSettings            `json:"settings"`
 	}
 	if err := json.Unmarshal(b, &m); err != nil {
 		return t, fmt.Errorf("plugin %s: %s: %w", id, hooks.PluginManifest, err)
@@ -131,7 +158,15 @@ func readPluginTools(dir string) (PluginTools, error) {
 			return t, fmt.Errorf("plugin %s: setup names MCP server %q, which the plugin does not ship", id, m.Setup.Server)
 		}
 	}
-	t.MCP, t.Skills, t.Setup = m.MCP, m.Skills, m.Setup
+	if m.Settings != nil {
+		if _, ok := m.MCP[m.Settings.Server]; !ok {
+			return t, fmt.Errorf("plugin %s: settings name MCP server %q, which the plugin does not ship", id, m.Settings.Server)
+		}
+		if len(m.Settings.List) == 0 {
+			return t, fmt.Errorf("plugin %s: settings need list args", id)
+		}
+	}
+	t.MCP, t.Skills, t.Setup, t.Settings = m.MCP, m.Skills, m.Setup, m.Settings
 	return t, nil
 }
 
@@ -491,8 +526,93 @@ func pluginSetupCommand(pluginsDir, plugin string) (string, *PluginSetup, string
 func pluginCommand(ctx context.Context, exe, dir string, args []string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, exe, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "BERTH_PLUGIN_DIR="+dir)
+	cmd.Env = PluginEnv(dir)
 	return cmd
+}
+
+// PluginEnv is the environment a plugin's binaries run with: this process's,
+// plus the plugin's folder and its settings file.
+func PluginEnv(dir string) []string {
+	return append(os.Environ(), "BERTH_PLUGIN_DIR="+dir, "BERTH_PLUGIN_SETTINGS="+PluginSettingsPath(filepath.Dir(dir), filepath.Base(dir)))
+}
+
+// PluginSettingsPath is where berth keeps a plugin's setting values: beside
+// the plugins folder (~/.berth/plugin-settings/<id>.json), so updating or
+// replacing the plugin keeps them.
+func PluginSettingsPath(pluginsDir, plugin string) string {
+	return filepath.Join(filepath.Dir(pluginsDir), "plugin-settings", plugin+".json")
+}
+
+// ErrNoSettings is returned for a plugin that has no settings.
+var ErrNoSettings = errors.New("this plugin has no settings")
+
+// ListPluginSettings asks the plugin for its settings and their values.
+func ListPluginSettings(ctx context.Context, pluginsDir, plugin string) (*PluginSettings, []PluginSetting, error) {
+	if !pluginToolName.MatchString(plugin) {
+		return nil, nil, fmt.Errorf("bad plugin name")
+	}
+	t, err := readPluginTools(filepath.Join(pluginsDir, plugin))
+	if err != nil {
+		return nil, nil, err
+	}
+	if t.Settings == nil {
+		return nil, nil, ErrNoSettings
+	}
+	exe, _, dir, err := PluginMCPCommand(pluginsDir, plugin, t.Settings.Server)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := pluginCommand(ctx, exe, dir, t.Settings.List).Output()
+	if err != nil {
+		return nil, nil, fmt.Errorf("the plugin could not list its settings: %w", err)
+	}
+	var report struct {
+		Settings []PluginSetting `json:"settings"`
+	}
+	if err := json.Unmarshal(out, &report); err != nil {
+		return nil, nil, errors.New("the plugin's settings list is not JSON")
+	}
+	return t.Settings, report.Settings, nil
+}
+
+// SetPluginSetting turns one of a plugin's listed settings on or off.
+func SetPluginSetting(ctx context.Context, pluginsDir, plugin, key string, value bool) error {
+	_, list, err := ListPluginSettings(ctx, pluginsDir, plugin)
+	if err != nil {
+		return err
+	}
+	known := false
+	for _, s := range list {
+		known = known || s.Key == key
+	}
+	if !known {
+		return fmt.Errorf("the plugin has no setting %q", key)
+	}
+	path := PluginSettingsPath(pluginsDir, plugin)
+	doc := struct {
+		Values map[string]bool `json:"values"`
+	}{}
+	if b, err := os.ReadFile(path); err == nil {
+		_ = json.Unmarshal(b, &doc)
+	}
+	if doc.Values == nil {
+		doc.Values = map[string]bool{}
+	}
+	doc.Values[key] = value
+	b, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // PluginSetupState is what the app shows for a plugin's setup.

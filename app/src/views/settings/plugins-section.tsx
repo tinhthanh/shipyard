@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toastManager } from "@/components/ui/toast";
-import { laptopApi, type PluginInfo, type PluginSetupState } from "@/lib/api";
+import { laptopApi, type PluginInfo, type PluginSetting, type PluginSettingsState, type PluginSetupState } from "@/lib/api";
 import { plainError } from "@/lib/errors";
 import { errorMessage } from "@/lib/format";
 import { openDocs } from "@/lib/open-url";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { askToAllow } from "@/plugins/consent";
 import { builtinPlugins, loadPlugins } from "@/plugins/host";
 import { useRegistry } from "@/plugins/registry";
+import { ConfirmDialog } from "@/views/settings/confirm";
 import { Code, SettingsGroup, SettingsPage } from "@/views/settings/rows";
 import { Tip } from "@/components/tip";
 
@@ -89,6 +90,8 @@ export function PluginsSection() {
 function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; status?: { state: string; error?: string }; onChanged(): void }) {
   // Never on until you allow it, and off again when it changes.
   const enabled = p.enabled === true;
+  // Bumped when a setting changes, so the setup row checks again.
+  const [settingsChanges, setSettingsChanges] = useState(0);
   const review = !enabled && (p.changed || status?.state === "review");
   // The agent counts a plugin's hooks; older builds listed them.
   const hooks = Array.isArray(p.hooks) ? p.hooks.length : typeof p.hooks === "number" ? (p.hooks as number) : 0;
@@ -106,7 +109,8 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
         {p.description && <div className="mt-0.5 text-muted-foreground text-xs">{p.description}</div>}
         <Contributions plugin={p.id} />
         <AgentTools plugin={p} />
-        {enabled && p.setup && <PluginSetupRow plugin={p} />}
+        {enabled && p.setup && <PluginSetupRow key={settingsChanges} plugin={p} />}
+        {enabled && p.settings && <PluginSettingsRows plugin={p} onChanged={() => setSettingsChanges((n) => n + 1)} />}
         <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/80">
           {p.id}
           {hooks > 0 && ` · ${hooks} hook${hooks === 1 ? "" : "s"}`}
@@ -245,6 +249,87 @@ function PluginSetupRow({ plugin: p }: { plugin: PluginInfo }) {
         Set up…
       </Button>
       {(error || state?.error) && <ErrorText className="text-destructive-foreground text-xs" text={error ?? state?.error ?? ""} />}
+    </div>
+  );
+}
+
+// PluginSettingsRows lists the switches a plugin offers for its tools, such
+// as which Chrome profiles agents may use. Turning on one that carries a
+// warning asks first.
+function PluginSettingsRows({ plugin: p, onChanged }: { plugin: PluginInfo; onChanged(): void }) {
+  const [state, setState] = useState<PluginSettingsState>();
+  const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState<string>();
+  const [confirming, setConfirming] = useState<PluginSetting>();
+  const load = useCallback(async () => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    try {
+      setState(await laptopApi.pluginSettings(client, p.id));
+      setError(undefined);
+    } catch (err) {
+      setError(plainError(err));
+    }
+  }, [p.id]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  const set = async (s: PluginSetting, value: boolean) => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    setBusy(s.key);
+    try {
+      setState(await laptopApi.setPluginSetting(client, p.id, s.key, value));
+      setError(undefined);
+      // Something just turned on may need its one-time step (the Chrome
+      // plugin opens the steps in a profile that lacks its extension).
+      if (value && p.setup) await laptopApi.startPluginSetup(client, p.id);
+      onChanged();
+    } catch (err) {
+      setError(plainError(err));
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  if (!state && !error) return null;
+  return (
+    <div className="mt-2 rounded-md border">
+      <div className="flex items-center gap-2 border-b px-3 py-1.5 text-muted-foreground text-xs">
+        <span className="flex-1">{state?.label || p.settings?.label || "Settings"}</span>
+        <Button size="xs" variant="ghost" aria-label="Check again" onClick={() => void load()}>
+          <RefreshCwIcon />
+        </Button>
+      </div>
+      {state?.settings.length === 0 && <div className="px-3 py-2 text-muted-foreground text-xs">Nothing to set yet.</div>}
+      {state?.settings.map((s) => (
+        <div key={s.key} className="flex items-center gap-3 px-3 py-1.5">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs">{s.label}</div>
+            {s.description && <div className="text-muted-foreground text-[11px]">{s.description}</div>}
+          </div>
+          <Switch
+            checked={s.value}
+            disabled={busy === s.key}
+            aria-label={`${s.value ? "Turn off" : "Turn on"} ${s.label}`}
+            onCheckedChange={(on) => {
+              if (on && s.warning) setConfirming(s);
+              else void set(s, on);
+            }}
+          />
+        </div>
+      ))}
+      {error && <ErrorText className="px-3 py-1.5 text-destructive-foreground text-xs" text={error} />}
+      <ConfirmDialog
+        open={!!confirming}
+        onOpenChange={(open) => !open && setConfirming(undefined)}
+        title={`Turn on ${confirming?.label ?? ""}?`}
+        description={confirming?.warning ?? ""}
+        confirm="Turn on"
+        destructive
+        onConfirm={async () => {
+          if (confirming) await set(confirming, true);
+        }}
+      />
     </div>
   );
 }

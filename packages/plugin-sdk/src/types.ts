@@ -492,6 +492,8 @@ export interface PluginInfo {
   skills?: string[];
   // A one-time step its tools need on this computer, such as macOS permissions.
   setup?: { label?: string };
+  // Switches for its tools, set in Settings → Plugins.
+  settings?: { label?: string };
   // Ships inside the app (plugins/ in the repository) rather than
   // ~/.berth/plugins; a user plugin with the same id replaces it.
   builtin?: boolean;

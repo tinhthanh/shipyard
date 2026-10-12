@@ -497,8 +497,11 @@ type PluginInfo struct {
 	Skills []string `json:"skills,omitempty"`
 	// Setup is the one-time step its tools need on this computer, if any
 	// (GET and POST /v1/plugins/{id}/setup).
-	Setup   *PluginSetupInfo `json:"setup,omitempty"`
-	Enabled bool             `json:"enabled"`
+	Setup *PluginSetupInfo `json:"setup,omitempty"`
+	// Settings are switches for its tools (GET and PUT
+	// /v1/plugins/{id}/settings), if it has any.
+	Settings *PluginSetupInfo `json:"settings,omitempty"`
+	Enabled  bool             `json:"enabled"`
 	// Allowed is the hash of the files the user allowed (hooks.PluginHash),
 	// which the app checks against what it is about to import.
 	Allowed string `json:"allowed,omitempty"`
@@ -518,10 +521,11 @@ func (a *Agent) plugins() []PluginInfo {
 		p := PluginInfo{ID: filepath.Base(dir)}
 		var raw struct {
 			PluginInfo
-			Hooks  []json.RawMessage          `json:"hooks"`
-			MCP    map[string]json.RawMessage `json:"mcp"`
-			Skills map[string]json.RawMessage `json:"skills"`
-			Setup  *PluginSetupInfo           `json:"setup"`
+			Hooks    []json.RawMessage          `json:"hooks"`
+			MCP      map[string]json.RawMessage `json:"mcp"`
+			Skills   map[string]json.RawMessage `json:"skills"`
+			Setup    *PluginSetupInfo           `json:"setup"`
+			Settings *PluginSetupInfo           `json:"settings"`
 		}
 		if b, err := os.ReadFile(m); err != nil {
 			p.Error = err.Error()
@@ -530,7 +534,7 @@ func (a *Agent) plugins() []PluginInfo {
 		} else {
 			p.Name, p.Version, p.Description, p.Main, p.Themes = raw.Name, raw.Version, raw.Description, raw.Main, raw.Themes
 			p.Hooks = len(raw.Hooks)
-			p.MCP, p.Skills, p.Setup = sortedKeys(raw.MCP), sortedKeys(raw.Skills), raw.Setup
+			p.MCP, p.Skills, p.Setup, p.Settings = sortedKeys(raw.MCP), sortedKeys(raw.Skills), raw.Setup, raw.Settings
 		}
 		// The folder name is the ID, so it is always a safe path segment.
 		if p.Name == "" {

@@ -46,8 +46,7 @@ func pluginMCP(args []string) error {
 	if err := os.Chdir(pluginDir); err != nil {
 		return err
 	}
-	env := append(os.Environ(), "BERTH_PLUGIN_DIR="+pluginDir)
-	return syscall.Exec(exe, append([]string{exe}, srvArgs...), env)
+	return syscall.Exec(exe, append([]string{exe}, srvArgs...), integrations.PluginEnv(pluginDir))
 }
 
 // pluginsCommand is `berthd plugins sync`.
