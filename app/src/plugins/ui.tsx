@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 
+import type { SqlEditorProps } from "@/components/files/sql-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardPanel, CardTitle } from "@/components/ui/card";
@@ -31,10 +32,13 @@ import { AgentPicker } from "@/components/new-worktree/agent-picker";
 import { AgentIcon } from "@/components/agent-glyph";
 import { loadDiffs } from "@/components/diff/load";
 import { cn } from "@/lib/utils";
+import { HelperBox, useHelperState } from "@/plugins/helper-box";
 import { WidgetEmpty, WidgetRow, WidgetSkeleton } from "@/views/home/widgets/parts";
 import { PluginPage, ViewHeader } from "@/views/view-header";
 
 const NamedIcon = lazy(() => import("@/plugins/dynamic-icon"));
+const ChartView = lazy(() => import("@/components/art/views/chart-view"));
+const SqlEditorView = lazy(() => import("@/components/files/sql-editor"));
 
 // Icon draws any lucide icon by name, for plugins and their sidebar items.
 // Like lucide's DynamicIcon it draws nothing until the icon has loaded.
@@ -43,6 +47,33 @@ export function Icon({ name, className }: { name: string; className?: string }) 
     <Suspense fallback={null}>
       <NamedIcon name={name} className={className} />
     </Suspense>
+  );
+}
+
+// Chart draws a berth.chart (lib/art/chart-spec.ts) with the app's own chart
+// components, in the theme's colours: what an agent's chart artifact is
+// drawn with. Its box sets the size; the chart fills it.
+export function Chart({ spec, className }: { spec: object; className?: string }) {
+  const body = JSON.stringify({ $schema: "berth.chart/v1", ...spec });
+  return (
+    <div className={cn("flex h-64 min-w-0 flex-col", className)}>
+      <Suspense fallback={<Skeleton className="h-full w-full" />}>
+        <ChartView body={body} size="full" />
+      </Suspense>
+    </div>
+  );
+}
+
+// SqlEditor is the File tab's editor cut down to a statement or a few:
+// highlighting, completion from a schema, and a key to run. CodeMirror loads
+// the first time one is drawn. Its box sets the size; the editor fills it.
+export function SqlEditor({ className, ...props }: SqlEditorProps) {
+  return (
+    <div className={cn("flex h-40 min-h-0 min-w-0 flex-col", className)}>
+      <Suspense fallback={<Skeleton className="m-3 h-4 w-2/3" />}>
+        <SqlEditorView {...props} className="min-h-0 flex-1" />
+      </Suspense>
+    </div>
   );
 }
 
@@ -128,6 +159,10 @@ export const pluginUi = {
   AgentPicker,
   AgentIcon,
   Icon,
+  Chart,
+  SqlEditor,
+  HelperBox,
+  useHelperState,
   ViewHeader,
   PluginPage,
   cn,

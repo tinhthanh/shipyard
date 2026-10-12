@@ -106,6 +106,9 @@ type Box struct {
 	// worktrees of projects that turn it on (reviewbutton.go); nil on a box
 	// without it.
 	ReviewButtons *ReviewButtons
+	// Helpers runs the helper programs plugins bring (helpers.go); nil on a
+	// box without them.
+	Helpers *Helpers
 }
 
 func (b *Box) own(path string) {
@@ -165,6 +168,7 @@ func (b *Box) Mount(s *wire.Server) {
 	route("GET /v1/locations/{name}/worktrees/{worktree}/file", b.getWorktreeFile)
 	route("PUT /v1/locations/{name}/worktrees/{worktree}/file", b.putWorktreeFile)
 	route("GET /v1/locations/{name}/worktrees/{worktree}/touched", b.worktreeTouched)
+	route("POST /v1/locations/{name}/worktrees/{worktree}/setup", b.setupWorktree)
 	route("POST /v1/locations/{name}/worktrees/{worktree}/{action}", b.pauseAction)
 	route("GET /v1/phone", b.getPhone)
 	route("PUT /v1/phone", b.putPhone)
@@ -248,6 +252,7 @@ func (b *Box) Mount(s *wire.Server) {
 	b.mountBrowser(route)
 	b.mountNotify(route)
 	b.mountArtifacts(route)
+	b.mountHelpers(s, route)
 	b.mountPairing(s, route)
 }
 
@@ -387,9 +392,17 @@ func (b *Box) removeLocation(w http.ResponseWriter, r *http.Request) error {
 	if err := b.before(r, "location.remove", map[string]any{"location": name}); err != nil {
 		return err
 	}
+	// Its worktrees, while they can still be listed: plugins' helpers are
+	// told of each once the location is gone (helperdetach.go).
+	var loc Location
+	if b.Helpers != nil {
+		loc, _ = b.Locations.Get(r.Context(), name)
+	}
 	if err := b.Locations.Remove(name); err != nil {
 		return err
 	}
+	loc.Name = name
+	b.detachLocation(loc)
 	b.publish(r, "location.removed", map[string]any{"location": name})
 	writeJSON(w, map[string]string{"removed": name})
 	return nil
@@ -446,16 +459,28 @@ func (b *Box) createWorktree(r *http.Request, loc Location, req WorktreeRequest)
 		created["repo_config"] = loc.RepoTrust
 	}
 	b.publish(r, "worktree.created", created)
-	// Services start once setup has made the worktree ready for them.
+	if req.NoSetup {
+		if err := b.Locations.setSetupPending(loc.Name, wt.Path, true); err == nil {
+			wt.SetupPending = true
+		}
+		return wt, nil
+	}
+	b.runSetup(origin(r), loc, wt.Path, wt.Name)
+	return wt, nil
+}
+
+// runSetup runs the location's setup script in the background, then starts
+// the services that start with every worktree; without a script it only
+// starts them. Services start once setup has made the worktree ready.
+func (b *Box) runSetup(from string, loc Location, dir, name string) {
 	if loc.Scripts.Setup != "" {
-		go b.lifecycle(origin(r), "setup", loc, wt.Path, wt.Name, loc.Scripts.Setup, func() error {
-			go b.startAutostart(loc.Name, wt.Name)
+		go b.lifecycle(from, "setup", loc, dir, name, loc.Scripts.Setup, func() error {
+			go b.startAutostart(loc.Name, name)
 			return nil
 		})
-	} else {
-		go b.startAutostart(loc.Name, wt.Name)
+		return
 	}
-	return wt, nil
+	go b.startAutostart(loc.Name, name)
 }
 
 // lifecycle runs a setup or archive script in the background, announcing its

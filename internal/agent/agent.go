@@ -91,7 +91,10 @@ type Config struct {
 	// UserDir holds hooks, themes, templates and plugins. Defaults to
 	// ~/.berth.
 	UserDir string
-	Log     *log.Logger
+	// PluginRegistry is the index.json the plugin marketplace lists
+	// (marketplace.go); defaults to DefaultPluginRegistry.
+	PluginRegistry string
+	Log            *log.Logger
 	// Now reads the wall clock; tests replace it to simulate sleep.
 	Now func() time.Time
 	// Networks reaches boxes on other tailnets. Defaults to embedded
@@ -251,6 +254,14 @@ type Agent struct {
 	work      workSet
 	// suggest is what team suggestions know (teamsuggest.go).
 	suggest teamSuggest
+	// market is the plugin listing last read, and the one install or
+	// removal under way (marketplace.go).
+	market marketState
+	// helperWork is the helpers being installed on boxes now (helpers.go).
+	helperWork helperWork
+	// helperLedger is the helpers this computer is to remove from boxes,
+	// and the removals not done yet (helpercleanup.go).
+	helperLedger helperLedger
 
 	// ctx lives as long as the agent; forwards added through the API run under
 	// it rather than under the request that created them.
@@ -367,6 +378,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.keepLocalBoxCurrent(ctx)
 	go a.watchTeamUpdates(ctx)
 	go a.watchTeamSuggestions(ctx)
+	go a.keepHelpersTidy(ctx)
 	a.hooks = &hooks.Runner{Path: filepath.Join(cfg.UserDir, "hooks.json"), PluginsDir: filepath.Join(cfg.UserDir, "plugins"), Log: cfg.Log}
 	go a.hooks.Run(ctx, &a.bus)
 
