@@ -11,6 +11,13 @@ again.
 
 ## Unreleased
 
+- **Plugins can give agents tools.** A plugin's `berth-plugin.json` can list
+  MCP servers and skills it ships, each pinned by its sha256. Once you allow
+  the plugin, berthd adds its servers (as `berth-<plugin>`) and skills to
+  Claude Code, Codex and Gemini CLI wherever berth's own are installed, and
+  takes them away when you turn the plugin off. Agents start a plugin's
+  server through `berthd plugin-mcp`, which refuses one whose plugin is off
+  or whose binary is not the file you allowed.
 - **This fork updates and installs from its own releases.** The app's
   updater, the install command, the Homebrew cask and the links in Settings →
   About point at `tinhthanh/shipyard` instead of upstream, and agents no

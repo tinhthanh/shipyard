@@ -67,6 +67,9 @@ const usage = `berthd — the berth daemon for a development box
                                           (--check: only say whether it can read now)
   berthd mcp                              A stdio MCP server of berth's tools for agents on this box
                                           (integrations install adds it to Claude, Codex and Gemini)
+  berthd plugins sync                     Give agents the MCP servers and skills of the plugins that are on
+  berthd plugin-mcp PLUGIN SERVER         Run a plugin's MCP server once it is checked against what was
+                                          allowed (agents' configs run this)
   berthd agents install [--integrations] [--markers] claude|codex|cursor|opencode ...
                                           Install agent CLIs into ~/.local/bin, without sudo (each is
                                           skipped when it is already here)
@@ -207,6 +210,10 @@ func run(args []string) error {
 		return box.RunHeadless(args[1:], os.Stdout)
 	case "mcp":
 		return mcpserver.Serve(context.Background(), b.socket(), os.Stdin, os.Stdout)
+	case "plugin-mcp":
+		return pluginMCP(args[1:])
+	case "plugins":
+		return pluginsCommand(args[1:], os.Stdout)
 	case "agents":
 		return agents(args[1:], os.Stdout)
 	case "integrations":
@@ -409,6 +416,7 @@ func serve(b boxHome, args []string) error {
 		if done := integrations.RefreshHooked(home, exe); len(done) > 0 {
 			logger.Printf("updated berth's hooks for %s", strings.Join(done, ", "))
 		}
+		go syncPluginToolsLoop(ctx, home, filepath.Join(userDir, "plugins"), exe, logger)
 	}
 	go turns.Run(ctx, bx)
 	// Agents hear back about work they started, after the ledger has it.
