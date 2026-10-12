@@ -113,6 +113,8 @@ The folder's name is the plugin's id. The manifest's fields:
 | `hooks` | [Hooks](/guides/hooks) to run while the plugin is on, in its folder, with `BERTH_PLUGIN_DIR` set |
 | `themes` | Theme JSON files to offer, relative to the folder |
 | `kits` | Kit folders to offer, relative to the folder |
+| `mcp` | MCP servers to give agents: `{"name": {"command", "args", "sha256"}}`. See [Tools for agents](#tools-for-agents) |
+| `skills` | Skills to give agents: `{"name": {"path", "sha256"}}`, each a `SKILL.md` in the folder |
 
 A plugin folder in `~/.berth/plugins` on a box gives that box its hooks
 too, once it is allowed there (see below).
@@ -154,6 +156,50 @@ whatever the folder holds:
   Consent decides whether a plugin runs; it does not limit what a plugin
   does once it runs. Running each plugin in its own isolated view behind a
   bridge that grants only the capabilities it asked for is planned.
+</Callout>
+
+## Tools for agents
+
+A plugin can ship tools for the agents on a box: MCP servers and skills,
+files in its own folder. The manifest pins each file by its sha256, and the
+manifest is part of what you allow, so allowing the plugin allows exactly
+those bytes:
+
+```json title="~/.berth/plugins/computer/berth-plugin.json"
+{
+  "id": "computer", "name": "Computer use", "version": "1.0.0",
+  "mcp": {
+    "computer": { "command": "bin/open-computer-use", "args": ["mcp"], "sha256": "…" }
+  },
+  "skills": {
+    "berth-computer": { "path": "skills/berth-computer/SKILL.md", "sha256": "…" }
+  }
+}
+```
+
+Paths are relative to the plugin's folder and cannot climb out of it with
+`..`. Names are lowercase letters, digits and dashes, and a skill cannot
+take the name of one of berth's own.
+
+While the plugin is on, berthd gives its tools to Claude Code, Codex and
+Gemini CLI wherever berth's own MCP server or skills are installed: a server
+called `berth-<plugin>` (or `berth-<plugin>-<server>` when the names differ),
+and a copy of each skill. It checks every 30 seconds and when it starts;
+`berthd plugins sync` does it at once. Turn the plugin off and the servers
+and skills it added go away. Berth only ever removes what it added: a server
+or skill of yours with the same name is left alone.
+
+An agent's config never runs the plugin's binary itself. It runs
+`berthd plugin-mcp <plugin> <server>`, which checks that the plugin is still
+on and that the binary still hashes to what its manifest pins, and only then
+becomes it, in the plugin's folder with `BERTH_PLUGIN_DIR` set. A binary
+swapped after you allowed the plugin does not start; neither does one
+whose plugin you turned off.
+
+<Callout title="Tools run as you">
+  A plugin's MCP server runs with the agent's access, like any other tool
+  the agent uses. Allowing a plugin decides whether its tools exist; what an
+  agent then does with them is up to the agent and your prompts.
 </Callout>
 
 ## What a plugin can add
