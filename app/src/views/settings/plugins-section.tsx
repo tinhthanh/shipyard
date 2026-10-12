@@ -1,11 +1,13 @@
 import { RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { ErrorText } from "@/components/error-note";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toastManager } from "@/components/ui/toast";
-import { laptopApi, type PluginInfo } from "@/lib/api";
+import { laptopApi, type PluginInfo, type PluginSetupState } from "@/lib/api";
+import { plainError } from "@/lib/errors";
 import { errorMessage } from "@/lib/format";
 import { openDocs } from "@/lib/open-url";
 import { builtinOn, setBuiltinOn, usePrefs } from "@/lib/prefs";
@@ -104,6 +106,7 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
         {p.description && <div className="mt-0.5 text-muted-foreground text-xs">{p.description}</div>}
         <Contributions plugin={p.id} />
         <AgentTools plugin={p} />
+        {enabled && p.setup && <PluginSetupRow plugin={p} />}
         <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/80">
           {p.id}
           {hooks > 0 && ` · ${hooks} hook${hooks === 1 ? "" : "s"}`}
@@ -181,6 +184,68 @@ function StatusDot({ state }: { state: string }) {
     <Tip label={state}>
       <span role="img" aria-label={state} className={cn("size-2 shrink-0 rounded-full", state === "failed" ? "bg-destructive" : "bg-warning")} />
     </Tip>
+  );
+}
+
+// PluginSetupRow shows whether a plugin's one-time setup on this computer is
+// done, and offers it until it is, checking again every few seconds while it
+// isn't (the person may be in System Settings right now).
+function PluginSetupRow({ plugin: p }: { plugin: PluginInfo }) {
+  const [state, setState] = useState<PluginSetupState>();
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async () => {
+      const client = useStore.getState().client;
+      if (!client) return;
+      try {
+        const s = await laptopApi.pluginSetup(client, p.id);
+        if (!live) return;
+        setState(s);
+        if (!(s.known && s.ready)) timer = setTimeout(() => void check(), 3000);
+      } catch (err) {
+        if (live) setError(plainError(err));
+      }
+    };
+    void check();
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [p.id]);
+  const start = async () => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    setStarting(true);
+    setError(undefined);
+    try {
+      await laptopApi.startPluginSetup(client, p.id);
+    } catch (err) {
+      setError(plainError(err));
+    } finally {
+      setStarting(false);
+    }
+  };
+  if (!state && !error) return null;
+  if (state?.known && state.ready) {
+    return (
+      <div className="mt-1.5">
+        <Badge variant="success" size="sm">
+          Set up on this computer
+        </Badge>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+      <span className="text-warning-foreground text-xs">{state?.label || p.setup?.label || "Needs one more step on this computer"}</span>
+      <Button size="xs" variant="outline" loading={starting} onClick={() => void start()}>
+        Set up…
+      </Button>
+      {(error || state?.error) && <ErrorText className="text-destructive-foreground text-xs" text={error ?? state?.error ?? ""} />}
+    </div>
   );
 }
 

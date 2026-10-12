@@ -11,6 +11,16 @@ again.
 
 ## Unreleased
 
+- **A plugin's tools can ask for the one step only you can take.** A plugin
+  whose agent tools need something on this computer first, such as macOS
+  Accessibility and Screen Recording, starts that step as soon as you allow
+  it (for the computer plugin, a window that shows what to switch on), and
+  Settings → Plugins says whether it is done, with a **Set up…** button until
+  it is. No command to look up.
+- **Updating Shipyard no longer leaves this Mac's box stopped.** Reinstalling
+  berthd's launchd job right after the old one was taken down could fail with
+  "Bootstrap failed: 5: Input/output error"; it now waits for the old job to
+  go and tries again.
 - **A plugin without a main module turns on.** One that only adds hooks,
   themes, kits or agent tools used to show as failed in Settings → Plugins;
   now it is on, and nothing runs in the app. Settings → Plugins shows the

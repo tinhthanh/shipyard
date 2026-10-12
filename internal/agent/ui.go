@@ -493,9 +493,12 @@ type PluginInfo struct {
 	Hooks       int      `json:"hooks"`
 	// MCP and Skills name the tools the plugin gives agents (see
 	// integrations.SyncPluginTools).
-	MCP     []string `json:"mcp,omitempty"`
-	Skills  []string `json:"skills,omitempty"`
-	Enabled bool     `json:"enabled"`
+	MCP    []string `json:"mcp,omitempty"`
+	Skills []string `json:"skills,omitempty"`
+	// Setup is the one-time step its tools need on this computer, if any
+	// (GET and POST /v1/plugins/{id}/setup).
+	Setup   *PluginSetupInfo `json:"setup,omitempty"`
+	Enabled bool             `json:"enabled"`
 	// Allowed is the hash of the files the user allowed (hooks.PluginHash),
 	// which the app checks against what it is about to import.
 	Allowed string `json:"allowed,omitempty"`
@@ -518,6 +521,7 @@ func (a *Agent) plugins() []PluginInfo {
 			Hooks  []json.RawMessage          `json:"hooks"`
 			MCP    map[string]json.RawMessage `json:"mcp"`
 			Skills map[string]json.RawMessage `json:"skills"`
+			Setup  *PluginSetupInfo           `json:"setup"`
 		}
 		if b, err := os.ReadFile(m); err != nil {
 			p.Error = err.Error()
@@ -526,7 +530,7 @@ func (a *Agent) plugins() []PluginInfo {
 		} else {
 			p.Name, p.Version, p.Description, p.Main, p.Themes = raw.Name, raw.Version, raw.Description, raw.Main, raw.Themes
 			p.Hooks = len(raw.Hooks)
-			p.MCP, p.Skills = sortedKeys(raw.MCP), sortedKeys(raw.Skills)
+			p.MCP, p.Skills, p.Setup = sortedKeys(raw.MCP), sortedKeys(raw.Skills), raw.Setup
 		}
 		// The folder name is the ID, so it is always a safe path segment.
 		if p.Name == "" {
@@ -595,6 +599,11 @@ func headerHasToken(v, token string) bool {
 		}
 	}
 	return false
+}
+
+// PluginSetupInfo is what the app needs to offer a plugin's setup.
+type PluginSetupInfo struct {
+	Label string `json:"label,omitempty"`
 }
 
 func sortedKeys[V any](m map[string]V) []string {

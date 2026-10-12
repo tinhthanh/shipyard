@@ -39,6 +39,9 @@ export function PluginConsentDialog() {
     setSaving(true);
     try {
       await laptopApi.allowPlugin(client, plugin.id, files.hash);
+      // Its tools may need a step only the person here can take (macOS
+      // permissions): start it now, so it is not left to a command to find.
+      if (plugin.setup) void laptopApi.startPluginSetup(client, plugin.id).catch(() => {});
       answerConsent(true);
     } catch (err) {
       setError(plainError(err));

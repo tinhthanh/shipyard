@@ -1,11 +1,13 @@
 package service
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func stub(t *testing.T, os_ string) (home string, calls *[]string) {
@@ -295,5 +297,55 @@ func TestPreflightOnAMacNeedsALoginSession(t *testing.T) {
 	}
 	if err := Preflight(); err == nil || !strings.Contains(err.Error(), "no login session") {
 		t.Errorf("without a GUI session: %v", err)
+	}
+}
+
+// launchd still tearing the old job down: bootstrap fails with I/O error 5
+// until it is gone. load waits for it and retries instead of leaving the
+// service installed but not running.
+func TestLaunchdReloadWaitsForTheOldJobAndRetries(t *testing.T) {
+	_, calls := stub(t, "darwin")
+	oldSleep := sleep
+	sleep = func(time.Duration) {}
+	t.Cleanup(func() { sleep = oldSleep })
+	prints, bootstraps := 0, 0
+	command = func(name string, args ...string) ([]byte, error) {
+		*calls = append(*calls, name+" "+strings.Join(args, " "))
+		switch args[0] {
+		case "print":
+			prints++
+			if prints < 3 {
+				return []byte("state = running"), nil
+			}
+			return nil, errors.New("Could not find service")
+		case "bootstrap":
+			bootstraps++
+			if bootstraps < 3 {
+				return []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
+			}
+		}
+		return nil, nil
+	}
+	if err := load(spec, "/tmp/x.plist"); err != nil {
+		t.Fatalf("load should succeed once launchd lets go of the old job: %v", err)
+	}
+	if prints != 3 || bootstraps != 3 {
+		t.Fatalf("expected 3 status checks and 3 bootstraps, got %d and %d: %v", prints, bootstraps, *calls)
+	}
+}
+
+func TestLaunchdReloadGivesUpWithTheError(t *testing.T) {
+	_, _ = stub(t, "darwin")
+	oldSleep := sleep
+	sleep = func(time.Duration) {}
+	t.Cleanup(func() { sleep = oldSleep })
+	command = func(name string, args ...string) ([]byte, error) {
+		if args[0] == "bootstrap" {
+			return []byte("Bootstrap failed: 5: Input/output error"), errors.New("exit status 5")
+		}
+		return nil, nil
+	}
+	if err := load(spec, "/tmp/x.plist"); err == nil || !strings.Contains(err.Error(), "Input/output error") {
+		t.Fatalf("expected the bootstrap error, got %v", err)
 	}
 }

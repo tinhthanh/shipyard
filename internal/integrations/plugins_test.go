@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cosscom/shipyard/internal/hooks"
 )
@@ -230,5 +232,74 @@ func TestSyncPluginToolsNeedsBerthd(t *testing.T) {
 	acmePlugin(t, plugins, true)
 	if changed, err := SyncPluginTools(home, plugins, filepath.Join(home, "bin", "berth")); err != nil || len(changed) != 0 {
 		t.Fatalf("only berthd runs plugin servers, got %v %v", changed, err)
+	}
+}
+
+// setupPlugin writes and allows a plugin "acme" whose binary answers a
+// status check with ready and records that setup ran.
+func setupPlugin(t *testing.T, pluginsDir, ready, setupJSON string) string {
+	t.Helper()
+	dir := filepath.Join(pluginsDir, "acme")
+	bin := []byte("#!/bin/sh\nif [ \"$1\" = status ]; then echo '{\"allGranted\": " + ready + "}'; exit 0; fi\ntouch \"$BERTH_PLUGIN_DIR/setup-ran\"\n")
+	writePluginFile(t, filepath.Join(dir, "bin", "acme"), bin)
+	manifest := `{"mcp":{"acme":{"command":"bin/acme","args":["mcp"],"sha256":"` + sum(bin) + `"}}` + setupJSON + `}`
+	writePluginFile(t, filepath.Join(dir, hooks.PluginManifest), []byte(manifest))
+	h, err := hooks.PluginHash(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hooks.AllowPlugin(dir, h); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestPluginSetupStatusAndStart(t *testing.T) {
+	for _, ready := range []string{"false", "true"} {
+		plugins := t.TempDir()
+		dir := setupPlugin(t, plugins, ready, `,"setup":{"server":"acme","status":["status"],"ready":"allGranted","label":"Allow it"}`)
+		st, err := PluginSetupStatus(context.Background(), plugins, "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !st.Known || st.Ready != (ready == "true") || st.Label != "Allow it" {
+			t.Fatalf("ready=%s: unexpected state %+v", ready, st)
+		}
+		if err := StartPluginSetup(plugins, "acme"); err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "setup-ran")); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("setup did not run in the plugin's folder")
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}
+
+func TestPluginSetupNeedsAnAllowedPluginAndAKnownServer(t *testing.T) {
+	plugins := t.TempDir()
+	setupPlugin(t, plugins, "true", "")
+	if _, err := PluginSetupStatus(context.Background(), plugins, "acme"); !errors.Is(err, ErrNoSetup) {
+		t.Fatalf("a plugin without setup: got %v", err)
+	}
+
+	plugins = t.TempDir()
+	dir := setupPlugin(t, plugins, "true", `,"setup":{"server":"other"}`)
+	if _, err := readPluginTools(dir); err == nil {
+		t.Fatal("setup naming a server the plugin does not ship must be refused")
+	}
+
+	plugins = t.TempDir()
+	dir = setupPlugin(t, plugins, "true", `,"setup":{"server":"acme"}`)
+	if err := hooks.ForbidPlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := StartPluginSetup(plugins, "acme"); !errors.Is(err, ErrPluginOff) {
+		t.Fatalf("a plugin that is off must not run its setup, got %v", err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cosscom/shipyard/internal/hooks"
+	"github.com/cosscom/shipyard/internal/integrations"
 	"github.com/cosscom/shipyard/internal/sshsetup"
 	"github.com/cosscom/shipyard/internal/trust"
 )
@@ -304,6 +305,22 @@ func (a *Agent) manageRoutes(mux *http.ServeMux) {
 		a.publish(Event{Type: "hooks.changed"})
 		a.getHooks(w, r)
 	})
+	mux.HandleFunc("GET /v1/plugins/{id}/setup", func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		if strings.ContainsAny(id, `/\`) || strings.HasPrefix(id, ".") {
+			writeError(w, http.StatusNotFound, "no such plugin")
+			return
+		}
+		st, err := integrations.PluginSetupStatus(r.Context(), filepath.Join(a.cfg.UserDir, "plugins"), id)
+		switch {
+		case errors.Is(err, integrations.ErrPluginOff), errors.Is(err, integrations.ErrNoSetup):
+			writeError(w, http.StatusConflict, err.Error())
+		case err != nil:
+			writeError(w, http.StatusInternalServerError, err.Error())
+		default:
+			writeJSON(w, http.StatusOK, st)
+		}
+	})
 	mux.HandleFunc("POST /v1/plugins/{id}/{action}", func(w http.ResponseWriter, r *http.Request) {
 		id, action := r.PathValue("id"), r.PathValue("action")
 		dir := filepath.Join(a.cfg.UserDir, "plugins", id)
@@ -343,8 +360,16 @@ func (a *Agent) manageRoutes(mux *http.ServeMux) {
 			}
 		case "disable":
 			err = hooks.ForbidPlugin(dir)
+		case "setup":
+			// The one-time step its agent tools need here (macOS permissions,
+			// say), run from the binary the user allowed: it opens a window for
+			// the person at this computer and the app polls GET …/setup.
+			if err = integrations.StartPluginSetup(filepath.Join(a.cfg.UserDir, "plugins"), id); errors.Is(err, integrations.ErrPluginOff) || errors.Is(err, integrations.ErrNoSetup) {
+				writeError(w, http.StatusConflict, err.Error())
+				return
+			}
 		default:
-			writeError(w, http.StatusNotFound, "use enable or disable")
+			writeError(w, http.StatusNotFound, "use enable, disable or setup")
 			return
 		}
 		if err != nil {
