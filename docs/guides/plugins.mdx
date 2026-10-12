@@ -221,6 +221,30 @@ prints has `ready` set to true (or, without `ready`, until it exits 0), and
 offers **Set up…** until then. Both run only while the plugin is on and its
 binary is the one you allowed.
 
+### Settings
+
+A plugin can offer switches for its tools, such as which Chrome profiles
+agents may use. It lists them from the binary of one of its MCP servers:
+
+```json
+"settings": {
+  "server": "chrome",
+  "list": ["shipyard", "settings", "--json"],
+  "label": "Chrome profiles agents may use"
+}
+```
+
+`list` prints `{"settings": [{"key", "label", "description", "value",
+"warning"}]}`. Settings → Plugins shows each one as a switch, and asks first
+before turning on one that has a `warning`. Shipyard keeps the values in
+`~/.berth/plugin-settings/<id>.json`, outside the plugin's folder: changing
+one doesn't need a new review, and updates keep them. Every binary of the
+plugin gets that file's path in `BERTH_PLUGIN_SETTINGS` and reads it there,
+and Shipyard only stores keys the plugin lists.
+
+Settings say what the plugin's tools should do. They don't sandbox it: the
+plugin's binary enforces them.
+
 <Callout title="Tools run as you">
   A plugin's MCP server runs with the agent's access, like any other tool
   the agent uses. Allowing a plugin decides whether its tools exist; what an

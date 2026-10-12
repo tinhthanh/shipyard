@@ -512,7 +512,27 @@ export const laptopApi = {
   // permissions, say): whether it is done, and starting it.
   pluginSetup: (c: Client, id: string) => c.laptop<PluginSetupState>("GET", `/v1/plugins/${encodeURIComponent(id)}/setup`),
   startPluginSetup: (c: Client, id: string) => c.laptop<PluginInfo>("POST", `/v1/plugins/${encodeURIComponent(id)}/setup`),
+  // Switches a plugin lists for its tools (which Chrome profiles agents may
+  // use, say). They are kept outside the reviewed files, so changing one
+  // keeps the plugin allowed.
+  pluginSettings: (c: Client, id: string) => c.laptop<PluginSettingsState>("GET", `/v1/plugins/${encodeURIComponent(id)}/settings`),
+  setPluginSetting: (c: Client, id: string, key: string, value: boolean) =>
+    c.laptop<PluginSettingsState>("PUT", `/v1/plugins/${encodeURIComponent(id)}/settings`, { key, value }),
 };
+
+export interface PluginSetting {
+  key: string;
+  label: string;
+  description?: string;
+  value: boolean;
+  // Shown before the person turns it on.
+  warning?: string;
+}
+
+export interface PluginSettingsState {
+  label?: string;
+  settings: PluginSetting[];
+}
 
 export interface PluginSetupState {
   label?: string;

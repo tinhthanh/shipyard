@@ -303,3 +303,74 @@ func TestPluginSetupNeedsAnAllowedPluginAndAKnownServer(t *testing.T) {
 		t.Fatalf("a plugin that is off must not run its setup, got %v", err)
 	}
 }
+
+// settingsPlugin writes and allows a plugin "acme" that lists one setting,
+// "profile:work", reading its value from $BERTH_PLUGIN_SETTINGS.
+func settingsPlugin(t *testing.T, pluginsDir string) string {
+	t.Helper()
+	dir := filepath.Join(pluginsDir, "acme")
+	bin := []byte("#!/bin/sh\nv=false\ngrep -q '\"profile:work\": true' \"$BERTH_PLUGIN_SETTINGS\" 2>/dev/null && v=true\necho '{\"settings\":[{\"key\":\"profile:work\",\"label\":\"Work\",\"value\":'$v'}]}'\n")
+	writePluginFile(t, filepath.Join(dir, "bin", "acme"), bin)
+	manifest := `{"mcp":{"acme":{"command":"bin/acme","args":["mcp"],"sha256":"` + sum(bin) + `"}},"settings":{"server":"acme","list":["settings"],"label":"Profiles"}}`
+	writePluginFile(t, filepath.Join(dir, hooks.PluginManifest), []byte(manifest))
+	h, err := hooks.PluginHash(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := hooks.AllowPlugin(dir, h); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestPluginSettingsAreListedAndKeptOutsideThePlugin(t *testing.T) {
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	dir := settingsPlugin(t, plugins)
+	hash, _ := hooks.PluginHash(dir)
+
+	def, list, err := ListPluginSettings(context.Background(), plugins, "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if def.Label != "Profiles" || len(list) != 1 || list[0].Key != "profile:work" || list[0].Value {
+		t.Fatalf("unexpected settings %+v %+v", def, list)
+	}
+	if err := SetPluginSetting(context.Background(), plugins, "acme", "profile:work", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, list, _ = ListPluginSettings(context.Background(), plugins, "acme"); !list[0].Value {
+		t.Fatalf("the plugin must read the new value: %+v", list)
+	}
+	path := PluginSettingsPath(plugins, "acme")
+	if filepath.Dir(filepath.Dir(path)) != filepath.Dir(plugins) || strings.HasPrefix(path, dir) {
+		t.Fatalf("settings must live beside the plugins folder, not in the plugin: %s", path)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("settings file: %v %v", info, err)
+	}
+	if after, _ := hooks.PluginHash(dir); after != hash || !hooks.PluginStatus(dir).Enabled {
+		t.Fatal("changing a setting must keep the plugin allowed")
+	}
+	if err := SetPluginSetting(context.Background(), plugins, "acme", "profile:bank", true); err == nil {
+		t.Fatal("a key the plugin does not list must be refused")
+	}
+	if err := hooks.ForbidPlugin(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ListPluginSettings(context.Background(), plugins, "acme"); !errors.Is(err, ErrPluginOff) {
+		t.Fatalf("a plugin that is off must not run, got %v", err)
+	}
+}
+
+func TestPluginSettingsNeedAKnownServer(t *testing.T) {
+	plugins := t.TempDir()
+	setupPlugin(t, plugins, "true", "")
+	if _, _, err := ListPluginSettings(context.Background(), plugins, "acme"); !errors.Is(err, ErrNoSettings) {
+		t.Fatalf("a plugin without settings: got %v", err)
+	}
+	plugins = t.TempDir()
+	dir := setupPlugin(t, plugins, "true", `,"settings":{"server":"other","list":["x"]}`)
+	if _, err := readPluginTools(dir); err == nil {
+		t.Fatal("settings naming a server the plugin does not ship must be refused")
+	}
+}
