@@ -74,7 +74,9 @@ export async function builtinPlugins(): Promise<PluginInfo[]> {
 // user allowed.
 class PluginNeedsReview extends Error {}
 
-async function pluginSource(client: Client, p: PluginInfo): Promise<string> {
+// pluginSource is the code to import for p, or null for a plugin with no
+// main module (one that only adds hooks, themes, kits or agent tools).
+async function pluginSource(client: Client, p: PluginInfo): Promise<string | null> {
   if (p.builtin) {
     const res = await fetch(new URL(p.entry!, location.href));
     if (!res.ok) throw new Error(`${p.id}: ${res.status}`);
@@ -82,7 +84,7 @@ async function pluginSource(client: Client, p: PluginInfo): Promise<string> {
   }
   const files = await readPluginFiles(client, p);
   if (!mayLoad(p, files.hash)) throw new PluginNeedsReview("It changed since you allowed it. Review it to turn it back on.");
-  if (!files.mainPath) throw new Error("its manifest names no main module");
+  if (!files.mainPath) return null;
   return new TextDecoder().decode(files.main);
 }
 
@@ -90,7 +92,13 @@ async function loadPlugin(client: Client, p: PluginInfo) {
   setPluginStatus({ id: p.id, name: p.name, version: p.version, state: "loading", builtin: p.builtin });
   try {
     if (p.error) throw new Error(p.error);
-    const source = rewriteImports(await pluginSource(client, p));
+    const code = await pluginSource(client, p);
+    if (code === null) {
+      // Nothing runs in the app: its hooks and tools run on the boxes.
+      setPluginStatus({ id: p.id, name: p.name, version: p.version, state: "active", builtin: p.builtin });
+      return;
+    }
+    const source = rewriteImports(code);
     const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
     const mod = (await import(/* @vite-ignore */ url)) as { default?: unknown };
     if (typeof mod.default !== "function") throw new Error("its module has no default export function");

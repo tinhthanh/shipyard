@@ -103,6 +103,7 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
         </div>
         {p.description && <div className="mt-0.5 text-muted-foreground text-xs">{p.description}</div>}
         <Contributions plugin={p.id} />
+        <AgentTools plugin={p} />
         <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/80">
           {p.id}
           {hooks > 0 && ` · ${hooks} hook${hooks === 1 ? "" : "s"}`}
@@ -180,6 +181,21 @@ function StatusDot({ state }: { state: string }) {
     <Tip label={state}>
       <span role="img" aria-label={state} className={cn("size-2 shrink-0 rounded-full", state === "failed" ? "bg-destructive" : "bg-warning")} />
     </Tip>
+  );
+}
+
+// AgentTools lists the MCP servers and skills a plugin gives agents on boxes.
+function AgentTools({ plugin: p }: { plugin: PluginInfo }) {
+  const parts = [...(p.mcp ?? []).map((n) => `MCP: ${n}`), ...(p.skills ?? []).map((n) => `Skill: ${n}`)];
+  if (!parts.length) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {parts.map((t) => (
+        <Badge key={t} variant="outline" size="sm">
+          {t}
+        </Badge>
+      ))}
+    </div>
   );
 }
 

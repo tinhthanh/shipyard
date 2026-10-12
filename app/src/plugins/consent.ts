@@ -15,6 +15,9 @@ export interface PluginFiles {
   hash: string;
   // The hooks the manifest lists, to show before allowing it.
   hooks: { on: string; run: string }[];
+  // The tools it gives agents (MCP servers and skills), each file pinned by
+  // its sha256 in the manifest, to show before allowing it.
+  tools: { kind: "MCP" | "Skill"; name: string; file: string; sha256: string }[];
 }
 
 const MANIFEST = "berth-plugin.json";
@@ -24,13 +27,24 @@ export async function readPluginFiles(client: Client, p: PluginInfo): Promise<Pl
   const mainPath = mainOf(manifest);
   const main = mainPath ? await client.pluginFile(p, mainPath) : new Uint8Array();
   let hooks: PluginFiles["hooks"] = [];
+  let tools: PluginFiles["tools"] = [];
   try {
-    const m = JSON.parse(new TextDecoder().decode(manifest)) as { hooks?: unknown };
+    const m = JSON.parse(new TextDecoder().decode(manifest)) as { hooks?: unknown; mcp?: unknown; skills?: unknown };
     if (Array.isArray(m.hooks)) hooks = m.hooks.map((h: { on?: unknown; run?: unknown }) => ({ on: String(h?.on ?? ""), run: String(h?.run ?? "") }));
+    tools = [...pluginTools("MCP", m.mcp, "command"), ...pluginTools("Skill", m.skills, "path")];
   } catch {
     // mainOf already parsed it; a manifest it could read has no other shape to fail on.
   }
-  return { manifest, mainPath, main, hash: await hashPluginFiles(manifest, main), hooks };
+  return { manifest, mainPath, main, hash: await hashPluginFiles(manifest, main), hooks, tools };
+}
+
+// pluginTools lists a manifest's "mcp" or "skills" map, read from the same
+// bytes that are hashed, so the dialog shows exactly what is allowed.
+function pluginTools(kind: "MCP" | "Skill", map: unknown, fileKey: "command" | "path"): PluginFiles["tools"] {
+  if (!map || typeof map !== "object" || Array.isArray(map)) return [];
+  return Object.entries(map as Record<string, Record<string, unknown> | null>)
+    .map(([name, t]) => ({ kind, name, file: String(t?.[fileKey] ?? ""), sha256: String(t?.sha256 ?? "") }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // The consent dialog is opened from anywhere (Settings, a plugin's missing

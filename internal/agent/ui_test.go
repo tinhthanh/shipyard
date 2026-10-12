@@ -195,6 +195,7 @@ func TestTheAppReadsThemesTemplatesAndPluginsButNothingOutsideThem(t *testing.T)
 	write("plugins/hello/berth-plugin.json", `{"name":"Hello","version":"1.0.0","main":"dist/index.js","themes":["themes/sun.json"],"hooks":[{"on":"agent.finished","run":"true"}]}`)
 	write("plugins/hello/dist/index.js", `export default function activate() {}`)
 	write("plugins/hello/themes/sun.json", `{"id":"sun","name":"Sun","appearance":"light"}`)
+	write("plugins/tools/berth-plugin.json", `{"name":"Tools","mcp":{"tools":{"command":"bin/t","sha256":"00"}},"skills":{"tool-b":{"path":"s/b.md","sha256":"00"},"tool-a":{"path":"s/a.md","sha256":"00"}}}`)
 	write("secret.txt", "do not serve")
 	if h, err := hooks.PluginHash(filepath.Join(user, "plugins", "hello")); err != nil {
 		t.Fatal(err)
@@ -225,8 +226,12 @@ func TestTheAppReadsThemesTemplatesAndPluginsButNothingOutsideThem(t *testing.T)
 	_, body = uiCall(t, a, "GET", "/v1/plugins", tok)
 	var plugins []PluginInfo
 	json.Unmarshal([]byte(body), &plugins)
-	if len(plugins) != 1 || plugins[0].Entry != "/v1/plugins/hello/dist/index.js" || plugins[0].Hooks != 1 || !plugins[0].Enabled || plugins[0].Allowed == "" {
+	if len(plugins) != 2 || plugins[0].Entry != "/v1/plugins/hello/dist/index.js" || plugins[0].Hooks != 1 || !plugins[0].Enabled || plugins[0].Allowed == "" {
 		t.Fatalf("plugins = %s", body)
+	}
+	// A plugin with only agent tools: no entry to import, its tools named.
+	if p := plugins[1]; p.ID != "tools" || p.Entry != "" || p.Enabled || strings.Join(p.MCP, ",") != "tools" || strings.Join(p.Skills, ",") != "tool-a,tool-b" {
+		t.Fatalf("tools plugin = %+v", p)
 	}
 	resp, body := uiCall(t, a, "GET", plugins[0].Entry, tok)
 	if resp.StatusCode != 200 || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/javascript") || !strings.Contains(body, "activate") {
