@@ -115,6 +115,7 @@ The folder's name is the plugin's id. The manifest's fields:
 | `kits` | Kit folders to offer, relative to the folder |
 | `mcp` | MCP servers to give agents: `{"name": {"command", "args", "sha256"}}`. See [Tools for agents](#tools-for-agents) |
 | `skills` | Skills to give agents: `{"name": {"path", "sha256"}}`, each a `SKILL.md` in the folder |
+| `setup` | A one-time step its tools need on this computer: `{"server", "args", "status", "ready", "label"}`. See [Setup](#setup) |
 
 A plugin folder in `~/.berth/plugins` on a box gives that box its hooks
 too, once it is allowed there (see below).
@@ -195,6 +196,30 @@ on and that the binary still hashes to what its manifest pins, and only then
 becomes it, in the plugin's folder with `BERTH_PLUGIN_DIR` set. A binary
 swapped after you allowed the plugin does not start; neither does one
 whose plugin you turned off.
+
+### Setup
+
+Some tools need a step only the person at the computer can take, such as
+macOS Accessibility and Screen Recording for a tool that uses desktop apps.
+A plugin describes it in `setup`, run by the binary of one of its MCP
+servers, so it needs no pin of its own:
+
+```json
+"setup": {
+  "server": "computer",
+  "args": [],
+  "status": ["doctor", "--json"],
+  "ready": "allGranted",
+  "label": "Allow Accessibility and Screen Recording for Open Computer Use"
+}
+```
+
+When you allow the plugin, the app starts `args` at once (typically a
+window that walks you through the step). Settings → Plugins then shows
+whether it is done, by running `status` every few seconds until the JSON it
+prints has `ready` set to true (or, without `ready`, until it exits 0), and
+offers **Set up…** until then. Both run only while the plugin is on and its
+binary is the one you allowed.
 
 <Callout title="Tools run as you">
   A plugin's MCP server runs with the agent's access, like any other tool

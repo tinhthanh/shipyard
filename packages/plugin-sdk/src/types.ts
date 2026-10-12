@@ -490,6 +490,8 @@ export interface PluginInfo {
   // The MCP servers and skills a plugin in ~/.berth/plugins gives agents.
   mcp?: string[];
   skills?: string[];
+  // A one-time step its tools need on this computer, such as macOS permissions.
+  setup?: { label?: string };
   // Ships inside the app (plugins/ in the repository) rather than
   // ~/.berth/plugins; a user plugin with the same id replaces it.
   builtin?: boolean;

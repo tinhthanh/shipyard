@@ -508,7 +508,19 @@ export const laptopApi = {
   // plugins/consent.ts); the agent refuses it if they have changed since.
   allowPlugin: (c: Client, id: string, hash: string) => c.laptop<PluginInfo>("POST", `/v1/plugins/${encodeURIComponent(id)}/enable`, { hash }),
   disablePlugin: (c: Client, id: string) => c.laptop<PluginInfo>("POST", `/v1/plugins/${encodeURIComponent(id)}/disable`),
+  // The one-time step a plugin's agent tools need on this computer (macOS
+  // permissions, say): whether it is done, and starting it.
+  pluginSetup: (c: Client, id: string) => c.laptop<PluginSetupState>("GET", `/v1/plugins/${encodeURIComponent(id)}/setup`),
+  startPluginSetup: (c: Client, id: string) => c.laptop<PluginInfo>("POST", `/v1/plugins/${encodeURIComponent(id)}/setup`),
 };
+
+export interface PluginSetupState {
+  label?: string;
+  // Done, or the plugin cannot tell (known is then false).
+  ready: boolean;
+  known: boolean;
+  error?: string;
+}
 
 export function httpClient(ep: Endpoint): Client {
   const headers = { Authorization: `Bearer ${ep.token}` };

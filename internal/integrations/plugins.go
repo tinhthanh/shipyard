@@ -1,6 +1,7 @@
 package integrations
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -8,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cosscom/shipyard/internal/hooks"
 )
@@ -45,12 +48,30 @@ type PluginSkill struct {
 	SHA256 string `json:"sha256"`
 }
 
+// PluginSetup is the one-time step a plugin's tools need on the machine they
+// run on, such as macOS permissions, that only the person at it can give. It
+// reuses one of the plugin's pinned MCP binaries, so it needs no pin of its
+// own.
+type PluginSetup struct {
+	// Server names the MCP server whose binary runs the setup.
+	Server string `json:"server"`
+	// Args start the setup: typically a window that walks the person through it.
+	Args []string `json:"args,omitempty"`
+	// Status, when set, are the args that report whether setup is done:
+	// a JSON object whose Ready key is true, or an exit code of 0 without Ready.
+	Status []string `json:"status,omitempty"`
+	Ready  string   `json:"ready,omitempty"`
+	// Label says what setup does, for the app's button.
+	Label string `json:"label,omitempty"`
+}
+
 // PluginTools is what an allowed plugin gives agents.
 type PluginTools struct {
 	ID     string
 	Dir    string
 	MCP    map[string]PluginMCPServer
 	Skills map[string]PluginSkill
+	Setup  *PluginSetup
 }
 
 // pluginToolName is the shape of plugin ids, server and skill names: they
@@ -87,6 +108,7 @@ func readPluginTools(dir string) (PluginTools, error) {
 	var m struct {
 		MCP    map[string]PluginMCPServer `json:"mcp"`
 		Skills map[string]PluginSkill     `json:"skills"`
+		Setup  *PluginSetup               `json:"setup"`
 	}
 	if err := json.Unmarshal(b, &m); err != nil {
 		return t, fmt.Errorf("plugin %s: %s: %w", id, hooks.PluginManifest, err)
@@ -104,7 +126,12 @@ func readPluginTools(dir string) (PluginTools, error) {
 			return t, fmt.Errorf("plugin %s: skill %s has the name of one of berth's own", id, name)
 		}
 	}
-	t.MCP, t.Skills = m.MCP, m.Skills
+	if m.Setup != nil {
+		if _, ok := m.MCP[m.Setup.Server]; !ok {
+			return t, fmt.Errorf("plugin %s: setup names MCP server %q, which the plugin does not ship", id, m.Setup.Server)
+		}
+	}
+	t.MCP, t.Skills, t.Setup = m.MCP, m.Skills, m.Setup
 	return t, nil
 }
 
@@ -436,4 +463,91 @@ func syncPluginSkills(f files, dir string, want map[string]pluginSkillCopy) (boo
 		changed = true
 	}
 	return changed, nil
+}
+
+// ErrNoSetup is returned for a plugin whose tools need no setup.
+var ErrNoSetup = errors.New("this plugin needs no setup")
+
+// pluginSetupCommand resolves a plugin's setup: the verified binary (as
+// `berthd plugin-mcp` would run it), the setup, and the plugin's folder.
+func pluginSetupCommand(pluginsDir, plugin string) (string, *PluginSetup, string, error) {
+	if !pluginToolName.MatchString(plugin) {
+		return "", nil, "", fmt.Errorf("bad plugin name")
+	}
+	t, err := readPluginTools(filepath.Join(pluginsDir, plugin))
+	if err != nil {
+		return "", nil, "", err
+	}
+	if t.Setup == nil {
+		return "", nil, "", ErrNoSetup
+	}
+	exe, _, dir, err := PluginMCPCommand(pluginsDir, plugin, t.Setup.Server)
+	if err != nil {
+		return "", nil, "", err
+	}
+	return exe, t.Setup, dir, nil
+}
+
+func pluginCommand(ctx context.Context, exe, dir string, args []string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, exe, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "BERTH_PLUGIN_DIR="+dir)
+	return cmd
+}
+
+// PluginSetupState is what the app shows for a plugin's setup.
+type PluginSetupState struct {
+	Label string `json:"label,omitempty"`
+	// Ready: setup is done (or the plugin cannot tell, having no status).
+	Ready bool `json:"ready"`
+	// Known: the plugin reported its state; false when it has no status
+	// command or the check failed.
+	Known bool   `json:"known"`
+	Error string `json:"error,omitempty"`
+}
+
+// PluginSetupStatus runs a plugin's status check, for at most a few seconds.
+func PluginSetupStatus(ctx context.Context, pluginsDir, plugin string) (PluginSetupState, error) {
+	exe, setup, dir, err := pluginSetupCommand(pluginsDir, plugin)
+	if err != nil {
+		return PluginSetupState{}, err
+	}
+	st := PluginSetupState{Label: setup.Label}
+	if len(setup.Status) == 0 {
+		return st, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := pluginCommand(ctx, exe, dir, setup.Status).Output()
+	if setup.Ready == "" {
+		st.Known, st.Ready = true, err == nil
+		return st, nil
+	}
+	if err != nil {
+		st.Error = "the plugin's status check failed: " + err.Error()
+		return st, nil
+	}
+	var report map[string]any
+	if err := json.Unmarshal(out, &report); err != nil {
+		st.Error = "the plugin's status check did not print JSON"
+		return st, nil
+	}
+	ready, ok := report[setup.Ready].(bool)
+	st.Known, st.Ready = ok, ready
+	return st, nil
+}
+
+// StartPluginSetup starts a plugin's setup and returns without waiting for
+// it: it typically opens a window for the person at this computer.
+func StartPluginSetup(pluginsDir, plugin string) error {
+	exe, setup, dir, err := pluginSetupCommand(pluginsDir, plugin)
+	if err != nil {
+		return err
+	}
+	cmd := pluginCommand(context.Background(), exe, dir, setup.Args)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go cmd.Wait()
+	return nil
 }

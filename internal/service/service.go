@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 )
 
 type Spec struct {
@@ -46,6 +47,18 @@ var (
 	}
 	lookPath   = exec.LookPath
 	runUserDir = "/run/user"
+	sleep      = time.Sleep
+)
+
+// launchd takes a job down asynchronously: a bootstrap right after bootout
+// can fail with "Bootstrap failed: 5: Input/output error" while the old job
+// is still going away, which left an upgraded berthd installed but not
+// running. So load waits for the old job to be gone, and retries.
+const (
+	launchdGoneTimeout  = 10 * time.Second
+	launchdPoll         = 200 * time.Millisecond
+	launchdBootstraps   = 5
+	launchdBootstrapGap = time.Second
 )
 
 // UnitPath is where Install writes the service's unit or plist.
@@ -324,10 +337,18 @@ func launchdTarget(s Spec) string { return fmt.Sprintf("gui/%d/%s", os.Getuid(),
 func load(s Spec, path string) error {
 	if goos == "darwin" {
 		command("launchctl", "bootout", launchdTarget(s))
-		if out, err := command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), path); err != nil {
-			return fmt.Errorf("launchctl bootstrap: %v: %s", err, strings.TrimSpace(string(out)))
+		waitLaunchdGone(s)
+		var out []byte
+		var err error
+		for try := 1; try <= launchdBootstraps; try++ {
+			if out, err = command("launchctl", "bootstrap", fmt.Sprintf("gui/%d", os.Getuid()), path); err == nil {
+				return nil
+			}
+			if try < launchdBootstraps {
+				sleep(launchdBootstrapGap)
+			}
 		}
-		return nil
+		return fmt.Errorf("launchctl bootstrap: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	if out, err := command("systemctl", "--user", "daemon-reload"); err != nil {
 		return fmt.Errorf("systemctl daemon-reload: %v: %s", err, strings.TrimSpace(string(out)))
@@ -340,6 +361,16 @@ func load(s Spec, path string) error {
 		return fmt.Errorf("systemctl restart: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// waitLaunchdGone waits, for a while, until launchd no longer has the job.
+func waitLaunchdGone(s Spec) {
+	for waited := time.Duration(0); waited < launchdGoneTimeout; waited += launchdPoll {
+		if out, err := command("launchctl", "print", launchdTarget(s)); err != nil || len(out) == 0 {
+			return
+		}
+		sleep(launchdPoll)
+	}
 }
 
 func unload(s Spec) {
