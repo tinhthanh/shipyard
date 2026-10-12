@@ -1,9 +1,9 @@
 import { create } from "zustand";
 
 import type { Client, PluginInfo } from "@/lib/api";
-import { hashPluginFiles, mainOf } from "@/plugins/consent-core";
+import { hashPluginFiles, helperOf, mainOf, type PluginHelper } from "@/plugins/consent-core";
 
-export { mayLoad, PLUGIN_POWERS } from "@/plugins/consent-core";
+export { helperPower, mayLoad, PLUGIN_POWERS, type PluginHelper } from "@/plugins/consent-core";
 
 // PluginFiles is what the app would import for a plugin, read once: the
 // bytes that are hashed are the bytes that are reviewed and then imported.
@@ -18,6 +18,8 @@ export interface PluginFiles {
   // The tools it gives agents (MCP servers and skills), each file pinned by
   // its sha256 in the manifest, to show before allowing it.
   tools: { kind: "MCP" | "Skill"; name: string; file: string; sha256: string }[];
+  // The program it carries for boxes ("box.helper"), if it has one.
+  helper?: PluginHelper;
 }
 
 const MANIFEST = "berth-plugin.json";
@@ -35,7 +37,7 @@ export async function readPluginFiles(client: Client, p: PluginInfo): Promise<Pl
   } catch {
     // mainOf already parsed it; a manifest it could read has no other shape to fail on.
   }
-  return { manifest, mainPath, main, hash: await hashPluginFiles(manifest, main), hooks, tools };
+  return { manifest, mainPath, main, hash: await hashPluginFiles(manifest, main), hooks, tools, helper: helperOf(manifest) };
 }
 
 // pluginTools lists a manifest's "mcp" or "skills" map, read from the same
@@ -45,6 +47,13 @@ function pluginTools(kind: "MCP" | "Skill", map: unknown, fileKey: "command" | "
   return Object.entries(map as Record<string, Record<string, unknown> | null>)
     .map(([name, t]) => ({ kind, name, file: String(t?.[fileKey] ?? ""), sha256: String(t?.sha256 ?? "") }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// readPluginHelper is the program a plugin carries for boxes, read from its
+// manifest: what its row in Settings says it can install. None, or a
+// manifest that can't be read, is undefined.
+export async function readPluginHelper(client: Client, p: PluginInfo): Promise<PluginHelper | undefined> {
+  return client.pluginFile(p, MANIFEST).then(helperOf, () => undefined);
 }
 
 // The consent dialog is opened from anywhere (Settings, a plugin's missing

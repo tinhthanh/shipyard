@@ -4,21 +4,24 @@ import type { BerthEvent, Client, Hook, HooksFile, Location, Service, Session, S
 import { flowsCall } from "@/lib/mock-flows";
 import { runsCall } from "@/lib/mock-runs";
 import { mockRequirements } from "@/lib/mock-requirements";
-import { browserCall, mockScreencast, mockShotSvg } from "@/lib/mock-browser";
+import { browserCall, mockScreencast, mockShotSvg, wireBrowserMock } from "@/lib/mock-browser";
 import { mockDevtoolsCall } from "@/lib/mock-devtools";
 import { phoneCall } from "@/lib/mock-phone";
 import { worktreesCall } from "@/lib/mock-worktrees";
 import { kitsCall, kitsStream } from "@/lib/mock-kits";
+import { marketplaceCall, marketplaceFile, marketplaceReady, type MockPlugin, seededPlugins } from "@/lib/mock-marketplace";
 import { initTeamMock, isTeamSession, teamAttach, teamBoxCall, teamLaptopCall } from "@/lib/mock-team";
 import { initPrReviewMock, prReviewLaptopCall } from "@/lib/mock-pr-review";
 import { reviewCall, reviewExec } from "@/lib/mock-review";
 import { editorsCall } from "@/lib/mock-editors";
 import { imageGenCall } from "@/lib/mock-imagegen";
+import { linearCall } from "@/lib/mock-linear";
+import { helperBoxCall, helperLaptopCall, pluginHelpersCall, removeHelpers } from "@/lib/mock-helper";
 import { mockShell } from "@/lib/mock-shell";
 import { mockServiceAttach, wireMockServices } from "@/lib/mock-services";
 import { mockIssueTitle } from "@/lib/mock-issues";
 import { usageCall, usageExec } from "@/lib/mock-usage";
-import { initMockQueue, queueCall } from "@/lib/mock-queue";
+import { initMockQueue, mockSetBoxOnline, queueCall } from "@/lib/mock-queue";
 import { computersBoxCall, computersCall, initMockComputers } from "@/lib/mock-computers";
 import { initMockLocalBox, localBoxCall, localBoxFolders, localBoxStream } from "@/lib/mock-local-box";
 import { initMockInstall, mockBoxAgents, mockInstallAgents, mockInstallPlan, mockInstallTerminal } from "@/lib/mock-install";
@@ -38,6 +41,9 @@ import { crowd } from "@/lib/mock-crowd";
 const now = Date.now();
 const ago = (min: number) => new Date(now - min * 60_000).toISOString();
 const GB = 1024 ** 3;
+
+// The paired boxes as the mock's helpers see them (mock-helper.ts).
+const helperBoxes = () => status.boxes.map((b) => ({ name: b.name, online: b.state === "online" }));
 
 const status: Status = {
   boxes: [
@@ -292,6 +298,7 @@ const artifactsMock = () =>
     return m;
   });
 if (typeof window !== "undefined") (window as unknown as { __art: unknown }).__art = { bump: () => artifactsMock().then((m) => m.bumpArtifacts()), vdiff: () => artifactsMock().then((m) => m.bumpVdiff()) };
+wireBrowserMock(emit);
 wireMockServices({
   sessions: (box) => (sessions[box] ??= []),
   path: (box, loc, wt) => locations[box]?.find((l) => l.name === loc)?.worktrees?.find((w) => w.name === wt)?.path ?? `/home/me/work/${loc}-${wt}`,
@@ -592,15 +599,24 @@ function mockOrchestration(box: string, method: string, path: string, body?: unk
   }
   if (method === "POST" && path === "exec") {
     const r = body as { location: string; command: string };
+    // A box announces every command it ran (exec.finished), which is what
+    // makes the Review inbox look again; so does this one.
+    const after = <T extends { exit_code: number }>(ms: number, res: T) =>
+      new Promise<T>((resolve) =>
+        setTimeout(() => {
+          emit({ type: "exec.finished", box, data: { location: r.location, command: r.command, exit_code: res.exit_code } });
+          resolve(res);
+        }, ms),
+      );
     const reviewed = reviewExec(box, r.location, r.command, emit);
-    if (reviewed) return new Promise((resolve) => setTimeout(() => resolve(reviewed), 400));
+    if (reviewed) return after(400, reviewed);
     const usage = usageExec(box, r.command);
-    if (usage) return new Promise((resolve) => setTimeout(() => resolve(usage), 600));
+    if (usage) return after(600, usage);
     const shell = mockShell(box, r.location, r.command);
-    if (shell) return new Promise((resolve) => setTimeout(() => resolve(shell), 250));
+    if (shell) return after(250, shell);
     const n = (checksRun[`${box}:${r.location}`] = (checksRun[`${box}:${r.location}`] ?? 0) + 1);
     const output = n === 1 ? `$ ${r.command}\n FAIL  src/checkout.test.ts > rejects a double charge\n   Expected: 409\n   Received: 200\n\nTests: 1 failed, 213 passed\n` : `$ ${r.command}\nTests: 214 passed\n`;
-    return new Promise((resolve) => setTimeout(() => resolve({ exit_code: n === 1 ? 1 : 0, output }), 700));
+    return after(700, { exit_code: n === 1 ? 1 : 0, output });
   }
   return undefined;
 }
@@ -628,6 +644,9 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
   if (!online) return Promise.reject(new ApiError(`${box} is offline`, 503));
   const doc = mockBoxDoctor(box, !!status.boxes.find((b) => b.name === box)?.local, method, path);
   if (doc) return doc;
+  // A plugin's helper on the box (lib/mock-helper.ts).
+  const helper = helperBoxCall(box, method, path, delay, body);
+  if (helper) return helper;
   // In-app artifacts (lib/art/mock-artifacts.ts, loaded when first asked).
   if (/^locations\/[^/]+\/worktrees\/[^/]+\/artifacts/.test(path)) return artifactsMock().then((m) => delay(m.artifactsMockCall(box, method, path) ?? null));
   // Visual diffs' baselines and Accept as baseline (internal/box/shots.go).
@@ -785,7 +804,7 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
     return delay(session);
   }
   if (key === "POST sessions") {
-    const r = body as { location: string; name?: string; command?: string; agent?: string; prompt?: string; title?: string };
+    const r = body as { location: string; name?: string; command?: string; agent?: string; prompt?: string; title?: string; open?: string };
     const [locName, wtName] = r.location.split("/");
     const loc = locations[box].find((l) => l.name === locName)!;
     const wt = loc.worktrees?.find((w) => w.name === (wtName ?? locName)) ?? loc.worktrees![0];
@@ -794,6 +813,8 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
     const title = titleOf(r.title || r.prompt || "", r.title ? 80 : undefined) || undefined;
     const session: Session = { name: r.name ?? `${wt.name}-${command || "shell"}-${sessions[box].length}`, location: r.location, dir: wt.path, command, created: new Date().toISOString(), attached: 0, exited: false, agent, agent_state: agent ? "running" : undefined, title };
     sessions[box].push(session);
+    // Asked to show it, the box says so, as for a task's agent.
+    if (r.open) setTimeout(() => emit({ type: "session.open", box, data: { name: session.name, location: session.location, path: wt.path, open: r.open, agent } }), 120);
     return delay(session);
   }
   // Removing a worktree or a project. A worktree with uncommitted work
@@ -968,9 +989,14 @@ const discoverNetwork = (_network: string) => ({ user: "me", machines: networkMa
 
 const mockNetworks = fresh ? [] : [{ name: "personal", state: "Running", tailnet: "example.ts.net", ips: ["100.64.0.73"] }];
 
-// The live demo lists none: a plugin from ~/.berth/plugins would load from
-// the dev server, which the demo doesn't have.
-const mockPlugins = [{ id: "hello-ports", name: "Hello ports", version: "0.1.0", main: "dist/index.js", description: "Every dev server on every box, one click from your browser.", entry: "/__dev-plugins/hello-ports/dist/index.js", enabled: false, defaultEnabled: false, allowed: undefined as string | undefined }].filter(() => !__BERTH_DEMO__);
+// The live demo starts with none of these: a plugin from ~/.berth/plugins
+// would load from the dev server, which the demo doesn't have. One installed
+// from the mock listing (mock-marketplace.ts) carries its own files, so it
+// works there too: Leadline is added that way, when plugins are first listed.
+const mockPlugins: MockPlugin[] = [
+  { id: "hello-ports", name: "Hello ports", version: "0.1.0", main: "dist/index.js", description: "Every dev server on every box, one click from your browser.", entry: "/__dev-plugins/hello-ports/dist/index.js", enabled: false, defaultEnabled: false, allowed: undefined },
+  ...seededPlugins,
+].filter(() => !__BERTH_DEMO__);
 
 
 function addMockBox(name: string, address: string, network?: string) {
@@ -1130,7 +1156,10 @@ function laptopBoxes(method: string, path: string, body: unknown): Promise<unkno
     if (toggle[2] === "enable" && !hash) return Promise.reject(new Error("review the plugin in the app to turn it on"));
     p.enabled = toggle[2] === "enable";
     p.allowed = p.enabled ? hash : undefined;
-    return delay(p);
+    p.changed = undefined;
+    // Turned off, its helper stops on the boxes (mock-helper.ts).
+    const helpers = p.enabled ? undefined : removeHelpers(p.id, helperBoxes(), false);
+    return delay(helpers ? { ...p, helpers } : p);
   }
   return undefined;
 }
@@ -1189,6 +1218,7 @@ async function mockStream(method: string, path: string, body: unknown, onValue: 
     await say(`Uploading berthd-linux-amd64 to ${name}…`, 300);
     await say(`${name} upgraded: ${from} → ${SHIPPED_BUILD}. Sessions kept running.`, 1600);
     mockBuilds[name] = SHIPPED_BUILD;
+    mockSkillsAfterUpgrade(name);
     onValue({ done: true });
     return;
   }
@@ -1303,8 +1333,11 @@ function mockAgent(): Client {
         },
         { id: "review", name: "Review a branch", description: "Codex reviews the changes against main.", agent: "codex", prompt: "Review {{branch_name}} against main and list risks." },
       ]),
-    plugins: () => delay(mockPlugins),
+    // Leadline is read from the listing's own files first (mock-marketplace.ts).
+    plugins: () => marketplaceReady(mockPlugins, fresh).then(() => delay(mockPlugins)),
     async pluginFile(p, file) {
+      const listed = marketplaceFile(p.id, file);
+      if (listed) return listed;
       const res = await fetch(`/__dev-plugins/${encodeURIComponent(p.id)}/${file}`);
       if (!res.ok) throw new Error(`${p.id}: ${res.status} (run pnpm build in plugins/${p.id})`);
       return new Uint8Array(await res.arrayBuffer());
@@ -1366,12 +1399,20 @@ function mockAgent(): Client {
       if (queued) return queued as Promise<T>;
       const kits = kitsCall(method, path, body, emit, delay);
       if (kits) return kits as Promise<T>;
+      const market = marketplaceCall(method, path, body, mockPlugins, delay, (id) => removeHelpers(id, helperBoxes(), true));
+      if (market) return market as Promise<T>;
+      const where = pluginHelpersCall(method, path, helperBoxes(), (id) => mockPlugins.find((p) => p.id === id), delay);
+      if (where) return where as Promise<T>;
       const team = teamLaptopCall(method, path, body, delay);
       if (team) return team as Promise<T>;
       const prReview = prReviewLaptopCall(method, path, body, delay);
       if (prReview) return prReview as Promise<T>;
       const eds = editorsCall(method, path, body, delay);
       if (eds) return eds as Promise<T>;
+      const linear = linearCall(method, path, body, delay);
+      if (linear) return linear as Promise<T>;
+      const helper = helperLaptopCall(method, path, (box) => status.boxes.find((b) => b.name === box)?.state === "online", delay);
+      if (helper) return helper as Promise<T>;
       const gen = imageGenCall(method, path, delay);
       if (gen) return gen as Promise<T>;
       return Promise.reject(new Error(`mock: no fixture for ${method} ${path}`));
@@ -1389,8 +1430,11 @@ function mockAgent(): Client {
   };
 }
 
-// Skills on each box: some installed, one outdated, the rest missing, so
-// every state shows. Project copies start missing and are kept out of git.
+// Skills on each box, so every state shows and the sidebar has its notices
+// (lib/skills-notice.ts): devl has Codex's but none for Claude Code, gpu,
+// which runs an older berthd, has them all with three out of date, and any
+// other box (one added here, the crowd's) has them all, as an install
+// leaves it. Project copies start missing and are kept out of git.
 const skillCatalog = [
   { name: "berth", description: "Use berth to work across development boxes — repos, worktrees, tasks, sessions, ports and the repo's config.", version: "eb32be71b151" },
   { name: "berth-artifacts", description: "Show the user data as a chart, table, diagram, notes or a small page in their Shipyard app instead of a wall of text.", version: "3b7e9c41d2a0" },
@@ -1404,12 +1448,44 @@ type MockSkillState = "installed" | "outdated" | "missing";
 const skillStates: Record<string, Record<string, MockSkillState>> = {};
 const skillCommitted: Record<string, boolean> = {};
 
+const OLDER_ON_GPU = new Set(["berth", "berth-orchestrate", "berth-preview"]);
+
+function seedSkill(scope: string, skill: string, agent: string): MockSkillState {
+  if (scope.includes("/")) return "missing";
+  if (scope === "devl") return agent === "claude" ? "missing" : "installed";
+  if (scope === "gpu") return agent === "claude" && OLDER_ON_GPU.has(skill) ? "outdated" : "installed";
+  return "installed";
+}
+
+// A box's new berthd ships newer skills than the copies installed from the
+// one before: after an upgrade they are out of date until installed again.
+function mockSkillsAfterUpgrade(box: string) {
+  for (const s of skillCatalog) {
+    for (const a of ["claude", "codex"]) {
+      if (skillState(box, s.name, a) === "installed") skillStates[box][`${box}|${s.name}|${a}`] = "outdated";
+    }
+  }
+}
+
+// What a test or a demo can make the next installs on a box do
+// (window.__berthMockSkills): refuse(box, why) is a before:skills.install
+// hook saying no, until allow(box); drop(box) takes the box offline while
+// the next install is under way.
+const skillsRefused: Record<string, string> = {};
+const skillsDrop = new Set<string>();
+if (typeof window !== "undefined") {
+  (window as unknown as { __berthMockSkills: unknown }).__berthMockSkills = {
+    refuse: (box: string, why = "skills on this box are installed by the platform team") => void (skillsRefused[box] = why),
+    allow: (box: string) => void delete skillsRefused[box],
+    drop: (box: string) => void skillsDrop.add(box),
+  };
+}
+
 function skillState(scope: string, skill: string, agent: string): MockSkillState {
   const k = `${scope}|${skill}|${agent}`;
   if (!skillStates[scope]) skillStates[scope] = {};
   if (!(k in skillStates[scope])) {
-    const seeded = !scope.includes("/") && agent === "claude" ? (skill === "berth" ? "installed" : skill === "berth-orchestrate" ? "outdated" : "missing") : "missing";
-    skillStates[scope][k] = seeded;
+    skillStates[scope][k] = seedSkill(scope, skill, agent);
   }
   return skillStates[scope][k];
 }
@@ -1441,6 +1517,21 @@ function mockSkills(box: string, method: string, path: string, body?: unknown): 
   if (method !== "POST" || !m) return undefined;
   const req = body as { skills: string[] | "all"; agent: string; target: string; location?: string; commit?: boolean };
   if (req.target === "project" && !req.location) return Promise.reject(new Error("a project install needs a location"));
+  // A gate on the box says no, in the box's own words (internal/hooks).
+  if (m[1] === "install" && skillsRefused[box]) {
+    const refused = new ApiError(`a "before:skills.install" hook stopped skills.install: ${skillsRefused[box]}`, 403, "refused");
+    return new Promise((_, reject) => setTimeout(() => reject(refused), 300));
+  }
+  // The box goes away before it answers: 503, as the agent says of a
+  // request that never reached it.
+  if (m[1] === "install" && skillsDrop.delete(box)) {
+    return new Promise((_, reject) =>
+      setTimeout(() => {
+        mockSetBoxOnline(box, false);
+        reject(new ApiError(`${box} is offline`, 503));
+      }, 300),
+    );
+  }
   const names = req.skills === "all" || (req.skills.length === 1 && req.skills[0] === "all") ? skillCatalog.map((s) => s.name) : req.skills;
   const agents = req.agent === "all" ? ["claude", "codex"] : [req.agent];
   const scope = req.target === "project" ? `${box}/${req.location}` : box;

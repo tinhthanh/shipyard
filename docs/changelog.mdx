@@ -42,6 +42,158 @@ again.
   About point at `tinhthanh/shipyard` instead of upstream, and agents no
   longer add a "Review in Shipyard" button that goes through berthd.app to
   the pull requests they open.
+
+## v0.3.16
+
+- **Typing `/` in a chat lists your skills.** A bare `/` used to stop after
+  the agent's first 60 commands, which hid every skill and plugin command
+  (and the agent's last few) until you typed part of a name. It now lists
+  everything: your own commands and skills first, then the agent's, then
+  plugins'. And if the list couldn't be read when the chat opened, Shipyard
+  asks the box again instead of leaving the menu closed.
+
+- **An agent's browser opens beside it.** When an agent opens its browser
+  in the worktree you're looking at, its live view now opens to the right
+  of the agent, so you see the chat and the page side by side without
+  clicking **Agent's view · live**. If the tab already has a browser pane,
+  that pane switches to the agent's view instead. Your keyboard stays with
+  the agent, and nothing opens while you're looking at another worktree.
+  Turn it off in **Settings → General**.
+
+## v0.3.15
+
+Both need each box's new `berthd`, and the first the Database plugin's
+update (**Settings → Plugins**).
+
+- **Database finds a worktree's database in its `.env`.** Until now the
+  Database tab only showed a database once Shipyard had started one of the
+  worktree's services with its address, so a project that keeps
+  `DATABASE_URL` in `.env` and starts its own dev server saw "No database
+  yet" for every worktree. Now, when you open the tab and no service has
+  said, the box reads the worktree's `.env`, `.env.development`,
+  `.env.local` and `.env.development.local` and takes the `DATABASE_URL`
+  or `POSTGRES_URL` it finds, if it points at a Postgres on the box
+  itself. The tab says where a database came from, the refresh button
+  looks in the files again, and when there is none it says which files it
+  read and why a variable it found isn't shown. And when nothing says
+  which database a worktree has, **Connect a database…** takes its
+  address: it has to be a Postgres on the box itself, it is kept on the
+  box with the others, and **Forget…** removes it. See
+  [which databases appear](/guides/database#which-databases-appear).
+- **Leadline records queries for projects that keep `DATABASE_URL` in
+  `.env`.** When Shipyard starts a worktree's service and its own
+  environment for it has no `DATABASE_URL` or `POSTGRES_URL`, it now takes
+  the one in the worktree's `.env` files and starts the service with
+  Leadline's proxy in front of it, so **Queries** fills in without moving
+  the address into Shipyard's config. A variable Shipyard's environment
+  already has still wins, and the files are never changed. An app that
+  overrides its environment from `.env` connects round Leadline. See
+  [which databases Leadline sees](/guides/leadline#which-databases-leadline-sees).
+
+## v0.3.14
+
+Database, Leadline and `worktree new --no-setup` need each box's new
+`berthd`: use **Update all** in the status bar, or `berth upgrade BOX`.
+
+- **Database: a worktree's own development database, as a tab.** A new
+  plugin in **Settings → Plugins → Browse** adds a **Database** tab to a
+  worktree: its tables with their rows in a grid you can sort, filter and
+  page through, each table's structure, and a console for SQL. It opens
+  read-only. **Unlock writes** asks once and lasts 15 minutes; then you can
+  edit cells, add and delete rows, review every change as old → new and
+  apply them together, or run statements that write. It is off until you
+  turn it on for a box, which installs a small program there
+  (`berth-database`) after asking, and it only shows a Postgres on the box
+  itself that the worktree's services were started with. See
+  [Database](/guides/database); plugin authors get a `SqlEditor` and the
+  per-box switch for a plugin's program, `HelperBox`, in the
+  [plugin SDK](/reference/plugin-sdk#ui-components).
+- **A plugin's program stops when the plugin does.** Turning off a plugin
+  that runs a program on your boxes, such as Leadline, now stops that
+  program and removes it from every box it runs on, keeping what it
+  recorded; **Remove…** removes that too. Shipyard asks first and names the
+  boxes, and a box that is offline is done when it next connects. Before,
+  the program kept running and recording, with nothing in the app to stop
+  it. Turning the plugin on again starts nothing: you turn it on for each
+  box again. An update that keeps the same program leaves it running while
+  Shipyard asks you about the new version, with **Stop it** in the plugin's
+  row. See [a helper does not outlive its plugin](/guides/plugins#a-helper-does-not-outlive-its-plugin).
+- **Removing a worktree tells Leadline.** Leadline closes the connection it
+  kept in front of that worktree's database and deletes what it recorded
+  for it, however the worktree was removed; before, it kept both until its
+  data was removed. Plugin authors: a helper can name a
+  [`detach` path](/guides/plugins#detach-when-a-worktree-is-removed).
+- **Turning Leadline off again still names the services to restart.**
+  Turned off, on and off again without restarting a service, the second
+  time named none, though the service was sending to Leadline again.
+- **The sidebar says when a box's skills are missing or out of date.** On a
+  box where Shipyard's skills were never installed, or after a box upgrade
+  leaves them older than its berthd ships, a quiet note at the foot of the
+  sidebar names the box ("devl: Shipyard's skills aren't installed for
+  Claude Code", "gpu: 3 skills are out of date") with two ways out.
+  **Install now** installs or updates them all for the box's user and the
+  note goes; if a hook refuses or the box drops off, it says why.
+  **Snooze** puts that box's note away until tomorrow, for a week or for a
+  month, or **Don't remind me** for that box, which Settings → Agents turns
+  back on. No toast, no sound. See
+  [the sidebar's reminder](/guides/agent-integrations#the-sidebars-reminder).
+- The website's header is now coss.com's: "coss.com shipyard", with Docs,
+  Download, GitHub and its stars, and "Close the laptop" as an icon, and coss.com's
+  lines down the sides of the page and across the top of each chapter.
+- **Review no longer keeps a box busy while an item is open.** With an item
+  open, Review read the box's inbox and the item's diff again every couple of
+  seconds for as long as it showed, each read setting off the next. It now
+  reads them once, and again only when something changes.
+- **Make a worktree without waiting for its setup.** `worktree new --no-setup`
+  creates it at once, without the setup script or autostart services, and
+  `worktree setup LOC/NAME [--wait]` runs them later.
+- **Leadline: what your code did in development, as tabs on a worktree.** A
+  new plugin in **Settings → Plugins → Browse** adds **Queries**,
+  **Traces**, **Logs** and **Endpoints** to a worktree: every database
+  query grouped by shape with its N+1s flagged, each request as a
+  waterfall with its SQL and logs, and per-route latency and queries per
+  request. **Send to the agent** writes a slow query, an N+1 or a failing
+  endpoint up for the worktree's agent, and shows you the text before it
+  goes. It is off until you turn it on for a box, which installs a small
+  program there (`berth-leadline`) after asking; what it records stays on
+  that box, for 72 hours. Queries to a Postgres on the box are recorded
+  with no changes to your app; traces and logs need an OpenTelemetry SDK
+  in it. A plugin that carries a program like this says so, by the
+  program's name, before you allow it and in its row in Settings →
+  Plugins. See [Leadline](/guides/leadline); plugin authors get
+  `berth.helper` and a `Chart` component in the
+  [plugin SDK](/reference/plugin-sdk#helper).
+- **Plugins can be installed from the app.** Settings → Plugins has a new
+  **Browse** list of plugins that aren't built in, starting with Hello
+  ports. Install puts one under Installed, off: it runs only once you allow
+  it, like any plugin of your own, and after an update Shipyard asks again.
+  Remove deletes one you installed this way. To list a plugin of yours, see
+  [publish it to the listing](/guides/plugins#publish-it-to-the-listing).
+- **Shipyard has its own mark.** The B from when the app was called Berth is
+  gone: the icon is now a hull seen bow-on, resting on its keel blocks, with
+  the amber lamp lit inside. It is on the app and its dock icon, the phone
+  app, the site and the docs.
+- **Linear issues in Shipyard.** Paste a personal API key in **Settings →
+  Integrations**, and **Issues** gets a Linear side beside GitHub: what is
+  assigned to you or a team's open issues, each with its description and
+  comments, and **Start an agent** on any of them, in the project you
+  choose, on the branch Linear suggests for the issue. A row then shows how
+  its agent is doing. Home has a **Linear** widget for what is assigned to
+  you. The key stays in a file only you can read on this computer: the
+  laptop agent makes every call to Linear, and the app, plugins and boxes
+  never see it. See [Linear](/guides/linear).
+- **`worktree new` can check out a pull request.** Pass `--pr N` with the
+  pull request's head branch as `--branch`, and the worktree starts on that
+  branch as origin has it. A pull request from a fork is fetched from
+  `pull/N/head`, or from the ref you give with `--ref`.
+- **Links in a terminal open with ⌘-click, and say so.** A link used to
+  underline and show the pointing hand on a plain hover, where a click did
+  nothing, and links a program made with its own text (OSC 8) never opened
+  at all. Now resting on a link shows "⌘-click to open", the hand appears
+  while ⌘ is held, and ⌘-click opens the address in your browser, OSC 8
+  links included (Ctrl-click in the Linux app). A long link that wraps
+  over several rows, such as Codex's ChatGPT sign-in link, opens whole
+  from any of its rows; before, it couldn't be clicked at all.
 - **A home widget's ⋯ menu opens again.** It broke the home screen with
   "Base UI error #31" instead of showing its Size and Refresh options.
 - **A Browser tab on a port with nothing listening no longer crashes the

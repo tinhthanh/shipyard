@@ -11,6 +11,12 @@ Shipyard's landing page: static HTML and CSS, no build step. Open
   renders once per size; without the script the plain painting shows. The
   lighthouse's beam is a CSS wedge of halftone dots from the lamp, sweeping
   by transform only (still for reduced motion, paused when hidden).
+- The header is coss.com's bar, as on coss.com/ui: `coss.com shipyard` in
+  Cal Sans (the product in grey), then Docs and Download as ghost buttons,
+  a hairline, GitHub with the repository's stars (from the GitHub API) and
+  "Close the laptop" as an icon. Its lines
+  too: a rail down each side of the page at the header's width, a hairline
+  across the top of a chapter, and a small square where they cross.
 - "Close the laptop" in the header puts the page to night by hand
   (`data-theme` on `<html>`): the harbour redraws at night.
 - At night (dark mode, or the laptop closed) the harbour comes alive:
@@ -62,10 +68,20 @@ Shipyard's landing page: static HTML and CSS, no build step. Open
   GitHub's light and dark themes.
 - `demo/`: the live demo, built from `app/` (see below). Committed, so the
   site still has no build step.
+- `plugins/`: the plugin listing the app's Settings → Plugins → Browse
+  installs from (`plugins/index.json`, and each plugin's files under
+  `plugins/<id>/<version>/`). Built by `pnpm -C app build:marketplace` from
+  the folders in the repository's `plugins/` that say `"marketplace": true`,
+  and committed for the same reason. The laptop agent fetches it, never the
+  app's own page, and checks every file against the index's SHA-256
+  (`docs/guides/plugins.mdx`, "Publish it to the listing"). Don't edit it by
+  hand: `pnpm -C app check:marketplace` says when it isn't what the sources
+  build.
 - `assets/og-film.jpg`: the 1200×630 link preview for Open Graph and
   Twitter, cut from the film's poster (`assets/og.png`, the earlier one, is
   kept but no longer referenced); `assets/favicon.svg` and `assets/apple-touch-icon.png`.
-- `assets/fonts/`: Inter and JetBrains Mono (SIL OFL, licences beside them).
+- `assets/fonts/`: Inter and JetBrains Mono, and Cal Sans cut down to the
+  letters of the header's wordmark (SIL OFL, licences beside them).
 - `scripts/capture.mjs`: retakes the screenshots.
 
 ## The live demo
