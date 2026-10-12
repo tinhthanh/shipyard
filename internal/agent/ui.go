@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -490,7 +491,11 @@ type PluginInfo struct {
 	Main        string   `json:"main,omitempty"`
 	Themes      []string `json:"themes,omitempty"`
 	Hooks       int      `json:"hooks"`
-	Enabled     bool     `json:"enabled"`
+	// MCP and Skills name the tools the plugin gives agents (see
+	// integrations.SyncPluginTools).
+	MCP     []string `json:"mcp,omitempty"`
+	Skills  []string `json:"skills,omitempty"`
+	Enabled bool     `json:"enabled"`
 	// Allowed is the hash of the files the user allowed (hooks.PluginHash),
 	// which the app checks against what it is about to import.
 	Allowed string `json:"allowed,omitempty"`
@@ -510,7 +515,9 @@ func (a *Agent) plugins() []PluginInfo {
 		p := PluginInfo{ID: filepath.Base(dir)}
 		var raw struct {
 			PluginInfo
-			Hooks []json.RawMessage `json:"hooks"`
+			Hooks  []json.RawMessage          `json:"hooks"`
+			MCP    map[string]json.RawMessage `json:"mcp"`
+			Skills map[string]json.RawMessage `json:"skills"`
 		}
 		if b, err := os.ReadFile(m); err != nil {
 			p.Error = err.Error()
@@ -519,6 +526,7 @@ func (a *Agent) plugins() []PluginInfo {
 		} else {
 			p.Name, p.Version, p.Description, p.Main, p.Themes = raw.Name, raw.Version, raw.Description, raw.Main, raw.Themes
 			p.Hooks = len(raw.Hooks)
+			p.MCP, p.Skills = sortedKeys(raw.MCP), sortedKeys(raw.Skills)
 		}
 		// The folder name is the ID, so it is always a safe path segment.
 		if p.Name == "" {
@@ -587,4 +595,16 @@ func headerHasToken(v, token string) bool {
 		}
 	}
 	return false
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -11,6 +11,11 @@ again.
 
 ## Unreleased
 
+- **A plugin without a main module turns on.** One that only adds hooks,
+  themes, kits or agent tools used to show as failed in Settings → Plugins;
+  now it is on, and nothing runs in the app. Settings → Plugins shows the
+  MCP servers and skills a plugin gives agents, and the dialog that asks you
+  to allow a plugin lists them with each file and its sha256.
 - **Plugins can give agents tools.** A plugin's `berth-plugin.json` can list
   MCP servers and skills it ships, each pinned by its sha256. Once you allow
   the plugin, berthd adds its servers (as `berth-<plugin>`) and skills to

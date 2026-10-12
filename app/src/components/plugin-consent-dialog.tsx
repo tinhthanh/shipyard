@@ -84,7 +84,7 @@ export function PluginConsentDialog() {
             <dt className="text-muted-foreground">Folder</dt>
             <dd className="truncate font-mono">~/.berth/plugins/{plugin?.id}</dd>
             <dt className="text-muted-foreground">Code</dt>
-            <dd className="truncate font-mono">{files ? (files.mainPath ? `${files.mainPath} · ${(files.main.length / 1024).toFixed(1)} KB` : "none (hooks, themes or kits only)") : "Reading…"}</dd>
+            <dd className="truncate font-mono">{files ? (files.mainPath ? `${files.mainPath} · ${(files.main.length / 1024).toFixed(1)} KB` : "none (hooks, themes, kits or agent tools only)") : "Reading…"}</dd>
             <dt className="text-muted-foreground">Hash</dt>
             <dd className="truncate font-mono">{files ? files.hash.slice(0, 7 + 16) : "…"}</dd>
           </dl>
@@ -95,6 +95,18 @@ export function PluginConsentDialog() {
                 {files.hooks.map((h, i) => (
                   <li key={`${i}-${h.on}`} className="break-all">
                     <span className="text-muted-foreground">{h.on}</span> {h.run}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {files && files.tools.length > 0 && (
+            <div>
+              <h4 className="mb-1.5 font-medium text-muted-foreground text-xs">Tools it gives agents on your boxes</h4>
+              <ul className="flex flex-col gap-1 rounded-lg border bg-muted/30 px-3 py-2 font-mono text-xs">
+                {files.tools.map((t) => (
+                  <li key={`${t.kind}-${t.name}`} className="break-all">
+                    <span className="text-muted-foreground">{t.kind}</span> {t.name} <span className="text-muted-foreground">{t.file} · sha256 {t.sha256.slice(0, 12)}</span>
                   </li>
                 ))}
               </ul>

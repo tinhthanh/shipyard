@@ -487,6 +487,9 @@ export interface PluginInfo {
   version: string;
   main: string;
   description?: string;
+  // The MCP servers and skills a plugin in ~/.berth/plugins gives agents.
+  mcp?: string[];
+  skills?: string[];
   // Ships inside the app (plugins/ in the repository) rather than
   // ~/.berth/plugins; a user plugin with the same id replaces it.
   builtin?: boolean;
