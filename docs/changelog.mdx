@@ -11,6 +11,11 @@ again.
 
 ## Unreleased
 
+- **Doctor no longer says berthd runs "not as a service" when it does.**
+  `berthd install` puts your login shell's PATH in the service, and doctor
+  compared the service with one that had no PATH, so on a Mac it always
+  asked you to run `berthd install` again. Now any PATH counts; the program,
+  its arguments and the rest must still match.
 - **Plugins can have settings.** A plugin can list switches for its tools,
   for example which Chrome profiles agents may use, and you set them in
   Settings → Plugins. Changing one keeps the plugin allowed, and updating the
