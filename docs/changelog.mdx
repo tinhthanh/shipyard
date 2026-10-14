@@ -11,11 +11,6 @@ again.
 
 ## Unreleased
 
-- **Doctor no longer says berthd runs "not as a service" when it does.**
-  `berthd install` puts your login shell's PATH in the service, and doctor
-  compared the service with one that had no PATH, so on a Mac it always
-  asked you to run `berthd install` again. Now any PATH counts; the program,
-  its arguments and the rest must still match.
 - **Plugins can have settings.** A plugin can list switches for its tools,
   for example which Chrome profiles agents may use, and you set them in
   Settings → Plugins. Changing one keeps the plugin allowed, and updating the
@@ -47,6 +42,58 @@ again.
   About point at `tinhthanh/shipyard` instead of upstream, and agents no
   longer add a "Review in Shipyard" button that goes through berthd.app to
   the pull requests they open.
+- **Agents sharing a worktree each get a browser tab of their own.** When
+  several agents check pages in one worktree at once, each passes
+  `--tab NAME` to `berthd browser` and gets its own page, cookies and size,
+  so they no longer take the page from each other. Every tab keeps rendering
+  at full speed while nobody watches it. The agent's view in a browser pane
+  shows the tabs, stays on the one you pick, and no longer jumps from one
+  agent's page to the next. Needs the box upgraded.
+
+## v0.3.17
+
+- **Labs: OpenCode, Gemini CLI and Cursor Agent run structured too.** With
+  *Structured agents* on, they start through the Agent Client Protocol: their
+  replies stream into the chat, their permission requests come to it (or,
+  with Bypass, the box allows them), Stop cancels their turn, their own modes
+  are in the chat's mode menu, and they can be resumed. A repository's own
+  agent can join in by giving its preset an `acp`. Needs the box upgraded.
+
+- **Labs: Codex agents can run structured too.** With *Structured agents*
+  on (Settings › Labs), a new Codex agent
+  runs as Codex's app server, driven by the box: replies stream into the
+  chat, commands and file changes to approve come to it as Allow / Always
+  allow / Deny (or, with Bypass, run without asking), its questions are
+  answered there, and it can be stopped and resumed. Needs the box upgraded.
+
+- **Labs: a structured Claude agent's conversation can be resumed.** When
+  one ends, its pane offers *Resume the conversation* rather than a fresh
+  start, and once its session is closed a worktree's menu lists its
+  conversations under *Resume a conversation*: each carries on where it left
+  off, earlier turns and permission mode included. Needs the box upgraded.
+
+- **Labs: a structured Claude agent opens in Claude Code's own terminal and
+  comes back.** The Terminal switch on a structured agent's pane stops it and
+  opens the same conversation in Claude Code's screen, for `/login`,
+  `/memory`, its menus and anything else only it does; Conversation brings it
+  back to the chat, with what was said in the terminal in its place. Needs the
+  box upgraded.
+
+- **Labs: structured Claude agents.** Turn on *Structured agents*
+  in Settings › Labs and new Claude Code agents run without their
+  terminal: the box drives Claude Code through its stream and keeps its own
+  record of the conversation, so replies stream in as they are written,
+  nothing is read off a screen, and an agent keeps working while your
+  laptop is away or the box's berthd restarts. Permissions come to the chat
+  as Allow / Always allow / Deny, or with *Permissions: Bypass* (the
+  default) the box allows them for you; questions and plans always wait for
+  you. They open as conversations. Needs the box upgraded.
+
+- **Doctor no longer says berthd runs "not as a service" when it does.**
+  `berthd install` puts your login shell's PATH in the service, and doctor
+  compared the service with one that had no PATH, so on a Mac it always
+  asked you to run `berthd install` again. Now any PATH counts; the program,
+  its arguments and the rest must still match.
 
 ## v0.3.16
 

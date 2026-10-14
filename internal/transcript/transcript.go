@@ -315,6 +315,21 @@ func (c *conv) call(toolID string, tc ToolCall) {
 	}
 }
 
+// retitle says what a call does once its agent says more: its target, in
+// the group it is in, when it does the same kind of thing.
+func (c *conv) retitle(toolID string, tc ToolCall) {
+	i, ok := c.byTool[toolID]
+	it := c.at(i)
+	if !ok || it == nil || it.Kind != "tools" || it.Verb != tc.Verb {
+		return
+	}
+	for j := range it.Items {
+		if it.Items[j].ID == toolID {
+			it.Items[j].Target, it.Items[j].File = tc.Target, tc.File
+		}
+	}
+}
+
 // launched marks a helper as running in the background: its tool call
 // answers at once, and it is back only when its notification says so.
 func (c *conv) launched(toolID string) {
@@ -470,12 +485,7 @@ func (r *Reader) Follow(source, path, dir string, since int, gen string) (Result
 			r.evictOldest()
 		}
 		c = &conv{source: source, dir: dir, side: isHelper(path), byTool: map[string]int{}, crewByID: map[string]int{}, gen: gens.Add(1)}
-		switch source {
-		case "codex":
-			c.p = &codexParser{}
-		default:
-			c.p = &claudeParser{}
-		}
+		c.p = parserFor(source)
 		r.convs[path] = c
 	}
 	c.used = now
@@ -498,7 +508,7 @@ func (r *Reader) Follow(source, path, dir string, since int, gen string) (Result
 		from = min(from, c.base+n-1)
 	}
 	from = min(from, c.base+len(c.items))
-	out := Result{Source: source, Next: c.base + len(c.items), Truncated: c.truncated || c.base > 0, Last: c.lineAt,
+	out := Result{Source: shownSource(source), Next: c.base + len(c.items), Truncated: c.truncated || c.base > 0, Last: c.lineAt,
 		Gen: c.generation(), Reset: reset, Start: c.offset, File: strings.TrimSuffix(filepath.Base(path), ".jsonl")}
 	if len(c.items) > 0 {
 		out.Start = c.items[0].Off

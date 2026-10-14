@@ -7,6 +7,8 @@ import { SettingsGroup, SettingsPage, SettingsRow } from "@/views/settings/rows"
 export function LabsSection() {
   const labs = usePrefs((p) => p.labs);
   const agentView = usePrefs((p) => p.agentView);
+  const structured = usePrefs((p) => p.structuredClaude);
+  const approvals = usePrefs((p) => p.approvals);
   return (
     <SettingsPage title="Labs" description="Newer ideas, on by default. They may change or go away.">
       <SettingsGroup>
@@ -22,6 +24,26 @@ export function LabsSection() {
                 { value: "conversation", label: "Conversation" },
               ]}
               onChange={(v) => setPrefs({ agentView: v })}
+            />
+          </SettingsRow>
+        )}
+        {labs && (
+          <SettingsRow
+            label="Structured agents"
+            description="New Claude Code, Codex, OpenCode, Gemini CLI and Cursor Agent agents run without their terminal: the box drives them through their own protocol (Claude Code's stream, Codex's app server, ACP for the rest) and keeps its own record. They open as conversations; Claude Code's own terminal is one switch away."
+          >
+            <Switch checked={structured} onCheckedChange={(on) => setPrefs({ structuredClaude: on })} />
+          </SettingsRow>
+        )}
+        {labs && structured && (
+          <SettingsRow label="Permissions" description="Bypass lets the box allow what a structured agent asks to do; its questions and plans still come to you. Ask brings every permission to you.">
+            <Segmented
+              value={approvals}
+              options={[
+                { value: "bypass", label: "Bypass" },
+                { value: "ask", label: "Ask" },
+              ]}
+              onChange={(v) => setPrefs({ approvals: v })}
             />
           </SettingsRow>
         )}
