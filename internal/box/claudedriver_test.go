@@ -335,7 +335,12 @@ func TestAPermissionInAStructuredSessionsFirstTurnWaitsForThePerson(t *testing.T
 	if status := call(t, c, "POST", "/v1/sessions", "", map[string]any{"location": "acme", "agent": "claude", "driver": "claude", "prompt": "run the tests"}, &sess); status != 200 {
 		t.Fatalf("start: %d", status)
 	}
-	t.Cleanup(func() { call(t, c, "DELETE", "/v1/sessions/"+sess.Name, "", nil, nil) })
+	t.Cleanup(func() {
+		call(t, c, "DELETE", "/v1/sessions/"+sess.Name, "", nil, nil)
+		// The session is ended while its agent waits: let its host finish
+		// writing before the temporary folders go.
+		box.Sessions.WaitCleanup()
+	})
 
 	deadline := time.Now().Add(10 * time.Second)
 	for st, _ := states.State(sess.Name); st.State != "waiting"; st, _ = states.State(sess.Name) {
