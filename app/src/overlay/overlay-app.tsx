@@ -77,37 +77,53 @@ export default function OverlayApp() {
   const details = <Card limits={limits} usage={on} waiting={waiting} working={working} />;
   if (notch) {
     return (
-      <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-col items-center text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-        <NotchBar screen={screen}>{content}</NotchBar>
-        {hover && details}
+      <div className="fixed inset-0 flex items-start justify-center">
+        <style>{MOTION}</style>
+        <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-col items-center text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+          <NotchBar screen={screen}>{content}</NotchBar>
+          {hover && <div className="berth-bar-in">{details}</div>}
+        </div>
       </div>
     );
   }
   const tone = waiting.length ? "bg-amber-400" : working.length ? "bg-sky-400" : "bg-white/35";
+  // Pinned to the window's right edge and middle, which the window keeps
+  // as it eases to a new size: the dock stays put on the screen.
   return (
-    <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-row-reverse items-center gap-2 text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-      {hover ? (
-        <Dock
-          onRest={() => {
-            if (card || dwell.current) return;
-            dwell.current = window.setTimeout(() => {
-              dwell.current = 0;
-              setCard(true);
-            }, 300);
-          }}
-        >
-          {content}
-        </Dock>
-      ) : (
-        // Focusable too, so the keyboard can open it.
-        <button type="button" data-testid="overlay-sliver" aria-label="Shipyard: show the floating bar" className="flex h-16 w-2 items-center justify-end rounded-l-full bg-neutral-900/95 pr-px outline-none ring-1 ring-white/15" onFocus={() => setHover(true)}>
-          <span className={cn("h-8 w-[3px] rounded-full", tone)} />
-        </button>
-      )}
-      {hover && card && details}
+    <div className="fixed inset-0 flex items-center justify-end">
+      <style>{MOTION}</style>
+      <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-row-reverse items-center gap-2 text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        {hover ? (
+          <Dock
+            onRest={() => {
+              if (card || dwell.current) return;
+              dwell.current = window.setTimeout(() => {
+                dwell.current = 0;
+                setCard(true);
+              }, 300);
+            }}
+          >
+            {content}
+          </Dock>
+        ) : (
+          // Focusable too, so the keyboard can open it.
+          <button type="button" data-testid="overlay-sliver" aria-label="Shipyard: show the floating bar" className="flex h-16 w-2 items-center justify-end rounded-l-full bg-neutral-900/95 pr-px outline-none ring-1 ring-white/15" onFocus={() => setHover(true)}>
+            <span className={cn("h-8 w-[3px] rounded-full", tone)} />
+          </button>
+        )}
+        {hover && card && <div className="berth-bar-in">{details}</div>}
+      </div>
     </div>
   );
 }
+
+// The dock slides out of the edge and the card fades in, quickly: the
+// window eases to its new size alongside (overlay.rs).
+const MOTION = `
+@keyframes berth-bar-in { from { opacity: 0; transform: translateX(10px) } to { opacity: 1; transform: none } }
+.berth-bar-in { animation: berth-bar-in 160ms ease-out both }
+@media (prefers-reduced-motion: reduce) { .berth-bar-in { animation: none } }
+`;
 
 // The dock on the screen's edge, after Codenotch's: a tab out of the edge,
 // its top and bottom curving into it.
@@ -119,7 +135,7 @@ function Dock({ onRest, children }: { onRest(): void; children: [React.ReactNode
   );
   return (
     // Mouse moves, not enter: the dock opens under a pointer already there.
-    <div className="flex flex-col items-end" data-testid="overlay-bar" onMouseMove={onRest}>
+    <div className="berth-bar-in flex flex-col items-end" data-testid="overlay-bar" onMouseMove={onRest}>
       {shoulder(true)}
       <div className="flex w-[52px] flex-col items-center gap-3 rounded-l-[26px] py-3 pl-1" style={{ background: DOCK }}>
         {children[0]}

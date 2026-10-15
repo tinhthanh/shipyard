@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+#[cfg(not(target_os = "macos"))]
+use tauri::{LogicalPosition, LogicalSize};
 
 // The floating bar (Settings → Appearance): a small window that stays over
 // every app, every Space and full-screen apps, with each login's plan limits
@@ -121,12 +123,21 @@ pub fn overlay_fit(app: AppHandle, window: WebviewWindow, width: f64, height: f6
         Place::Edge => (s.width - width - EDGE_GAP, ((s.height - height) / 2.0).max(s.top)),
         Place::Notch => ((s.width - width) / 2.0, 0.0),
     };
-    window.set_size(LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
-    window.set_position(LogicalPosition::new(ox + x, oy + y)).map_err(|e| e.to_string())?;
+    // Size and place in one step: done in two, what's under the pointer
+    // moves between them, the page hears it leave and folds, and the bar
+    // flickers open and shut. On macOS the frame eases there, the content
+    // pinned to the screen's edge.
     #[cfg(target_os = "macos")]
-    front(&window);
+    {
+        let _ = (ox, oy);
+        set_frame(&window, s.height, x, y, width, height);
+    }
     #[cfg(not(target_os = "macos"))]
-    window.show().map_err(|e| e.to_string())?;
+    {
+        window.set_size(LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
+        window.set_position(LogicalPosition::new(ox + x, oy + y)).map_err(|e| e.to_string())?;
+        window.show().map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -285,15 +296,29 @@ fn float(w: &WebviewWindow, place: Place) {
     }
 }
 
-// front shows the bar without making Shipyard the active app.
+// set_frame gives the bar its frame in one step, in AppKit's coordinates
+// (from the bottom of the menu bar's screen): at once the first time, then
+// eased (through the window's animator, which doesn't hold up the main
+// thread the way setFrame:display:animate: does). It shows the bar without
+// making Shipyard the active app.
 #[cfg(target_os = "macos")]
-fn front(w: &WebviewWindow) {
+fn set_frame(w: &WebviewWindow, screen_height: f64, x: f64, y: f64, width: f64, height: f64) {
+    use mac::{Point, Rect, Size};
     use objc2::msg_send;
     use objc2::runtime::AnyObject;
     let Ok(ns) = w.ns_window() else { return };
+    let frame = Rect { origin: Point { x, y: screen_height - y - height }, size: Size { width, height } };
     unsafe {
-        if let Some(ns) = (ns as *mut AnyObject).as_ref() {
-            let _: () = msg_send![ns, orderFrontRegardless];
+        let Some(ns) = (ns as *mut AnyObject).as_ref() else { return };
+        let visible: bool = msg_send![ns, isVisible];
+        if visible {
+            let animator: *mut AnyObject = msg_send![ns, animator];
+            if let Some(animator) = animator.as_ref() {
+                let _: () = msg_send![animator, setFrame: frame, display: true];
+                return;
+            }
         }
+        let _: () = msg_send![ns, setFrame: frame, display: true];
+        let _: () = msg_send![ns, orderFrontRegardless];
     }
 }
