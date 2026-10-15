@@ -35,6 +35,22 @@ const refreshes: [prefix: string, parts: BoxPart[]][] = [
   ["agents.", ["info"]],
 ];
 
+// refreshFor refetches what an event changed on its box, and the boxes'
+// status when one came or went. The floating bar (src/overlay) follows
+// events with this alone: no notifications, plugins or runs there.
+export function refreshFor(e: BerthEvent) {
+  if (e.type.startsWith("box.") || e.type.startsWith("forward.")) {
+    void useStore.getState().refreshStatus();
+    const name = (e.data?.box as string | undefined) ?? e.box;
+    if (e.type === "box.connected" && name) scheduleRefresh(name, ["locations", "sessions", "stats", "services", "info"]);
+  }
+  if (e.box) {
+    for (const [prefix, parts] of refreshes) {
+      if (e.type.startsWith(prefix)) scheduleRefresh(e.box, parts);
+    }
+  }
+}
+
 // The most recent events, newest first, for the Automations view.
 export const useEventLog = create<{ events: BerthEvent[] }>()(() => ({ events: [] }));
 
@@ -46,19 +62,8 @@ export function handleEvent(e: BerthEvent) {
   if (e.type === "transcript.changed") return noteTranscriptChanged(e);
   useEventLog.setState((s) => ({ events: [e, ...s.events].slice(0, 200) }));
   dispatch(e);
-  const store = useStore.getState();
-
-  if (e.type.startsWith("box.") || e.type.startsWith("forward.")) {
-    void store.refreshStatus();
-    const name = (e.data?.box as string | undefined) ?? e.box;
-    if (e.type === "box.connected" && name) scheduleRefresh(name, ["locations", "sessions", "stats", "services", "info"]);
-  }
+  refreshFor(e);
   if (e.box && (e.type.startsWith("run.") || e.type.startsWith("flow."))) scheduleRuns(e.box);
-  if (e.box) {
-    for (const [prefix, parts] of refreshes) {
-      if (e.type.startsWith(prefix)) scheduleRefresh(e.box, parts);
-    }
-  }
 
   // Prompts queued for a box that was away: the list, and what came of them.
   if (e.type.startsWith("queue.")) handleQueueEvent(e);

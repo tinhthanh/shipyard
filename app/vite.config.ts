@@ -81,6 +81,19 @@ function demoPage(): Plugin {
 
 // noShikiWasm: the diff renderer highlights with Shiki's JavaScript regex
 // engine, so its Oniguruma engine (a 600 KB wasm chunk) is never shipped.
+// boxScripts loads the scripts plugins run on boxes (usage.py) as text, as
+// the plugin build does, for the floating bar, which reads plan limits with
+// the Usage plugin's own code (src/overlay).
+function boxScripts(): Plugin {
+  return {
+    name: "berth-box-scripts",
+    transform(code, id) {
+      if (!/\.(py|sh)$/.test(id.split("?")[0])) return;
+      return { code: `export default ${JSON.stringify(code)};`, map: null };
+    },
+  };
+}
+
 function noShikiWasm(): Plugin {
   return {
     name: "berth-no-shiki-wasm",
@@ -147,7 +160,7 @@ const argPort = process.argv.includes("--port") ? process.argv[process.argv.inde
 
 export default defineConfig(({ mode }) => ({
   cacheDir: argPort && argPort !== "1420" ? `node_modules/.vite-${argPort}` : "node_modules/.vite",
-  plugins: [react(), tailwindcss(), devPlugins(), mockVdiff(), noShikiWasm(), ...(mode === "demo" ? [demoPage()] : [])],
+  plugins: [react(), tailwindcss(), devPlugins(), mockVdiff(), noShikiWasm(), boxScripts(), ...(mode === "demo" ? [demoPage()] : [])],
   // The diff renderer's highlighting worker loads its languages as chunks,
   // which takes a module worker.
   worker: { format: "es" as const, plugins: () => [noShikiWasm(), workerScript()] },

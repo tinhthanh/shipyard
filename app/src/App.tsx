@@ -54,6 +54,7 @@ import { useReviewStatuses } from "@/views/pr-review/use-review-status";
 import { AddBoxDialog } from "@/views/onboarding/add-box-dialog";
 import { useOnboardingActive } from "@/views/onboarding/onboarding-state";
 import { HomeView } from "@/views/home/home-view";
+import { useOverlayControl } from "@/overlay/control";
 import { usePrefs } from "@/lib/prefs";
 import { lazyView, preloadViews } from "@/lib/lazy-view";
 import { placeLabel } from "@/lib/worktree-names";
@@ -104,6 +105,8 @@ export default function App() {
   useReviewDeepLinks();
   useReviewStatuses();
   useTeamWatch();
+  // The floating bar over every app (src/overlay), when it is on.
+  useOverlayControl();
   const view = useStore((s) => s.view);
   const workspace = view.kind === "workspace";
   // Labs: zen (⌘.) puts away the sidebar, the tab strip and the status bar.

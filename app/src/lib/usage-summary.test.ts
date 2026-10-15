@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Limits, Report, Window } from "../../../plugins/usage/src/box.ts";
-import { summarizeUsage, windowName } from "../../../plugins/usage/src/summary.ts";
+import { limitsByLogin, summarizeUsage, windowName } from "../../../plugins/usage/src/summary.ts";
 
 const NOW = Date.parse("2026-10-14T12:00:00Z");
 const H = 3600;
@@ -152,4 +152,26 @@ test("window names", () => {
   assert.equal(windowName(win(1, 10080, 1)), "week");
   assert.equal(windowName(win(1, 1440, 1)), "day");
   assert.equal(windowName(win(1, 10080, 1, "Weekly limit (Fable)")), "week (Fable)");
+});
+
+test("limits by login: one ring each, a login read on two boxes once, shortest window first", () => {
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10, win(36, 10080, 50, "Weekly limit (Fable)")), email: "ana@acme.test" };
+  const a2 = { ...claude("work", at("2026-10-14T11:30:00Z"), 4, 10), email: "ana@acme.test" };
+  const b = { ...claude("default", at("2026-10-14T11:00:00Z"), 8, 0), email: "bo@acme.test" };
+  const codex: Limits = { agent: "codex", account: "default", at: at("2026-10-14T11:00:00Z"), limits: { primary: win(30, 300, 2), secondary: win(60, 10080, 72) } };
+  const rows = limitsByLogin([{ report: report([a, codex]) }, { report: report([a2, b]) }], NOW);
+  assert.deepEqual(
+    rows.map((r) => [r.agent, r.name, r.windows.map((w) => `${w.name} ${Math.round(w.used * 100)}`)]),
+    [
+      ["claude", "ana", ["5h 4", "week 10", "week (Fable) 36"]],
+      ["claude", "bo", ["5h 8", "week 0"]],
+      ["codex", "default", ["5h 30", "week 60"]],
+    ],
+  );
+});
+
+test("limits by login leave out windows that have reset, and logins with none left", () => {
+  const old = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "bo@acme.test" };
+  old.limits = { primary: win(3, 300, -1), secondary: win(10, 10080, -2) };
+  assert.deepEqual(limitsByLogin([{ report: report([old]) }], NOW), []);
 });
