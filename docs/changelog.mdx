@@ -14,8 +14,9 @@ again.
 - **Usage shows Claude Code's plan limits.** The Usage screen and its home
   widget now show each Claude login's current session, its week and any week
   for one model (such as Fable), with when each resets — what Claude Code's
-  own `/usage` prints. The box asks `/usage` at most every five minutes per
-  login, in a way that leaves no transcript and starts no MCP server.
+  own `/usage` prints. The box asks `/usage` at most every ten minutes per
+  login, all logins at once and for at most 12 seconds, in a way that leaves
+  no transcript and starts no MCP server; if it fails, the tokens still show.
 - **Labs: a structured agent's first permission waits for you.** When a
   structured agent asked for a permission in its very first turn, with
   *Permissions: Ask*, the box read the session's screen, which shows nothing
