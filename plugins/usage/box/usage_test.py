@@ -54,6 +54,21 @@ class ClaudeUsageTest(unittest.TestCase):
         self.assertEqual(l["secondary"], {"used_percent": 64.0, "window_minutes": 10080, "resets_at": at(2026, 10, 19, 8, 0)})
         self.assertEqual(l["extra"], [{"used_percent": 32.0, "window_minutes": 10080, "resets_at": at(2026, 10, 19, 8, 0), "label": "Weekly limit (Fable)"}])
 
+    def test_a_login_whose_usage_has_no_all_models_week(self):
+        # Word for word what another Max login printed on 2026-10-15: a
+        # session and a model's week, no week for all models.
+        text = """You are currently using your subscription to power your Claude Code usage
+
+Current session: 5% used · resets Oct 15 at 4:09pm (Asia/Saigon)
+Current week (Fable): 0% used · resets Oct 21 at 3pm (Asia/Saigon)
+
+What's contributing to your limits usage?
+"""
+        l = usage.parse_claude_usage(text, NOW)
+        self.assertEqual(l["primary"]["used_percent"], 5.0)
+        self.assertIsNone(l["secondary"])
+        self.assertEqual([(w["label"], w["used_percent"]) for w in l["extra"]], [("Weekly limit (Fable)", 0.0)])
+
     def test_the_prose_below_is_no_limit(self):
         # "100% of your usage..." is about what drove the usage, not a window.
         l = usage.parse_claude_usage(SAMPLE, NOW)

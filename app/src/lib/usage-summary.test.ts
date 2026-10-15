@@ -59,6 +59,23 @@ test("boxes that read the same reset seconds apart agree on it", () => {
   );
 });
 
+test("one login printed a minute apart by two boxes (12:29 and 12:30) counts once", () => {
+  // What two boxes on one login showed for real: their reads were half a
+  // minute apart, and Claude Code prints resets to the minute.
+  const a = claude("default", at("2026-10-14T11:00:00Z"), 94, 77);
+  const b = claude("default", at("2026-10-14T10:15:00Z"), 88, 76);
+  b.limits.primary = { ...b.limits.primary!, resets_at: a.limits.primary!.resets_at! + 60 };
+  b.limits.secondary = { ...b.limits.secondary!, resets_at: a.limits.secondary!.resets_at! + 60 };
+  const s = summarizeUsage([{ box: "gh-m-040", report: report([a]) }, { box: "thus-macbook-pro", report: report([b]) }], [], NOW);
+  assert.deepEqual(
+    s.limits.map((l) => [l.label, Math.round(l.used * 100)]),
+    [
+      ["Claude Code · 5h", 94],
+      ["Claude Code · week", 77],
+    ],
+  );
+});
+
 test("two logins with their own windows both show", () => {
   const work: Limits = { ...claude("work", at("2026-10-14T11:00:00Z"), 80, 10), limits: { primary: win(80, 300, 3), secondary: win(10, 10080, 100) } };
   const s = summarizeUsage([{ box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 30, 60), work]) }], [], NOW);
