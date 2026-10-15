@@ -9,7 +9,7 @@ import { useAgentRows } from "@/views/home/widgets/agents";
 // OverlayFeed tells the floating bar (app/bar) what to show, each time that
 // changes: each login's plan limits, read with the Usage plugin's script
 // while that plugin is on, and the agents that need you or are working.
-// The main window renders it while the bar is on (overlay/control.ts).
+// The main window renders it while the bar is on (overlay/control.tsx).
 export default function OverlayFeed() {
   const usage = usePrefs((p) => p.enabledPlugins.includes("usage") && !p.disabledPlugins.includes("usage"));
   const logins = useLoginLimits(usage);

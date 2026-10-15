@@ -26,21 +26,29 @@ pub struct Target {
     session: String,
 }
 
-// The running bar, if any.
+// The bar, while it is on: where it sits, what it shows, and the helper
+// showing it. Both are kept, so a helper that starts (or starts again after
+// it stopped) is told at once, whichever of the two came first.
 #[derive(Default)]
-pub struct Bar(Mutex<Option<Running>>);
+pub struct Bar(Mutex<Inner>);
+
+#[derive(Default)]
+struct Inner {
+    place: Option<Place>,
+    state: Option<serde_json::Value>,
+    running: Option<Running>,
+}
 
 pub struct Running {
     child: std::process::Child,
-    stdin: std::process::ChildStdin,
+    // Lines for the helper's stdin, written on a thread of their own: a
+    // helper that stops reading must not hold up the app's main thread.
+    lines: std::sync::mpsc::Sender<String>,
 }
 
 impl Running {
-    fn send(&mut self, line: &serde_json::Value) -> Result<(), String> {
-        use std::io::Write;
-        let mut text = line.to_string();
-        text.push('\n');
-        self.stdin.write_all(text.as_bytes()).and_then(|_| self.stdin.flush()).map_err(|e| format!("the floating bar stopped: {e}"))
+    fn send(&self, line: &serde_json::Value) {
+        let _ = self.lines.send(line.to_string());
     }
 
     fn alive(&mut self) -> bool {
@@ -55,38 +63,77 @@ impl Drop for Running {
     }
 }
 
+fn state_line(state: &serde_json::Value) -> serde_json::Value {
+    let mut line = state.clone();
+    if let Some(o) = line.as_object_mut() {
+        o.insert("type".into(), "state".into());
+    }
+    line
+}
+
+impl Inner {
+    // The helper, running and told what it should show: started (again) if
+    // it isn't.
+    fn ensure(&mut self, app: &AppHandle) -> Result<(), String> {
+        let Some(place) = self.place else { return Ok(()) };
+        if let Some(running) = self.running.as_mut() {
+            if running.alive() {
+                return Ok(());
+            }
+        }
+        self.running = None;
+        let running = start(app, place)?;
+        if let Some(state) = &self.state {
+            running.send(&state_line(state));
+        }
+        self.running = Some(running);
+        Ok(())
+    }
+}
+
+fn lock(bar: &Bar) -> std::sync::MutexGuard<'_, Inner> {
+    bar.0.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 // overlay_show starts the bar at place, or moves it there.
 #[tauri::command]
 pub fn overlay_show(app: AppHandle, bar: State<Bar>, place: Place) -> Result<(), String> {
-    let mut slot = bar.0.lock().map_err(|e| e.to_string())?;
-    if let Some(running) = slot.as_mut() {
-        if running.alive() {
-            return running.send(&serde_json::json!({ "type": "place", "place": place }));
+    let mut inner = lock(&bar);
+    let moved = inner.place.is_some_and(|p| p != place);
+    inner.place = Some(place);
+    if moved && inner.running.as_mut().is_some_and(|r| r.alive()) {
+        if let Some(running) = &inner.running {
+            running.send(&serde_json::json!({ "type": "place", "place": place }));
         }
+        return Ok(());
     }
-    *slot = Some(start(&app, place)?);
-    Ok(())
+    inner.ensure(&app)
 }
 
 // overlay_hide stops the bar.
 #[tauri::command]
 pub fn overlay_hide(bar: State<Bar>) {
-    if let Ok(mut slot) = bar.0.lock() {
-        slot.take();
-    }
+    let mut inner = lock(&bar);
+    inner.place = None;
+    inner.running = None;
 }
 
 // overlay_state is what the bar shows (src/overlay/bar-state.ts): logins
 // and their plan windows, and the agents that need you or are working.
 #[tauri::command]
-pub fn overlay_state(bar: State<Bar>, state: serde_json::Value) -> Result<(), String> {
-    let mut slot = bar.0.lock().map_err(|e| e.to_string())?;
-    let Some(running) = slot.as_mut() else { return Ok(()) };
-    let mut line = state;
-    if let Some(o) = line.as_object_mut() {
-        o.insert("type".into(), "state".into());
+pub fn overlay_state(app: AppHandle, bar: State<Bar>, state: serde_json::Value) -> Result<(), String> {
+    let mut inner = lock(&bar);
+    let line = state_line(&state);
+    inner.state = Some(state);
+    let was_running = inner.running.as_mut().is_some_and(|r| r.alive());
+    inner.ensure(&app)?;
+    // A helper started just now was told already.
+    if was_running {
+        if let Some(running) = &inner.running {
+            running.send(&line);
+        }
     }
-    running.send(&line)
+    Ok(())
 }
 
 // The bar goes with the main window: closing that still quits Shipyard.
@@ -112,8 +159,18 @@ fn start(app: &AppHandle, place: Place) -> Result<Running, String> {
         .stderr(Stdio::null())
         .spawn()
         .map_err(|e| format!("couldn't start the floating bar ({}): {e}", path.display()))?;
-    let stdin = child.stdin.take().ok_or("the floating bar has no stdin")?;
+    let mut stdin = child.stdin.take().ok_or("the floating bar has no stdin")?;
     let stdout = child.stdout.take().ok_or("the floating bar has no stdout")?;
+    let (lines, queue) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        for mut line in queue {
+            line.push('\n');
+            if stdin.write_all(line.as_bytes()).and_then(|_| stdin.flush()).is_err() {
+                break;
+            }
+        }
+    });
     let handle = app.clone();
     std::thread::spawn(move || {
         for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
@@ -125,7 +182,7 @@ fn start(app: &AppHandle, place: Place) -> Result<Running, String> {
             }
         }
     });
-    Ok(Running { child, stdin })
+    Ok(Running { child, lines })
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -144,9 +201,11 @@ fn helper() -> Result<std::path::PathBuf, String> {
     }
     #[cfg(debug_assertions)]
     {
-        let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../bar/.build/release/shipyard-bar");
-        if dev.exists() {
-            return Ok(dev);
+        let bar = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../bar/.build");
+        for dev in [bar.join("release/shipyard-bar"), bar.join("apple/Products/Release/shipyard-bar")] {
+            if dev.exists() {
+                return Ok(dev);
+            }
         }
     }
     Err("this Shipyard has no floating bar (shipyard-bar is missing); in development, run swift build -c release in app/bar".into())

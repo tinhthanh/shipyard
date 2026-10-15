@@ -12,11 +12,11 @@ import SwiftUI
 //   {"type":"open","box":"devl","session":"shop-claude"}   a session
 //   {"type":"open"}                                         Home
 
-enum Place: String, Decodable {
+enum Place: String, Decodable, Sendable {
     case edge, notch
 }
 
-struct Window: Decodable, Equatable, Hashable {
+struct PlanWindow: Decodable, Equatable, Hashable, Sendable {
     var name: String
     var minutes: Double
     var used: Double
@@ -24,20 +24,20 @@ struct Window: Decodable, Equatable, Hashable {
     var resets: Double
 }
 
-struct Login: Decodable, Equatable, Identifiable {
+struct Login: Decodable, Equatable, Identifiable, Sendable {
     var agent: String
     var login: String
     var name: String
-    var windows: [Window]
+    var windows: [PlanWindow]
     var id: String { "\(agent):\(login)" }
 
     // The outer arc: the shortest window (Claude Code's session). The inner:
     // the most used of the others (a week).
-    var outer: Window? { windows.first }
-    var inner: Window? { windows.dropFirst().max(by: { $0.used < $1.used }) }
+    var outer: PlanWindow? { windows.first }
+    var inner: PlanWindow? { windows.dropFirst().max(by: { $0.used < $1.used }) }
 }
 
-struct Agent: Decodable, Equatable, Identifiable {
+struct Agent: Decodable, Equatable, Identifiable, Sendable {
     var key: String
     var box: String
     var session: String
@@ -52,14 +52,14 @@ struct Agent: Decodable, Equatable, Identifiable {
     }
 }
 
-struct BarState: Decodable, Equatable {
+struct BarState: Decodable, Equatable, Sendable {
     var usage: Bool = false
     var logins: [Login] = []
     var waiting: [Agent] = []
     var working: [Agent] = []
 }
 
-struct Message: Decodable {
+struct Message: Decodable, Sendable {
     var type: String
     var place: Place?
     var usage: Bool?

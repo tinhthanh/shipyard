@@ -79,8 +79,6 @@ function demoPage(): Plugin {
   };
 }
 
-// noShikiWasm: the diff renderer highlights with Shiki's JavaScript regex
-// engine, so its Oniguruma engine (a 600 KB wasm chunk) is never shipped.
 // boxScripts loads the scripts plugins run on boxes (usage.py) as text, as
 // the plugin build does, for the floating bar, which reads plan limits with
 // the Usage plugin's own code (src/overlay).
@@ -94,6 +92,8 @@ function boxScripts(): Plugin {
   };
 }
 
+// noShikiWasm: the diff renderer highlights with Shiki's JavaScript regex
+// engine, so its Oniguruma engine (a 600 KB wasm chunk) is never shipped.
 function noShikiWasm(): Plugin {
   return {
     name: "berth-no-shiki-wasm",

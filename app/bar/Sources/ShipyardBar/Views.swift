@@ -19,6 +19,11 @@ enum Layout {
     static let notchRing: CGFloat = 22
     // A screen without a notch: the bar folds into a lip under the top edge.
     static let lip = CGSize(width: 120, height: 5)
+    // The card lists this many logins, then says how many more.
+    static let cardLogins = 5
+    // Room around the card for its shadow, which takes the pointer too, so
+    // a click there isn't lost in a pixel that is neither card nor screen.
+    static let cardShadow: CGFloat = 22
 
     static func dockHeight(_ s: BarState) -> CGFloat {
         let rings = max(1, s.logins.count)
@@ -192,7 +197,7 @@ struct Ring: View {
         .accessibilityLabel("\(login.name): " + login.windows.map { "\($0.name) \(Int(($0.used * 100).rounded())) percent" }.joined(separator: ", "))
     }
 
-    @ViewBuilder private func arc(_ w: Window?, inset: CGFloat, line: CGFloat) -> some View {
+    @ViewBuilder private func arc(_ w: PlanWindow?, inset: CGFloat, line: CGFloat) -> some View {
         if let w {
             ZStack {
                 Circle().stroke(Color.white.opacity(0.14), lineWidth: line)
@@ -241,7 +246,7 @@ struct Counts: View {
             if !state.working.isEmpty {
                 Button { Outbox.open(state.working.first) } label: {
                     HStack(spacing: 4) {
-                        Spinner().frame(width: 9, height: 9)
+                        Spinner(active: open).frame(width: 9, height: 9)
                         Text("\(state.working.count)").font(.system(size: 11, weight: .semibold).monospacedDigit()).foregroundStyle(Color(red: 0.49, green: 0.83, blue: 0.99))
                     }
                     .frame(height: Layout.count)
@@ -254,18 +259,17 @@ struct Counts: View {
     }
 }
 
+// It turns only while the bar is open: shut, nothing on the bar redraws.
 struct Spinner: View {
-    @State private var turn = false
+    var active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduce
     var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.7)
-            .stroke(Color(red: 0.22, green: 0.74, blue: 0.97), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-            .rotationEffect(.degrees(turn ? 360 : 0))
-            .onAppear {
-                guard !reduce else { return }
-                withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) { turn = true }
-            }
+        TimelineView(.animation(paused: !active || reduce)) { t in
+            Circle()
+                .trim(from: 0, to: 0.7)
+                .stroke(Color(red: 0.22, green: 0.74, blue: 0.97), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .rotationEffect(.degrees(t.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.9) / 0.9 * 360))
+        }
     }
 }
 
@@ -280,7 +284,7 @@ struct Card: View {
                 Text(state.usage ? "No plan limits read yet." : "Turn on the Usage & accounts plugin in Shipyard to see plan limits here.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(state.logins) { l in
+            ForEach(state.logins.prefix(Layout.cardLogins)) { l in
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         AgentGlyph(agent: l.agent).font(.system(size: 10, weight: .bold))
@@ -291,7 +295,9 @@ struct Card: View {
                             HStack(spacing: 6) {
                                 Text(w.name).font(.system(size: 11)).lineLimit(1)
                                 Spacer(minLength: 4)
-                                Text("resets \(resetsIn(w.resets))").font(.system(size: 10)).foregroundStyle(.secondary)
+                                TimelineView(.periodic(from: .now, by: 30)) { t in
+                                    Text("resets \(resetsIn(w.resets, now: t.date))").font(.system(size: 10)).foregroundStyle(.secondary)
+                                }
                                 Text("\(Int((w.used * 100).rounded()))%").font(.system(size: 11).monospacedDigit()).frame(width: 34, alignment: .trailing)
                             }
                             GeometryReader { g in
@@ -304,6 +310,9 @@ struct Card: View {
                         }
                     }
                 }
+            }
+            if state.logins.count > Layout.cardLogins {
+                Text("+\(state.logins.count - Layout.cardLogins) more logins in Shipyard's Usage").font(.system(size: 9)).foregroundStyle(.tertiary)
             }
             section("Need you", state.waiting, Color(red: 0.98, green: 0.75, blue: 0.14))
             section("Working", state.working, Color(red: 0.22, green: 0.74, blue: 0.97))

@@ -46,6 +46,10 @@ final class BarController {
         model.$place.dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.fold(); self?.position() }
         }.store(in: &bag)
+        // More logins make the notch bar wider than its panel: widen it.
+        model.$state.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.positionIfNarrow() }
+        }.store(in: &bag)
         Publishers.CombineLatest3(model.$shapeFrame, model.$cardFrame, model.$card)
             .sink { [weak self] _, _, _ in DispatchQueue.main.async { self?.updateHits() } }
             .store(in: &bag)
@@ -63,22 +67,35 @@ final class BarController {
     // and centred, with room below.
     func position() {
         guard let panel, let screen else { return }
+        panel.setFrame(frame(on: screen), display: true)
+        updateHits()
+    }
+
+    private func positionIfNarrow() {
+        guard model.place == .notch, let panel, let screen else { return }
+        if frame(on: screen).width > panel.frame.width { position() }
+    }
+
+    private func frame(on screen: NSScreen) -> CGRect {
         let f = screen.frame
-        model.notch = Self.notch(of: screen)
-        model.menuBar = max(0, f.maxY - screen.visibleFrame.maxY)
-        let frame: CGRect
+        let visible = screen.visibleFrame
+        let notch = Self.notch(of: screen)
+        if model.notch != notch { model.notch = notch }
+        let menuBar = max(0, f.maxY - visible.maxY)
+        if model.menuBar != menuBar { model.menuBar = menuBar }
         switch model.place {
         case .edge:
-            let width = Layout.card + Layout.gap + Layout.dockWidth + 28
-            let height = min(f.height - model.menuBar, 680)
-            frame = CGRect(x: f.maxX - width, y: f.midY - height / 2, width: width, height: height)
+            // Within the screen below the menu bar, so the card never runs
+            // under it.
+            let width = Layout.card + Layout.gap + Layout.dockWidth + Layout.cardShadow * 2
+            let height = min(visible.height, 760)
+            return CGRect(x: f.maxX - width, y: visible.midY - height / 2, width: width, height: height)
         case .notch:
-            let width: CGFloat = 640
-            let height = min(f.height * 0.7, 560)
-            frame = CGRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
+            let open = (model.notch?.width ?? 12) + Layout.wing(model.state) * 2 + 40
+            let width = max(640, open)
+            let height = min(f.height * 0.8, 640)
+            return CGRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
         }
-        panel.setFrame(frame, display: true)
-        updateHits()
     }
 
     // The display's own notch, measured from the menu bar strips either side
@@ -126,6 +143,8 @@ final class BarController {
     // sliver (or the notch), so the screen's very edge is enough to open it.
     private var hotRect: CGRect {
         let s = model.shapeFrame
+        // Before the first layout there is nothing to hover.
+        guard s != .zero else { return .zero }
         switch model.place {
         case .edge: return CGRect(x: s.minX - 6, y: s.minY - 10, width: s.width + 12, height: s.height + 20)
         case .notch: return CGRect(x: s.minX - 6, y: s.minY, width: s.width + 12, height: s.height + 6)
@@ -134,8 +153,8 @@ final class BarController {
 
     func pointerMoved() {
         guard let p = pointer() else { return }
-        let overShape = (model.open ? model.shapeFrame.insetBy(dx: -4, dy: -4) : hotRect).contains(p)
-        let overCard = model.card && model.cardFrame.insetBy(dx: -6, dy: -6).contains(p)
+        let overShape = shapeArea.contains(p)
+        let overCard = model.card && cardArea.contains(p)
         if overShape || overCard {
             closing?.cancel()
             closing = nil
@@ -147,7 +166,7 @@ final class BarController {
                     MainActor.assumeIsolated {
                         guard let self else { return }
                         self.dwelling = nil
-                        guard self.model.open, let p = self.pointer(), self.model.shapeFrame.insetBy(dx: -4, dy: -4).contains(p) else { return }
+                        guard self.model.open, let p = self.pointer(), self.shapeArea.contains(p) else { return }
                         withAnimation(Motion.glide) { self.model.card = true }
                     }
                 }
@@ -171,10 +190,21 @@ final class BarController {
         if model.open { model.open = false }
     }
 
+    // What keeps the bar open: the shape, and never less than what opened
+    // it (or a pointer in between would open and fold it over and over).
+    private var shapeArea: CGRect {
+        model.open ? model.shapeFrame.insetBy(dx: -4, dy: -4).union(hotRect) : hotRect
+    }
+
+    // The card and the shadow around it.
+    private var cardArea: CGRect {
+        model.cardFrame == .zero ? .zero : model.cardFrame.insetBy(dx: -Layout.cardShadow, dy: -Layout.cardShadow)
+    }
+
     private func updateHits() {
         guard let hosting else { return }
-        var rects = [model.open ? model.shapeFrame : hotRect]
-        if model.card, model.cardFrame != .zero { rects.append(model.cardFrame) }
+        var rects = [shapeArea]
+        if model.card, cardArea != .zero { rects.append(cardArea) }
         hosting.interactiveRects = rects
     }
 }
