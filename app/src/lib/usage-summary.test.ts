@@ -1,0 +1,101 @@
+// node --experimental-strip-types --test src/lib/usage-summary.test.ts (pnpm test)
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import type { Limits, Report, Window } from "../../../plugins/usage/src/box.ts";
+import { summarizeUsage, windowName } from "../../../plugins/usage/src/summary.ts";
+
+const NOW = Date.parse("2026-10-14T12:00:00Z");
+const H = 3600;
+const at = (iso: string) => iso;
+const win = (used: number, minutes: number, resetsInHours: number | null, label?: string): Window => ({
+  used_percent: used,
+  window_minutes: minutes,
+  resets_at: resetsInHours === null ? null : Math.round(NOW / 1000 + resetsInHours * H),
+  ...(label ? { label } : {}),
+});
+
+function report(limits: Limits[]): Report {
+  return { generated: "", days: 7, since: "2026-10-08", today: "2026-10-14", tz: "+07", partial: false, pending: 0, files: 0, daily: [], sessions: [], limits };
+}
+
+const claude = (account: string, readAt: string, session: number, week: number, fable?: Window | null, sessionResets: number | null = 2): Limits => ({
+  agent: "claude",
+  account,
+  at: readAt,
+  limits: { primary: win(session, 300, sessionResets), secondary: win(week, 10080, 72), ...(fable === undefined ? {} : { extra: fable ? [fable] : [] }) },
+});
+
+test("a login read on several boxes counts once, as most recently read", () => {
+  const s = summarizeUsage(
+    [
+      { box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 30, 60)]) },
+      { box: "gpu", report: report([claude("default", at("2026-10-14T11:30:00Z"), 34, 61)]) },
+      { box: "ci", report: report([claude("default", at("2026-10-14T10:00:00Z"), 20, 50)]) },
+    ],
+    [],
+    NOW,
+  );
+  assert.deepEqual(
+    s.limits.map((l) => [l.label, Math.round(l.used * 100)]),
+    [
+      ["Claude Code · week", 61],
+      ["Claude Code · 5h", 34],
+    ],
+  );
+});
+
+test("boxes that read the same reset seconds apart agree on it", () => {
+  const a = claude("default", at("2026-10-14T11:00:00Z"), 30, 60);
+  const b = claude("default", at("2026-10-14T11:05:00Z"), 31, 60);
+  b.limits.primary = { ...b.limits.primary!, resets_at: b.limits.primary!.resets_at! + 20 };
+  const s = summarizeUsage([{ box: "devl", report: report([a]) }, { box: "gpu", report: report([b]) }], [], NOW);
+  assert.deepEqual(
+    s.limits.map((l) => [l.label, Math.round(l.used * 100)]),
+    [
+      ["Claude Code · week", 60],
+      ["Claude Code · 5h", 31],
+    ],
+  );
+});
+
+test("two logins with their own windows both show", () => {
+  const work: Limits = { ...claude("work", at("2026-10-14T11:00:00Z"), 80, 10), limits: { primary: win(80, 300, 3), secondary: win(10, 10080, 100) } };
+  const s = summarizeUsage([{ box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 30, 60), work]) }], [], NOW);
+  assert.equal(s.limits.length, 4);
+  assert.equal(s.limits[0].label, "Claude Code · 5h");
+  assert.equal(Math.round(s.limits[0].used * 100), 80);
+});
+
+test("a model's week is named after the model; past and unreadable resets are left out", () => {
+  const s = summarizeUsage(
+    [
+      { box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 31, 64, win(32, 10080, 72, "Weekly limit (Fable)"), null)]) },
+      { box: "gpu", report: report([{ agent: "codex", account: "default", at: at("2026-10-14T11:00:00Z"), limits: { primary: win(34, 300, -1), secondary: win(12, 10080, 90) } }]) },
+    ],
+    [],
+    NOW,
+  );
+  assert.deepEqual(
+    s.limits.map((l) => l.label),
+    ["Claude Code · week", "Claude Code · week (Fable)", "Codex · week"],
+  );
+});
+
+test("Claude and Codex default logins stay apart", () => {
+  const codex: Limits = { agent: "codex", account: "default", at: at("2026-10-14T11:00:00Z"), limits: { primary: win(30, 300, 2), secondary: win(60, 10080, 72) } };
+  const s = summarizeUsage([{ box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 30, 60), codex]) }], [], NOW);
+  assert.deepEqual(s.limits.map((l) => l.label).sort(), ["Claude Code · 5h", "Claude Code · week", "Codex · 5h", "Codex · week"]);
+});
+
+test("limits read before this week are left out", () => {
+  const s = summarizeUsage([{ box: "devl", report: report([claude("default", at("2026-10-01T11:00:00Z"), 30, 60)]) }], [], NOW);
+  assert.deepEqual(s.limits, []);
+});
+
+test("window names", () => {
+  assert.equal(windowName(win(1, 300, 1)), "5h");
+  assert.equal(windowName(win(1, 10080, 1)), "week");
+  assert.equal(windowName(win(1, 1440, 1)), "day");
+  assert.equal(windowName(win(1, 10080, 1, "Weekly limit (Fable)")), "week (Fable)");
+});
