@@ -26,7 +26,17 @@ import time
 HOME = pathlib.Path.home()
 CACHE = HOME / ".cache" / "berth-usage" / "files.json"
 ACCOUNTS = HOME / ".berth" / "accounts"
-BUDGET_S = float(os.environ.get("BERTH_USAGE_BUDGET", "45"))
+def env_seconds(name, default):
+    """A number of seconds from the environment, or default when it is
+    missing or not a number: a typo must not cost the whole report."""
+    try:
+        v = float(os.environ.get(name, default))
+        return v if v >= 0 else float(default)
+    except ValueError:
+        return float(default)
+
+
+BUDGET_S = env_seconds("BERTH_USAGE_BUDGET", "45")
 MAX_OUT = 60_000
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,31}$")
 # Bump when the parsers change, so cached summaries are read again.
@@ -158,7 +168,12 @@ def mkaccount(agent, name):
 # own, so Claude Code files no project for each read. (After Codenotch's
 # ClaudeUsageCLI, MIT.)
 CLAUDE_LIMITS_CACHE = HOME / ".cache" / "berth-usage" / "claude-limits.json"
-CLAUDE_LIMITS_TTL = float(os.environ.get("BERTH_USAGE_CLAUDE_LIMITS_TTL", "300"))
+# How often each login's /usage is asked (the home widget reads every 5
+# minutes while it shows), and how long one read may take: every login is
+# read at once, so a box with several waits about as long as for one, and a
+# `claude` that hangs costs the report this much at most, never its tokens.
+CLAUDE_LIMITS_TTL = env_seconds("BERTH_USAGE_CLAUDE_LIMITS_TTL", "600")
+CLAUDE_USAGE_TIMEOUT = env_seconds("BERTH_USAGE_CLAUDE_TIMEOUT", "12")
 CLAUDE_USAGE_ARGS = ["--print", "--no-session-persistence", "--strict-mcp-config", "/usage"]
 LIMIT_LINE = re.compile(r"^Current (?:(session)|week \(([^)]+)\)):\s*(\d+(?:\.\d+)?)%\s*used(?:\s*·\s*resets\s*(.+?))?\s*$", re.M)
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
@@ -228,44 +243,60 @@ def claude_usage_text(name, d, binary):
         env["CLAUDE_CONFIG_DIR"] = str(d)
     cwd = CLAUDE_LIMITS_CACHE.parent / "claude-usage"
     cwd.mkdir(parents=True, exist_ok=True, mode=0o700)
-    r = subprocess.run([binary, *CLAUDE_USAGE_ARGS], cwd=cwd, env=env, capture_output=True, text=True, timeout=25, stdin=subprocess.DEVNULL)
-    return r.stdout
+    # In a process group of its own, so a timeout ends whatever Claude Code
+    # started too: a child left holding its stdout would keep this waiting.
+    proc = subprocess.Popen([binary, *CLAUDE_USAGE_ARGS], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+    try:
+        out, _ = proc.communicate(timeout=CLAUDE_USAGE_TIMEOUT)
+        return out
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, 9)
+        except OSError:
+            pass
+        proc.communicate()
+        raise
+
+
+def read_claude_limits(name, d, binary):
+    try:
+        return parse_claude_usage(claude_usage_text(name, d, binary))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
 
 
 def claude_limits():
     """Each signed-in Claude login's limits, read with `/usage` at most once
-    every CLAUDE_LIMITS_TTL seconds per login. Off with
+    every CLAUDE_LIMITS_TTL seconds per login, all logins at once. Off with
     BERTH_USAGE_CLAUDE_LIMITS=0."""
     if os.environ.get("BERTH_USAGE_CLAUDE_LIMITS") == "0":
         return []
     binary = claude_binary()
     if not binary:
         return []
+    from concurrent.futures import ThreadPoolExecutor
     cache = read_json(CLAUDE_LIMITS_CACHE) or {}
-    out, changed = [], False
-    for name, d in claude_dirs():
-        if not claude_account(name, d)["signed_in"]:
-            continue
-        hit = cache.get(name)
-        if not hit or time.time() - hit.get("read", 0) > CLAUDE_LIMITS_TTL:
-            try:
-                limits = parse_claude_usage(claude_usage_text(name, d, binary))
-            except (OSError, subprocess.SubprocessError):
-                limits = None
-            now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+    logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
+    due = [(name, d) for name, d in logins if time.time() - (cache.get(name) or {}).get("read", 0) > CLAUDE_LIMITS_TTL]
+    if due:
+        # Each read ends by its own timeout, so waiting for all of them is
+        # bounded by one: a pool left running would hold the script open.
+        with ThreadPoolExecutor(max_workers=len(due)) as pool:
+            read = dict(zip([n for n, _ in due], pool.map(lambda nd: read_claude_limits(*nd, binary), due)))
+        now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+        for name, _ in due:
+            hit = cache.get(name) or {}
             # A read that failed keeps the last good one, as of when it was.
-            hit = {"read": time.time(), "at": now, "limits": limits} if limits else {**(hit or {}), "read": time.time()}
-            cache[name], changed = hit, True
-        if hit.get("limits"):
-            out.append({"agent": "claude", "account": name, "at": hit["at"], "limits": hit["limits"]})
-    if changed:
+            cache[name] = {"read": time.time(), "at": now, "limits": read[name]} if read[name] else {**hit, "read": time.time()}
         tmp = CLAUDE_LIMITS_CACHE.with_name(f"claude-limits.{os.getpid()}.tmp")
         try:
             tmp.write_text(json.dumps(cache))
             tmp.replace(CLAUDE_LIMITS_CACHE)
         except OSError:
             tmp.unlink(missing_ok=True)
-    return out
+    return [{"agent": "claude", "account": name, "at": cache[name]["at"], "limits": cache[name]["limits"]}
+            for name, _ in logins if (cache.get(name) or {}).get("limits")]
 
 
 # --- transcripts -------------------------------------------------------------
@@ -434,8 +465,13 @@ def report(days):
         # Keyed by agent too: Claude Code and Codex each have a "default".
         if s.get("limits") and ((agent, account) not in limits or s["limits_at"] > limits[(agent, account)]["at"]):
             limits[(agent, account)] = {"agent": agent, "account": account, "at": s["limits_at"], "limits": s["limits"]}
-    for l in claude_limits():
-        limits[("claude", l["account"])] = l
+    # The limits are extra: whatever goes wrong reading them, the tokens are
+    # still reported.
+    try:
+        for l in claude_limits():
+            limits[("claude", l["account"])] = l
+    except Exception:
+        pass
 
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),

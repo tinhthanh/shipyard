@@ -1,3 +1,6 @@
+/// <reference path="./py.d.ts" />
+// (So the app's tsc, which reaches this file through usage-summary.test.ts,
+// knows usage.py is text too.)
 import type { BerthPluginContext, Location } from "@berth/plugin";
 
 import script from "../box/usage.py";
