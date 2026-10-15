@@ -19,6 +19,7 @@ pub enum Place {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub struct Target {
     #[serde(rename = "box")]
     box_name: String,
@@ -153,6 +154,7 @@ fn helper() -> Result<std::path::PathBuf, String> {
 
 // open_main brings the main window forward and has it open what was
 // clicked on the bar: a session, or Home when there is none.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn open_main(app: &AppHandle, target: Option<Target>) {
     let Some(main) = app.get_webview_window("main") else { return };
     let _ = main.unminimize();
