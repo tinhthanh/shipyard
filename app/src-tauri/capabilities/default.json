@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Only the app's own webviews get these: the main window's (label main) and the floating bar's (overlay). Browser panes are child webviews in the same window, labelled browser-*, and get nothing: pages loaded there cannot reach Tauri.",
+  "description": "Only the app's own webview (label main) gets these. Browser panes are child webviews in the same window, labelled browser-*, and get nothing: pages loaded there cannot reach Tauri.",
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -15,7 +15,6 @@
     "updater:allow-install"
   ],
   "webviews": [
-    "main",
-    "overlay"
+    "main"
   ]
 }

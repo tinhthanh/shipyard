@@ -106,6 +106,8 @@ pub fn run() {
         }
     }));
     builder
+        // The floating bar's helper, while it runs (overlay.rs).
+        .manage(overlay::Bar::default())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         // berth://kit?src=… links someone shares open a kit's review.
@@ -160,9 +162,7 @@ pub fn run() {
             browser::browser_close,
             overlay::overlay_show,
             overlay::overlay_hide,
-            overlay::overlay_screen,
-            overlay::overlay_fit,
-            overlay::overlay_open,
+            overlay::overlay_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

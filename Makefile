@@ -89,6 +89,8 @@ TRIPLE := $(shell rustc -vV 2>/dev/null | sed -n 's/^host: //p')
 APP_TARGET ?= $(TRIPLE)
 SIDECAR := app/src-tauri/binaries
 APP_VERSION := $(if $(filter dev,$(VERSION)),,$(patsubst v%,%,$(VERSION)))
+# The floating bar for the target's architectures: both for a universal app.
+BAR_ARCHS := $(if $(findstring universal,$(APP_TARGET)),--arch arm64 --arch x86_64,$(if $(findstring x86_64,$(APP_TARGET)),--arch x86_64,--arch arm64))
 APP_GOARCH := $(if $(findstring aarch64,$(APP_TARGET)),arm64,$(if $(findstring x86_64,$(APP_TARGET)),amd64))
 # The Linux app (an alpha) carries static builds, like the release archives,
 # so one AppImage runs on any distribution's libc.
@@ -112,6 +114,16 @@ endif
 		codesign --force --options runtime --timestamp --identifier dev.berth.berthd \
 			--sign "$$APPLE_SIGNING_IDENTITY" $(SIDECAR)/berthd-local; \
 	fi
+ifneq (,$(findstring apple-darwin,$(APP_TARGET)))
+	@# The floating bar's native helper (app/bar), which the app carries as
+	@# Contents/MacOS/shipyard-bar (tauri.bar.conf.json).
+	cd app/bar && swift build -c release $(BAR_ARCHS)
+	cp "$$(cd app/bar && swift build -c release $(BAR_ARCHS) --show-bin-path)/shipyard-bar" $(SIDECAR)/shipyard-bar
+	if [ -n "$$APPLE_SIGNING_IDENTITY" ]; then \
+		codesign --force --options runtime --timestamp --identifier dev.berth.bar \
+			--sign "$$APPLE_SIGNING_IDENTITY" $(SIDECAR)/shipyard-bar; \
+	fi
+endif
 	cp $(BIN)/berthd-linux-amd64 $(BIN)/berthd-linux-arm64 $(SIDECAR)/
 	@# The app carries Shipyard's tmux for Linux boxes; a release must have it.
 	scripts/build-tmux.sh $(BIN)
@@ -122,6 +134,7 @@ app-dev: all
 
 app-build: app-binaries
 	cd app && pnpm tauri build --config src-tauri/tauri.bundle.conf.json \
+		$(if $(findstring apple-darwin,$(APP_TARGET)),--config src-tauri/tauri.bar.conf.json) \
 		$(if $(APP_VERSION),--config '{"version":"$(APP_VERSION)"}') \
 		$(if $(filter $(TRIPLE),$(APP_TARGET)),,--target $(APP_TARGET)) \
 		$$([ -z "$$TAURI_SIGNING_PRIVATE_KEY" ] || echo --config src-tauri/tauri.updater.conf.json)

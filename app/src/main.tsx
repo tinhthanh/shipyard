@@ -25,22 +25,10 @@ if (isTauri()) {
   };
 }
 
-// The floating bar's window (overlay.rs) loads this page too, as
-// ?window=overlay: it gets its own small page, loaded on demand so the main
-// window's startup doesn't carry it.
-const Overlay = React.lazy(() => import("@/overlay/overlay-app"));
-const overlay = new URLSearchParams(location.search).get("window") === "overlay";
-
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      {overlay ? (
-        <React.Suspense fallback={null}>
-          <Overlay />
-        </React.Suspense>
-      ) : (
-        <App />
-      )}
+      <App />
     </ErrorBoundary>
   </React.StrictMode>,
 );

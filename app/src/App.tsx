@@ -54,7 +54,7 @@ import { useReviewStatuses } from "@/views/pr-review/use-review-status";
 import { AddBoxDialog } from "@/views/onboarding/add-box-dialog";
 import { useOnboardingActive } from "@/views/onboarding/onboarding-state";
 import { HomeView } from "@/views/home/home-view";
-import { useOverlayControl } from "@/overlay/control";
+import { OverlayFeed, useOverlayControl } from "@/overlay/control";
 import { usePrefs } from "@/lib/prefs";
 import { lazyView, preloadViews } from "@/lib/lazy-view";
 import { placeLabel } from "@/lib/worktree-names";
@@ -159,6 +159,8 @@ export default function App() {
 
   return (
     <TooltipProvider delay={300}>
+      {/* What the floating bar shows, while it's on (src/overlay). */}
+      <OverlayFeed />
       {/* Toasts sit bottom-right, as in other desktop tools: above the status
           bar (26px) and above the loop panel when there is one, which says
           how tall it is in --berth-loops-h. Top-right covered the headers of

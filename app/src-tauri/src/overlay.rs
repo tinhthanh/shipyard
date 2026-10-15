@@ -1,20 +1,15 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-#[cfg(not(target_os = "macos"))]
-use tauri::{LogicalPosition, LogicalSize};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager, State};
 
-// The floating bar (Settings → Appearance): a small window that stays over
-// every app, every Space and full-screen apps, with each login's plan limits
-// and the agents that need you or are working. Its page is the app's own
-// (index.html?window=overlay, app/src/overlay), which sizes the window to
-// what it shows and asks the main window to open what was clicked.
-//
-// It sits on the right edge of the screen with the menu bar, or around the
-// display's notch, after Codenotch (MIT), whose notch it imitates.
-
-const LABEL: &str = "overlay";
-// How far the edge bar keeps from the screen's edge: none, it grows out of it.
-const EDGE_GAP: f64 = 0.0;
+// The floating bar (Settings → Appearance): on macOS a native helper,
+// shipyard-bar (app/bar, SwiftUI, after Codenotch's notch; MIT), which the
+// app carries beside its own executable. Shipyard starts it while the bar is
+// on and speaks to it in JSON lines: where it sits and what it shows go in
+// on its stdin (the main window works them out, src/overlay), and what is
+// clicked on it comes back on its stdout, for the main window to open. The
+// bar quits when its stdin closes, so it goes with Shipyard however Shipyard
+// ends.
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]
@@ -23,302 +18,145 @@ pub enum Place {
     Notch,
 }
 
-impl Place {
-    fn as_str(self) -> &'static str {
-        match self {
-            Place::Edge => "edge",
-            Place::Notch => "notch",
-        }
-    }
-}
-
-// The screen the bar is on, in points: the one with the menu bar.
-#[derive(Serialize, Default)]
-pub struct Screen {
-    width: f64,
-    height: f64,
-    // The display's own notch, when it has one.
-    notch: Option<Notch>,
-    // The menu bar's height (or the notch's, which is deeper).
-    top: f64,
-}
-
-#[derive(Serialize)]
-struct Notch {
-    width: f64,
-    height: f64,
-}
-
-// overlay_show opens the bar at place, or moves it there. It stays hidden
-// until its page has measured itself (overlay_fit). Async: a window built
-// from a command on the main thread would wait on that thread.
-#[tauri::command]
-pub async fn overlay_show(app: AppHandle, place: Place) -> Result<(), String> {
-    let query = format!("window=overlay&place={}", place.as_str());
-    // Moved: the same window, on the page for its new place. (Closing it to
-    // make another would race the label, which a close frees only later.)
-    if let Some(w) = app.get_webview_window(LABEL) {
-        let mut url = w.url().map_err(|e| e.to_string())?;
-        if url.query() == Some(query.as_str()) {
-            return Ok(());
-        }
-        url.set_query(Some(&query));
-        w.hide().map_err(|e| e.to_string())?;
-        w.navigate(url).map_err(|e| e.to_string())?;
-        #[cfg(target_os = "macos")]
-        {
-            let floating = w.clone();
-            w.run_on_main_thread(move || float(&floating, place)).map_err(|e| e.to_string())?;
-        }
-        return Ok(());
-    }
-    let url = WebviewUrl::App(format!("index.html?{query}").into());
-    let w = WebviewWindowBuilder::new(&app, LABEL, url)
-        .title("Shipyard bar")
-        .decorations(false)
-        .transparent(true)
-        .shadow(false)
-        .resizable(false)
-        .always_on_top(true)
-        .visible_on_all_workspaces(true)
-        .skip_taskbar(true)
-        .focused(false)
-        .visible(false)
-        .inner_size(40.0, 40.0)
-        .build()
-        .map_err(|e| e.to_string())?;
-    #[cfg(target_os = "macos")]
-    {
-        let floating = w.clone();
-        w.run_on_main_thread(move || float(&floating, place)).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-// overlay_hide closes the bar.
-#[tauri::command]
-pub fn overlay_hide(app: AppHandle) {
-    if let Some(w) = app.get_webview_window(LABEL) {
-        let _ = w.close();
-    }
-}
-
-// overlay_screen is what the bar's page lays itself out around.
-#[tauri::command]
-pub fn overlay_screen(app: AppHandle) -> Screen {
-    screen(&app)
-}
-
-// overlay_fit sizes the bar to its page and places it: on the edge, centred
-// top to bottom and growing to the left; at the notch, centred under the
-// top of the screen and growing down.
-#[tauri::command]
-pub fn overlay_fit(app: AppHandle, window: WebviewWindow, width: f64, height: f64, place: Place) -> Result<(), String> {
-    if window.label() != LABEL {
-        return Err("only the floating bar fits itself".into());
-    }
-    let s = screen(&app);
-    let (ox, oy) = origin(&app);
-    let (x, y) = match place {
-        Place::Edge => (s.width - width - EDGE_GAP, ((s.height - height) / 2.0).max(s.top)),
-        Place::Notch => ((s.width - width) / 2.0, 0.0),
-    };
-    // Size and place in one step: done in two, what's under the pointer
-    // moves between them, the page hears it leave and folds, and the bar
-    // flickers open and shut. On macOS the frame eases there, the content
-    // pinned to the screen's edge.
-    #[cfg(target_os = "macos")]
-    {
-        let _ = (ox, oy);
-        set_frame(&window, s.height, x, y, width, height);
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        window.set_size(LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
-        window.set_position(LogicalPosition::new(ox + x, oy + y)).map_err(|e| e.to_string())?;
-        window.show().map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Target {
     #[serde(rename = "box")]
     box_name: String,
     session: String,
 }
 
-// overlay_open brings the main window forward and has it open what was
-// clicked on the bar: a session, or Home when there is none.
+// The running bar, if any.
+#[derive(Default)]
+pub struct Bar(Mutex<Option<Running>>);
+
+pub struct Running {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+}
+
+impl Running {
+    fn send(&mut self, line: &serde_json::Value) -> Result<(), String> {
+        use std::io::Write;
+        let mut text = line.to_string();
+        text.push('\n');
+        self.stdin.write_all(text.as_bytes()).and_then(|_| self.stdin.flush()).map_err(|e| format!("the floating bar stopped: {e}"))
+    }
+
+    fn alive(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(None))
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+// overlay_show starts the bar at place, or moves it there.
 #[tauri::command]
-pub fn overlay_open(app: AppHandle, target: Option<Target>) -> Result<(), String> {
-    let main = app.get_webview_window("main").ok_or("the main window is gone")?;
-    let _ = main.unminimize();
-    let _ = main.show();
-    let _ = main.set_focus();
-    main.emit_to("main", "berth://overlay-open", target).map_err(|e| e.to_string())
+pub fn overlay_show(app: AppHandle, bar: State<Bar>, place: Place) -> Result<(), String> {
+    let mut slot = bar.0.lock().map_err(|e| e.to_string())?;
+    if let Some(running) = slot.as_mut() {
+        if running.alive() {
+            return running.send(&serde_json::json!({ "type": "place", "place": place }));
+        }
+    }
+    *slot = Some(start(&app, place)?);
+    Ok(())
+}
+
+// overlay_hide stops the bar.
+#[tauri::command]
+pub fn overlay_hide(bar: State<Bar>) {
+    if let Ok(mut slot) = bar.0.lock() {
+        slot.take();
+    }
+}
+
+// overlay_state is what the bar shows (src/overlay/bar-state.ts): logins
+// and their plan windows, and the agents that need you or are working.
+#[tauri::command]
+pub fn overlay_state(bar: State<Bar>, state: serde_json::Value) -> Result<(), String> {
+    let mut slot = bar.0.lock().map_err(|e| e.to_string())?;
+    let Some(running) = slot.as_mut() else { return Ok(()) };
+    let mut line = state;
+    if let Some(o) = line.as_object_mut() {
+        o.insert("type".into(), "state".into());
+    }
+    running.send(&line)
 }
 
 // The bar goes with the main window: closing that still quits Shipyard.
 pub fn on_main_destroyed(app: &AppHandle) {
-    overlay_hide(app.clone());
+    if let Some(bar) = app.try_state::<Bar>() {
+        overlay_hide(bar);
+    }
 }
 
-fn origin(app: &AppHandle) -> (f64, f64) {
-    match app.primary_monitor() {
-        Ok(Some(m)) => {
-            let p = m.position().to_logical::<f64>(m.scale_factor());
-            (p.x, p.y)
+#[cfg(target_os = "macos")]
+fn start(app: &AppHandle, place: Place) -> Result<Running, String> {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+    let path = helper()?;
+    let place_arg = match place {
+        Place::Edge => "edge",
+        Place::Notch => "notch",
+    };
+    let mut child = Command::new(&path)
+        .args(["--place", place_arg])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("couldn't start the floating bar ({}): {e}", path.display()))?;
+    let stdin = child.stdin.take().ok_or("the floating bar has no stdin")?;
+    let stdout = child.stdout.take().ok_or("the floating bar has no stdout")?;
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
+            let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            if msg.get("type").and_then(|t| t.as_str()) == Some("open") {
+                let target = serde_json::from_value::<Target>(msg.clone()).ok();
+                let app = handle.clone();
+                let _ = handle.run_on_main_thread(move || open_main(&app, target));
+            }
         }
-        _ => (0.0, 0.0),
-    }
+    });
+    Ok(Running { child, stdin })
 }
 
 #[cfg(not(target_os = "macos"))]
-fn screen(app: &AppHandle) -> Screen {
-    match app.primary_monitor() {
-        Ok(Some(m)) => {
-            let size = m.size().to_logical::<f64>(m.scale_factor());
-            Screen { width: size.width, height: size.height, notch: None, top: 0.0 }
-        }
-        _ => Screen::default(),
-    }
+fn start(_app: &AppHandle, _place: Place) -> Result<Running, String> {
+    Err("the floating bar is for macOS".into())
 }
 
+// The helper beside the app's executable (Contents/MacOS/shipyard-bar); in
+// a development build, the one swift build made in app/bar.
 #[cfg(target_os = "macos")]
-mod mac {
-    use objc2::encode::{Encode, Encoding};
-
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    pub struct Point {
-        pub x: f64,
-        pub y: f64,
+fn helper() -> Result<std::path::PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let beside = exe.with_file_name("shipyard-bar");
+    if beside.exists() {
+        return Ok(beside);
     }
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    pub struct Size {
-        pub width: f64,
-        pub height: f64,
+    #[cfg(debug_assertions)]
+    {
+        let dev = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../bar/.build/release/shipyard-bar");
+        if dev.exists() {
+            return Ok(dev);
+        }
     }
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    pub struct Rect {
-        pub origin: Point,
-        pub size: Size,
-    }
-    #[repr(C)]
-    #[derive(Clone, Copy, Default)]
-    pub struct Insets {
-        pub top: f64,
-        pub left: f64,
-        pub bottom: f64,
-        pub right: f64,
-    }
-    unsafe impl Encode for Point {
-        const ENCODING: Encoding = Encoding::Struct("CGPoint", &[f64::ENCODING, f64::ENCODING]);
-    }
-    unsafe impl Encode for Size {
-        const ENCODING: Encoding = Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
-    }
-    unsafe impl Encode for Rect {
-        const ENCODING: Encoding = Encoding::Struct("CGRect", &[Point::ENCODING, Size::ENCODING]);
-    }
-    unsafe impl Encode for Insets {
-        const ENCODING: Encoding = Encoding::Struct("NSEdgeInsets", &[f64::ENCODING, f64::ENCODING, f64::ENCODING, f64::ENCODING]);
-    }
+    Err("this Shipyard has no floating bar (shipyard-bar is missing); in development, run swift build -c release in app/bar".into())
 }
 
-// The screen with the menu bar (the first NSScreen), its notch measured from
-// the menu bar strips either side of it, which AppKit describes directly.
-// The deepest of those and the safe area is the notch's depth: the safe area
-// collapses when the menu bar hides, the hole does not (after Codenotch).
-#[cfg(target_os = "macos")]
-fn screen(_app: &AppHandle) -> Screen {
-    use mac::{Insets, Rect};
-    use objc2::msg_send;
-    use objc2::runtime::{AnyClass, AnyObject};
-    unsafe {
-        let Some(class) = AnyClass::get(c"NSScreen") else { return Screen::default() };
-        let screens: *mut AnyObject = msg_send![class, screens];
-        let Some(screens) = screens.as_ref() else { return Screen::default() };
-        let count: usize = msg_send![screens, count];
-        if count == 0 {
-            return Screen::default();
-        }
-        let first: *mut AnyObject = msg_send![screens, objectAtIndex: 0usize];
-        let Some(first) = first.as_ref() else { return Screen::default() };
-        let frame: Rect = msg_send![first, frame];
-        let visible: Rect = msg_send![first, visibleFrame];
-        // Above the visible frame: the menu bar (zero when it hides).
-        let menu = (frame.size.height - (visible.origin.y - frame.origin.y) - visible.size.height).max(0.0);
-        let mut notch = None;
-        let mut top = menu;
-        let has_aux: bool = msg_send![first, respondsToSelector: objc2::sel!(auxiliaryTopLeftArea)];
-        if has_aux {
-            let left: Rect = msg_send![first, auxiliaryTopLeftArea];
-            let right: Rect = msg_send![first, auxiliaryTopRightArea];
-            let insets: Insets = msg_send![first, safeAreaInsets];
-            let width = frame.size.width - left.size.width - right.size.width;
-            let height = insets.top.max(left.size.height).max(right.size.height);
-            if left.size.width > 0.0 && right.size.width > 0.0 && width > 0.0 && height > 0.0 {
-                notch = Some(Notch { width, height });
-                top = top.max(height);
-            }
-        }
-        Screen { width: frame.size.width, height: frame.size.height, notch, top }
-    }
-}
-
-// float makes the bar float like a status item: over other apps' windows and
-// the menu bar, on every Space and beside full-screen apps, and staying when
-// Shipyard is not the active app.
-#[cfg(target_os = "macos")]
-fn float(w: &WebviewWindow, place: Place) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    // NSStatusWindowLevel is the menu bar's own items; the notch bar covers
-    // the menu bar, so one above.
-    let level: isize = match place {
-        Place::Edge => 25,
-        Place::Notch => 26,
-    };
-    // canJoinAllSpaces | stationary | ignoresCycle | fullScreenAuxiliary
-    let behavior: usize = (1 << 0) | (1 << 4) | (1 << 6) | (1 << 8);
-    let Ok(ns) = w.ns_window() else { return };
-    unsafe {
-        let Some(ns) = (ns as *mut AnyObject).as_ref() else { return };
-        let _: () = msg_send![ns, setLevel: level];
-        let _: () = msg_send![ns, setCollectionBehavior: behavior];
-        let _: () = msg_send![ns, setHidesOnDeactivate: false];
-        let _: () = msg_send![ns, setMovable: false];
-        let _: () = msg_send![ns, setExcludedFromWindowsMenu: true];
-    }
-}
-
-// set_frame gives the bar its frame in one step, in AppKit's coordinates
-// (from the bottom of the menu bar's screen): at once the first time, then
-// eased (through the window's animator, which doesn't hold up the main
-// thread the way setFrame:display:animate: does). It shows the bar without
-// making Shipyard the active app.
-#[cfg(target_os = "macos")]
-fn set_frame(w: &WebviewWindow, screen_height: f64, x: f64, y: f64, width: f64, height: f64) {
-    use mac::{Point, Rect, Size};
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    let Ok(ns) = w.ns_window() else { return };
-    let frame = Rect { origin: Point { x, y: screen_height - y - height }, size: Size { width, height } };
-    unsafe {
-        let Some(ns) = (ns as *mut AnyObject).as_ref() else { return };
-        let visible: bool = msg_send![ns, isVisible];
-        if visible {
-            let animator: *mut AnyObject = msg_send![ns, animator];
-            if let Some(animator) = animator.as_ref() {
-                let _: () = msg_send![animator, setFrame: frame, display: true];
-                return;
-            }
-        }
-        let _: () = msg_send![ns, setFrame: frame, display: true];
-        let _: () = msg_send![ns, orderFrontRegardless];
-    }
+// open_main brings the main window forward and has it open what was
+// clicked on the bar: a session, or Home when there is none.
+fn open_main(app: &AppHandle, target: Option<Target>) {
+    let Some(main) = app.get_webview_window("main") else { return };
+    let _ = main.unminimize();
+    let _ = main.show();
+    let _ = main.set_focus();
+    let _ = main.emit_to("main", "berth://overlay-open", target);
 }
