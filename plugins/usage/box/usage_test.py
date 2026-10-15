@@ -299,6 +299,11 @@ class ClaudeLimitsTest(unittest.TestCase):
         r = json.loads(usage.report(7))
         self.assertEqual(sorted((l["agent"], l["account"]) for l in r["limits"]), [("claude", "default"), ("claude", "work")])
 
+    def test_the_report_says_whose_limits_they_are(self):
+        import json
+        r = json.loads(usage.report(7))
+        self.assertEqual({l["account"]: l["email"] for l in r["limits"]}, {"default": "a@acme.test", "work": "b@acme.test"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -54,6 +54,8 @@ export interface Window {
 export interface Limits {
   agent: Agent;
   account: string;
+  // The login's email, when the agent recorded one.
+  email?: string | null;
   at: string;
   // Codex reports a 5-hour and a weekly window in its transcripts; Claude Code
   // reports its session, its week and a week per scoped model in `/usage`.
@@ -92,12 +94,16 @@ const encoded = (() => {
   return btoa(bin);
 })();
 
+// A box with no projects has nowhere to run the script: not a failure, just
+// nothing to read yet.
+export class NoProjects extends Error {}
+
 // where picks a location on the box to run in: the current worktree's, or
 // any. exec needs one; the script itself works in the home folder.
 export async function where(berth: BerthPluginContext, box: string, prefer?: string): Promise<string> {
   const locs: Location[] = await berth.api.locations(box);
   if (prefer && locs.some((l) => l.name === prefer.split("/")[0])) return prefer;
-  if (!locs.length) throw new Error(`${box} has no projects yet; add one to read its usage`);
+  if (!locs.length) throw new NoProjects(`${box} has no projects yet; add one to read its usage`);
   return locs[0].name;
 }
 

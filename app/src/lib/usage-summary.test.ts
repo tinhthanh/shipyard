@@ -76,12 +76,49 @@ test("one login printed a minute apart by two boxes (12:29 and 12:30) counts onc
   );
 });
 
-test("two logins with their own windows both show", () => {
+test("two logins with their own windows both show, each named", () => {
   const work: Limits = { ...claude("work", at("2026-10-14T11:00:00Z"), 80, 10), limits: { primary: win(80, 300, 3), secondary: win(10, 10080, 100) } };
   const s = summarizeUsage([{ box: "devl", report: report([claude("default", at("2026-10-14T11:00:00Z"), 30, 60), work]) }], [], NOW);
   assert.equal(s.limits.length, 4);
-  assert.equal(s.limits[0].label, "Claude Code · 5h");
+  assert.equal(s.limits[0].label, "Claude Code · 5h · work");
   assert.equal(Math.round(s.limits[0].used * 100), 80);
+});
+
+test("two boxes' default logins are told apart by email, even with the same numbers", () => {
+  // What the widget showed for real: "Claude Code · 5h 3%" twice, one per
+  // login, with nothing to say which was which.
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 0), email: "ana@acme.test" };
+  const b = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 0), email: "bo@acme.test" };
+  const s = summarizeUsage([{ box: "devl", report: report([a]) }, { box: "gpu", report: report([b]) }], [], NOW);
+  assert.deepEqual(s.limits.map((l) => l.label).sort(), ["Claude Code · 5h · ana", "Claude Code · 5h · bo", "Claude Code · week · ana", "Claude Code · week · bo"]);
+});
+
+test("one email on two boxes is one login, and needs no name", () => {
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "ana@acme.test" };
+  const b = { ...claude("work", at("2026-10-14T11:30:00Z"), 4, 10), email: "ana@acme.test" };
+  const s = summarizeUsage([{ box: "devl", report: report([a]) }, { box: "gpu", report: report([b]) }], [], NOW);
+  assert.deepEqual(
+    s.limits.map((l) => [l.label, Math.round(l.used * 100)]),
+    [
+      ["Claude Code · week", 10],
+      ["Claude Code · 5h", 4],
+    ],
+  );
+});
+
+test("logins whose emails share a name show the whole email", () => {
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "ana@acme.test" };
+  const b = { ...claude("default", at("2026-10-14T11:00:00Z"), 5, 10), email: "ana@example.test" };
+  const s = summarizeUsage([{ box: "devl", report: report([a]) }, { box: "gpu", report: report([b]) }], [], NOW);
+  assert.ok(s.limits.some((l) => l.label === "Claude Code · 5h · ana@example.test"));
+});
+
+test("a login whose windows have all reset doesn't make the others named", () => {
+  const old = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "bo@acme.test" };
+  old.limits = { primary: win(3, 300, -1), secondary: win(10, 10080, -2) };
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "ana@acme.test" };
+  const s = summarizeUsage([{ box: "devl", report: report([a]) }, { box: "gpu", report: report([old]) }], [], NOW);
+  assert.deepEqual(s.limits.map((l) => l.label).sort(), ["Claude Code · 5h", "Claude Code · week"]);
 });
 
 test("a model's week is named after the model; past and unreadable resets are left out", () => {
