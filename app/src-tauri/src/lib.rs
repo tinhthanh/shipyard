@@ -9,6 +9,7 @@ mod cli_link;
 #[cfg(target_os = "linux")]
 mod linux;
 mod menu;
+mod overlay;
 
 // The app is a view over the laptop agent (`berth agent`), which serves it on
 // loopback. The agent writes a token to its state directory; this shell reads
@@ -105,6 +106,8 @@ pub fn run() {
         }
     }));
     builder
+        // The floating bar's helper, while it runs (overlay.rs).
+        .manage(overlay::Bar::default())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         // berth://kit?src=… links someone shares open a kit's review.
@@ -130,6 +133,12 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
+        // The floating bar goes with the main window (overlay.rs).
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                overlay::on_main_destroyed(tauri::Manager::app_handle(window));
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             ui_endpoint,
             open_devtools,
@@ -151,6 +160,9 @@ pub fn run() {
             browser::browser_pick,
             browser::browser_inspect,
             browser::browser_close,
+            overlay::overlay_show,
+            overlay::overlay_hide,
+            overlay::overlay_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

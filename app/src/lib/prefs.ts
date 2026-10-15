@@ -80,7 +80,12 @@ export interface Prefs {
   // The newest version whose What's new card was shown, or that was
   // running when the card had nothing to show (lib/whats-new.ts).
   whatsNewSeen: string | null;
+  // The floating bar over every app (Settings › Appearance › Floating bar,
+  // src/overlay): off, or on the screen's right edge or around its notch.
+  overlay: { on: boolean; place: OverlayPlace };
 }
+
+export type OverlayPlace = "edge" | "notch";
 
 export type ChatWidth = "narrow" | "default" | "wide" | "xwide" | "full";
 // The column's widest, as CSS; full is the pane's width less its gutters.
@@ -116,6 +121,7 @@ const DEFAULTS: Prefs = {
   home: null,
   installAgents: null,
   whatsNewSeen: null,
+  overlay: { on: false, place: "edge" },
 };
 
 // PREFS_VERSION counts changes of default that saved prefs are moved to
@@ -154,6 +160,7 @@ export const usePrefs = create<Prefs>()(() => ({
   terminal: { ...DEFAULTS.terminal, ...saved.terminal },
   notify: { ...DEFAULTS.notify, ...saved.notify },
   systemThemes: { ...DEFAULTS.systemThemes, ...saved.systemThemes },
+  overlay: { ...DEFAULTS.overlay, ...saved.overlay },
   chatBackground: normalizeChatBackground(saved.chatBackground),
   sidebarWidth: clampWidth(saved.sidebarWidth ?? SIDEBAR_DEFAULT),
 }));
