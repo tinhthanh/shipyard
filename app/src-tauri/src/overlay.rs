@@ -11,8 +11,8 @@ use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUr
 // display's notch, after Codenotch (MIT), whose notch it imitates.
 
 const LABEL: &str = "overlay";
-// How far the edge bar keeps from the screen's edge.
-const EDGE_GAP: f64 = 6.0;
+// How far the edge bar keeps from the screen's edge: none, it grows out of it.
+const EDGE_GAP: f64 = 0.0;
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Debug)]
 #[serde(rename_all = "lowercase")]

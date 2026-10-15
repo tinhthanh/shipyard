@@ -16,12 +16,16 @@ const open = async (page: import("@playwright/test").Page, place: "edge" | "notc
   await page.goto(`/?mock=1&window=overlay&place=${place}`);
 };
 
-test("the bar shows a ring for each login and the agents that need you or are working", async ({ app }) => {
+test("on the edge the bar waits as a sliver, and hovering it opens a ring for each login and the agents", async ({ app }) => {
   mockOnly();
   const page = app.page;
   await open(page, "edge");
-  const bar = page.getByTestId("overlay-bar");
   await expect(page.getByTestId("overlay")).toHaveAttribute("data-place", "edge");
+  const sliver = page.getByTestId("overlay-sliver");
+  await expect(sliver).toBeVisible();
+  await expect(page.getByTestId("overlay-bar")).toHaveCount(0);
+  await sliver.hover();
+  const bar = page.getByTestId("overlay-bar");
   // Two Claude logins whose emails share a name show whole; Codex's one is its name.
   await expect(bar.getByRole("button", { name: /^you@example\.com: 5h 31%/ })).toBeVisible();
   await expect(bar.getByRole("button", { name: /^you@work\.example: 5h 12%/ })).toBeVisible();
@@ -34,6 +38,8 @@ test("hovering the bar opens a card with each window's reset and the agents, a c
   mockOnly();
   const page = app.page;
   await open(page, "edge");
+  await page.getByTestId("overlay-sliver").hover();
+  // Resting on the opened bar brings the card.
   await page.getByTestId("overlay-bar").hover();
   const card = page.getByTestId("overlay-card");
   await expect(card).toBeVisible();
@@ -61,6 +67,18 @@ test("without the Usage plugin the card says how to get plan limits", async ({ a
   mockOnly();
   const page = app.page;
   await open(page, "edge", false);
+  await page.getByTestId("overlay-sliver").hover();
   await page.getByTestId("overlay-bar").hover();
   await expect(page.getByTestId("overlay-card").getByText("Turn on the Usage & accounts plugin to see plan limits here.")).toBeVisible();
+});
+
+test("moving away folds the bar back into its sliver", async ({ app }) => {
+  mockOnly();
+  const page = app.page;
+  await open(page, "edge");
+  await page.getByTestId("overlay-sliver").hover();
+  await expect(page.getByTestId("overlay-bar")).toBeVisible();
+  await page.mouse.move(600, 600);
+  await expect(page.getByTestId("overlay-sliver")).toBeVisible();
+  await expect(page.getByTestId("overlay-card")).toHaveCount(0);
 });

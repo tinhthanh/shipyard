@@ -48,7 +48,18 @@ export default function OverlayApp() {
   const rows = useAgentRows();
   const waiting = useMemo(() => rows.filter((r) => r.state === "waiting"), [rows]);
   const working = useMemo(() => rows.filter((r) => r.state === "running"), [rows]);
+  // At the notch: hover for the card. On the edge the bar waits as a sliver
+  // against the screen's edge: hover opens it, and resting on it the card.
   const [hover, setHover] = useHover();
+  const [card, setCard] = useState(false);
+  const dwell = useRef(0);
+  useEffect(() => {
+    if (!hover) {
+      window.clearTimeout(dwell.current);
+      dwell.current = 0;
+      setCard(false);
+    }
+  }, [hover]);
 
   // The page is the window: nothing behind it.
   useLayoutEffect(() => {
@@ -62,39 +73,66 @@ export default function OverlayApp() {
 
   if (!screen) return null;
   const notch = where === "notch";
-  const bar = (
-    <Bar notch={notch} screen={screen}>
-      <Rings limits={limits} small={notch && !screen.notch} />
-      <Counts waiting={waiting} working={working} />
-    </Bar>
-  );
+  const content: [React.ReactNode, React.ReactNode] = [<Rings key="r" limits={limits} small={notch && !screen.notch} />, <Counts key="c" waiting={waiting} working={working} />];
+  const details = <Card limits={limits} usage={on} waiting={waiting} working={working} />;
+  if (notch) {
+    return (
+      <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-col items-center text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        <NotchBar screen={screen}>{content}</NotchBar>
+        {hover && details}
+      </div>
+    );
+  }
+  const tone = waiting.length ? "bg-amber-400" : working.length ? "bg-sky-400" : "bg-white/35";
   return (
-    <div
-      ref={root}
-      data-testid="overlay"
-      data-place={where}
-      className={cn("inline-flex select-none text-neutral-100", notch ? "flex-col items-center" : "flex-row-reverse items-center gap-2")}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      {bar}
-      {hover && <Card limits={limits} usage={on} waiting={waiting} working={working} />}
+    <div ref={root} data-testid="overlay" data-place={where} className="inline-flex select-none flex-row-reverse items-center gap-2 text-neutral-100" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      {hover ? (
+        <Dock
+          onRest={() => {
+            if (card || dwell.current) return;
+            dwell.current = window.setTimeout(() => {
+              dwell.current = 0;
+              setCard(true);
+            }, 300);
+          }}
+        >
+          {content}
+        </Dock>
+      ) : (
+        // Focusable too, so the keyboard can open it.
+        <button type="button" data-testid="overlay-sliver" aria-label="Shipyard: show the floating bar" className="flex h-16 w-2 items-center justify-end rounded-l-full bg-neutral-900/95 pr-px outline-none ring-1 ring-white/15" onFocus={() => setHover(true)}>
+          <span className={cn("h-8 w-[3px] rounded-full", tone)} />
+        </button>
+      )}
+      {hover && card && details}
     </div>
   );
 }
 
-// The bar itself. At the notch it is as tall as the notch and leaves its
-// width empty in the middle, the rings on its left and the agents on its
-// right; on the edge, a pill top to bottom.
-function Bar({ notch, screen, children }: { notch: boolean; screen: Screen; children: [React.ReactNode, React.ReactNode] }) {
-  if (!notch) {
-    return (
-      <div className="flex w-11 flex-col items-center gap-2 rounded-full border border-white/10 bg-black/85 px-1 py-2.5 shadow-lg backdrop-blur" data-testid="overlay-bar">
+// The dock on the screen's edge, after Codenotch's: a tab out of the edge,
+// its top and bottom curving into it.
+const DOCK = "rgb(23 23 23 / 0.96)";
+const SHOULDER = 14;
+function Dock({ onRest, children }: { onRest(): void; children: [React.ReactNode, React.ReactNode] }) {
+  const shoulder = (top: boolean) => (
+    <div aria-hidden style={{ width: SHOULDER, height: SHOULDER, background: `radial-gradient(circle at 0 ${top ? "0" : "100%"}, transparent ${SHOULDER}px, ${DOCK} ${SHOULDER + 0.5}px)` }} />
+  );
+  return (
+    // Mouse moves, not enter: the dock opens under a pointer already there.
+    <div className="flex flex-col items-end" data-testid="overlay-bar" onMouseMove={onRest}>
+      {shoulder(true)}
+      <div className="flex w-[52px] flex-col items-center gap-3 rounded-l-[26px] py-3 pl-1" style={{ background: DOCK }}>
         {children[0]}
         {children[1]}
       </div>
-    );
-  }
+      {shoulder(false)}
+    </div>
+  );
+}
+
+// At the notch the bar is as tall as the notch and leaves its width empty in
+// the middle, the rings on its left and the agents on its right.
+function NotchBar({ screen, children }: { screen: Screen; children: [React.ReactNode, React.ReactNode] }) {
   const height = Math.max(24, Math.round(screen.notch?.height ?? screen.top ?? 24));
   return (
     // Two equal columns either side of the gap, so the gap stays over the
@@ -115,7 +153,7 @@ function Rings({ limits, small }: { limits: LoginLimits[]; small: boolean }) {
     <>
       {limits.map((l) => (
         <button key={`${l.agent}:${l.login}`} type="button" className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/60" aria-label={`${l.name}: ${l.windows.map((w) => `${w.name} ${pct(w.used)}`).join(", ")}`} onClick={() => open(null)}>
-          <Ring login={l} size={small ? 20 : 28} />
+          <Ring login={l} size={small ? 20 : 30} />
         </button>
       ))}
     </>
