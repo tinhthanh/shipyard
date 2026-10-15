@@ -142,6 +142,7 @@ function report(box: string) {
       {
         agent: "claude",
         account: "default",
+        email: "you@example.com",
         at: at(0.02),
         limits: {
           primary: { used_percent: 31, window_minutes: 300, resets_at: Math.round(now.getTime() / 1000 + 2 * 3600) },
@@ -152,6 +153,7 @@ function report(box: string) {
       {
         agent: "codex",
         account: "default",
+        email: "you@example.com",
         at: at(gpu ? 5 : 0.05),
         limits: {
           plan_type: "pro",
@@ -159,6 +161,20 @@ function report(box: string) {
           secondary: { used_percent: 12, window_minutes: 10080, resets_at: Math.round(now.getTime() / 1000 + 4 * 86400) },
         },
       },
+      ...(gpu
+        ? [
+            {
+              agent: "claude" as const,
+              account: "work",
+              email: "you@work.example",
+              at: at(0.1),
+              limits: {
+                primary: { used_percent: 12, window_minutes: 300, resets_at: Math.round(now.getTime() / 1000 + 4 * 3600) },
+                secondary: { used_percent: 41, window_minutes: 10080, resets_at: Math.round(now.getTime() / 1000 + 5 * 86400) },
+              },
+            },
+          ]
+        : []),
     ],
   };
 }

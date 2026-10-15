@@ -34,7 +34,7 @@ export function summarizeUsage(reports: { box: string; report: Report }[], faile
   const at = new Map(week.map((d) => [d.day, d]));
   const agents = new Map<Agent, number>();
   let cost = 0;
-  const windows: (UsageSummary["limits"][number] & { at: string })[] = [];
+  const windows: (UsageSummary["limits"][number] & { at: string; agent: Agent; login: string })[] = [];
   for (const { report } of reports) {
     for (const [day, agent, , , , ...t] of report.daily) {
       const n = t[0] + t[1] + t[2] + t[3];
@@ -49,26 +49,42 @@ export function summarizeUsage(reports: { box: string; report: Report }[], faile
     // boxes reports the same window, ending at the same moment give or take
     // a minute (Claude Code prints it to the minute, so two reads half a
     // minute apart can say 12:29 and 12:30): it is kept once, as most
-    // recently read.
+    // recently read. A login is its email; every box has a "default".
     for (const l of report.limits) {
       if (l.at.slice(0, 10) < from) continue;
+      const login = l.email || l.account;
       for (const w of [l.limits.primary, l.limits.secondary, ...(l.limits.extra ?? [])]) {
         if (!w?.resets_at) continue;
         const label = `${AGENT_NAME[l.agent]} · ${windowName(w)}`;
         const resets = w.resets_at * 1000;
-        const i = windows.findIndex((x) => x.label === label && Math.abs(x.resets - resets) <= SAME_RESET_MS);
-        const read = { label, used: w.used_percent / 100, resets, at: l.at };
+        const i = windows.findIndex((x) => x.label === label && x.login === login && Math.abs(x.resets - resets) <= SAME_RESET_MS);
+        const read = { label, used: w.used_percent / 100, resets, at: l.at, agent: l.agent, login };
         if (i < 0) windows.push(read);
         else if (windows[i].at < l.at) windows[i] = read;
       }
     }
+  }
+  const live = windows.filter((w) => w.resets > now);
+  // With more than one login of an agent, each row says whose it is: the
+  // email's name, or the whole email when two logins share that.
+  const who = new Map<string, string>();
+  for (const agent of new Set(live.map((w) => w.agent))) {
+    const logins = [...new Set(live.filter((w) => w.agent === agent).map((w) => w.login))];
+    if (logins.length < 2) continue;
+    const names = logins.map((l) => l.split("@")[0]);
+    logins.forEach((l, i) => who.set(`${agent}:${l}`, names.filter((n) => n === names[i]).length > 1 ? l : names[i]));
   }
   return {
     today: at.get(today)?.tokens ?? 0,
     week,
     cost,
     byAgent: [...agents.entries()].map(([agent, tokens]) => ({ agent, tokens })).sort((a, b) => b.tokens - a.tokens),
-    limits: windows.map(({ at: _, ...l }) => l).filter((l) => l.resets > now).sort((a, b) => b.used - a.used),
+    limits: live
+      .map(({ at: _, agent, login, ...l }) => {
+        const name = who.get(`${agent}:${login}`);
+        return name ? { ...l, label: `${l.label} · ${name}` } : l;
+      })
+      .sort((a, b) => b.used - a.used),
     failed,
   };
 }

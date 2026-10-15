@@ -472,6 +472,12 @@ def report(days):
             limits[("claude", l["account"])] = l
     except Exception:
         pass
+    # Who each login is: every box has a "default", so the account name alone
+    # can't tell one login read on two boxes from two logins.
+    who = {("claude", n): claude_account(n, d)["email"] for n, d in claude_dirs()}
+    who.update({("codex", n): codex_account(n, d)["email"] for n, d in codex_dirs()})
+    for k, l in limits.items():
+        l["email"] = who.get(k)
 
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),

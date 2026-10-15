@@ -1,7 +1,7 @@
 import { type HomeWidgetProps, useBoxes, useWidgetData } from "@berth/plugin";
 import { Tip, WidgetEmpty, WidgetSkeleton, cn } from "@berth/plugin/ui";
 
-import { type Report, runScript, where } from "./box";
+import { NoProjects, type Report, runScript, where } from "./box";
 import { AGENT_NAME, compact, usd } from "./data";
 import { summarizeUsage, type UsageSummary } from "./summary.ts";
 
@@ -23,8 +23,8 @@ export function UsageWidget({ berth, size }: HomeWidgetProps) {
         online.map(async (box) => {
           try {
             return { box, report: await runScript<Report>(berth, box, await where(berth, box), ["report", "7"], "2m") };
-          } catch {
-            failed.push(box);
+          } catch (e) {
+            if (!(e instanceof NoProjects)) failed.push(box);
             return undefined;
           }
         }),
@@ -76,7 +76,9 @@ export function UsageWidget({ berth, size }: HomeWidgetProps) {
           ))}
         </div>
       )}
-      {size !== "s" && (
+      {/* Medium has room for one line under the limit: which boxes couldn't
+          be read, when some couldn't, matters more than the week. */}
+      {size !== "s" && (big || !data.failed.length) && (
         <p className="truncate text-[11px] text-muted-foreground">
           This week: {data.byAgent.map((a) => `${AGENT_NAME[a.agent]} ${compact(a.tokens)}`).join(" · ") || "no tokens yet"}
         </p>
