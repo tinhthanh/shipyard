@@ -44,7 +44,8 @@ type AgentPreset struct {
 // The model and effort flags are each CLI's own, from its --help: Claude
 // Code's --model takes aliases (opus, sonnet, haiku) and --effort low to max;
 // Codex takes -m/--model and its reasoning effort as the config key
-// model_reasoning_effort; OpenCode and Cursor Agent take --model.
+// model_reasoning_effort; OpenCode and Cursor Agent take --model; oh-my-pi
+// takes --model and --thinking.
 var builtinAgents = []AgentPreset{
 	{ID: "claude", Name: "Claude Code", Command: "claude", ModelFlag: "--model", EffortFlag: "--effort",
 		Models: []string{"opus", "sonnet", "haiku"}, Efforts: []string{"low", "medium", "high", "xhigh", "max"}},
@@ -53,6 +54,8 @@ var builtinAgents = []AgentPreset{
 	{ID: "opencode", Name: "OpenCode", Command: "opencode", PromptFlag: "--prompt", ModelFlag: "--model", ACP: "acp"},
 	{ID: "gemini", Name: "Gemini CLI", Command: "gemini", PromptFlag: "-i", ACP: "--acp"},
 	{ID: "cursor", Name: "Cursor Agent", Command: "cursor-agent", ModelFlag: "--model", ACP: "acp"},
+	{ID: "omp", Name: "oh-my-pi", Command: "omp", ModelFlag: "--model", EffortFlag: "--thinking",
+		Efforts: []string{"low", "medium", "high", "xhigh", "max"}, ACP: "acp"},
 }
 
 // Presets are the built-in agents this box has, then the location's own from
@@ -214,6 +217,7 @@ var agentPackages = map[string]string{
 	"@openai/codex":             "codex",
 	"@google/gemini-cli":        "gemini",
 	"opencode-ai":               "opencode",
+	"@oh-my-pi/pi-coding-agent": "omp",
 }
 
 // wrapperWord is a word that runs the command after it.
@@ -307,10 +311,11 @@ func (b *Box) addTask(w http.ResponseWriter, r *http.Request) error {
 		if !ok {
 			return badRequest("unknown agent %q", req.Agent)
 		}
-		if kind, err := wantStructured(req.Driver); err != nil {
+		// No driver named (another agent, the CLI): the box's default.
+		if kind, mode, err := b.startDriver(p, req.Driver, req.Mode); err != nil {
 			return err
 		} else if kind != "" {
-			l, err := b.launchStructured(kind, p, req.Model, req.Effort, req.Mode)
+			l, err := b.launchStructured(kind, p, req.Model, req.Effort, mode)
 			if err != nil {
 				return err
 			}
@@ -431,7 +436,7 @@ func (b *Box) enrich(ctx context.Context, all []Session) []Session {
 				s.AgentState, s.StateSince = st.State, st.Since
 			}
 			s.Turn, s.StateSeq, s.Fidelity = st.Turn, st.Seq, st.Fidelity
-			s.Queued = st.Queued
+			s.Queued, s.Unfinished, s.Parked = st.Queued, st.Unfinished && s.AgentState == "finished", st.Parked && s.AgentState == "finished"
 			if s.AgentState == "waiting" {
 				s.Ask = st.Ask
 				var choices []AskChoice

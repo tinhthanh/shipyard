@@ -166,11 +166,44 @@ export async function handleWebhook(event: PaymentEvent): Promise<Order> {
 
 Before I plan the release, a few questions.`;
 
+const TABLE_REPORT = `The latest checks show the search and checkout paths improving:
+
+| Endpoint | Before (ms) | After (ms) |
+| --- | ---: | ---: |
+| Search | 1,240 | 410 |
+| Checkout | 880 | 520 |
+| Cart | 630 | 280 |
+
+The checks behind those numbers:
+
+| Check | Status | Time (ms) |
+| --- | --- | ---: |
+| Search index | pass | 18 |
+| Retry webhook | fail | 42 |
+| Checkout page | pass | 31 |
+| Duplicate order | fail | 27 |`;
+
+const TEST_REPORT = `I ran the checkout tests. One retry case still needs attention:
+
+\`\`\`text
+ RUN  v3.2.1 /work/shop
+ ❯ apps/web/lib/checkout/createOrder.test.ts (5 tests | 1 failed) 18ms
+   × reuses an order when a webhook retries 8ms
+     apps/web/lib/checkout/createOrder.test.ts:42:11
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 8 passed (9)
+\`\`\``;
+
 function releaseChat(): TranscriptItem[] {
+  const picture = new URLSearchParams(location.search).get("scene") === "chat-image" ? "\n\nThe checkout screenshot shows the confirmed order:\n\n![Checkout result](screenshots/checkout-result.png)" : "";
+  const tables = new URLSearchParams(location.search).get("scene") === "chat-tables";
+  const testReport = new URLSearchParams(location.search).get("scene") === "chat-tests";
   return [
     { kind: "user", id: "rq-u1", text: "Plan the release of the checkout fix." },
     { kind: "tools", id: "rq-t1", verb: "Read", done: true, items: [{ verb: "Read", target: "webhook.ts", file: true, id: "mock-read-1" }, { verb: "Read", target: "createOrder.ts", file: true, id: "mock-read-2" }] },
-    { kind: "text", id: "rq-x1", text: RELEASE_PLAN },
+    { kind: "text", id: "rq-x1", text: RELEASE_PLAN + picture },
+    ...(tables ? [{ kind: "text" as const, id: "rq-x2", text: TABLE_REPORT }] : []),
+    ...(testReport ? [{ kind: "text" as const, id: "rq-x2", text: TEST_REPORT }] : []),
     { kind: "question", id: "rq-q1", tool: "mock-ask-release", questions: RELEASE_QUESTIONS },
   ];
 }
@@ -190,6 +223,12 @@ export function mockAnswer(box: string, session: string, req: { tool: string; an
 // seedTranscript gives an agent that is already working something to show
 // when it is opened.
 export function seedTranscript(box: string, session: string, state: string, worktree: string): TranscriptItem[] {
+  // ?scene=first-prompt: an agent at rest hasn't been asked anything yet,
+  // so it opens to the start of a chat (the header picture, the composer).
+  if (new URLSearchParams(location.search).get("scene") === "first-prompt" && state !== "running" && state !== "waiting") {
+    useConversations.setState((s) => (s.items[keyOf(box, session)] ? s : { items: { ...s.items, [keyOf(box, session)]: [] } }));
+    return [];
+  }
   // Messages from other agents and Claude Code (agent-message): a story, or
   // with ?scene=busy a teammate on a busy team.
   if (box === "gpu" && session === MESSAGES_SESSION) {
@@ -248,6 +287,13 @@ export function seedTranscript(box: string, session: string, state: string, work
   if (state === "finished") items.push({ kind: "text", id: id(), text: pages ? `All green. ${pages.length === 1 ? "The page above has the coverage" : "The pages above have the numbers and screenshots"}; the branch is ready for review.` : "All green. The branch is ready for review." });
   // The search-perf agent then made artifacts here (components/art).
   if (box === ART_BOX && session === ART_SESSION) items.push(...artChat());
+  // ?structured: search-perf's Claude then loaded a skill; the chat shows
+  // the step, not the skill's instructions.
+  if (session === "search-perf-claude" && new URLSearchParams(location.search).has("structured")) {
+    items.push({ kind: "user", id: id(), text: "Check the change against our perf budget." });
+    items.push({ kind: "tools", id: id(), verb: "Skill", done: true, items: [{ verb: "Skill", target: "acme-perf-budget", id: "mock-skill-1" }] });
+    items.push({ kind: "text", id: id(), text: "Within budget: /search p95 is 410 ms against 500 ms." });
+  }
   // One finished session shows a notice card (chat-controls).
   const notice = mockNotice(session);
   if (notice) items.push(notice);

@@ -1,8 +1,8 @@
-// node --experimental-strip-types --test src/overlay/bar-state.test.ts (pnpm test)
+// node --experimental-strip-types --test src/lib/bar-state.test.ts (pnpm test)
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { barState } from "./bar-state.ts";
+import { barState } from "../overlay/bar-state.ts";
 
 const row = (state: string, name: string) => ({ key: `devl/${name}`, box: "devl", session: { name }, agent: "claude", title: `Task ${name}`, where: "shop · devl", state });
 const login = { agent: "claude" as const, login: "ana@acme.test", name: "ana", windows: [{ name: "5h", minutes: 300, used: 0.3, resets: 1 }] };

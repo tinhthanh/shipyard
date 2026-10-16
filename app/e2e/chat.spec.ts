@@ -32,6 +32,83 @@ test("a reply's Markdown draws, with its code highlighted", async ({ app }) => {
   await expect(md.locator("pre code")).toContainText("orders.byIdempotencyKey(event.idempotencyKey)");
 });
 
+test("a reply shows a worktree picture and opens its file", async ({ app }) => {
+  mockOnly();
+  await app.open({ params: { view: "conversation", scene: "chat-image" } });
+  await app.openWorktree("gpu/shop");
+  const card = app.chat.getByTestId("chat-worktree-image");
+  await expect(card).toBeVisible();
+  await expect(card).toHaveAttribute("data-path", "screenshots/checkout-result.png");
+  const image = card.getByRole("img", { name: "Checkout result" });
+  await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(960);
+  if (process.env.BERTH_SHOTS) {
+    await card.scrollIntoViewIfNeeded();
+    await app.page.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-worktree-image.png` });
+    await card.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-worktree-image-detail.png` });
+  }
+  await card.getByRole("button", { name: "Source" }).click();
+  await expect(card).toContainText("![Checkout result](screenshots/checkout-result.png)");
+  await card.getByRole("button", { name: "Image" }).click();
+  await card.getByRole("button", { name: "Open Checkout result" }).click();
+  await expect(app.page.locator("[data-testid=file-pane][data-path='screenshots/checkout-result.png'] [data-testid=file-image] img")).toBeVisible();
+});
+
+test("Markdown tables can chart numbers and filter failed rows", async ({ app }) => {
+  mockOnly();
+  await app.open({ params: { view: "conversation", scene: "chat-tables" } });
+  await app.openWorktree("gpu/shop");
+  const speed = app.chat.locator(".cv-table").filter({ hasText: "Before (ms)" });
+  await expect(speed).toBeVisible();
+  await speed.getByRole("button", { name: "Chart" }).click();
+  const chart = speed.getByTestId("chat-table-chart");
+  await expect(chart).toBeVisible();
+  await expect(chart.locator("[data-chart-type=bar]")).toBeVisible();
+  await expect(chart.locator("[data-chart-type=bar] svg").first()).toBeVisible();
+  if (process.env.BERTH_SHOTS) {
+    // Let the chart's reveal finish before recording its final appearance.
+    await app.page.waitForTimeout(1200);
+    await chart.scrollIntoViewIfNeeded();
+    await app.page.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-table-chart.png` });
+    await speed.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-table-chart-detail.png` });
+  }
+  await speed.getByRole("button", { name: "Explore" }).click();
+  const explored = speed.getByTestId("chat-explored-table");
+  await explored.getByRole("button", { name: "After (ms)" }).click();
+  await expect(explored.locator("tbody tr").first()).toContainText("Cart");
+
+  const checks = app.chat.locator(".cv-table").filter({ hasText: "Retry webhook" });
+  await checks.getByRole("button", { name: "Explore" }).click();
+  await checks.getByRole("button", { name: "Failures only" }).click();
+  await expect(checks.getByTestId("chat-explored-table").locator("tbody tr")).toHaveCount(2);
+  await expect(checks.getByTestId("chat-explored-table")).not.toContainText("Search index");
+  if (process.env.BERTH_SHOTS) await checks.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-table-failures-detail.png` });
+  await checks.getByRole("button", { name: "Original" }).click();
+  await expect(checks.locator(":scope > table")).toBeVisible();
+  await expect(checks.locator(":scope > table")).toContainText("Search index");
+});
+
+test("a test report shows failures and opens the failed file", async ({ app }) => {
+  mockOnly();
+  await app.open({ params: { view: "conversation", scene: "chat-tests" } });
+  await app.openWorktree("gpu/shop");
+  const card = app.chat.getByTestId("chat-test-results");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("1 failed");
+  await expect(card).toContainText("8 passed");
+  await expect(card).toContainText("reuses an order when a webhook retries");
+  const block = card.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' cv-pre ')]").first();
+  if (process.env.BERTH_SHOTS) {
+    await block.scrollIntoViewIfNeeded();
+    await app.page.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-test-results.png` });
+    await block.screenshot({ path: `${process.env.BERTH_SHOTS}/chat-test-results-detail.png` });
+  }
+  await block.getByRole("button", { name: "Show test output" }).click();
+  await expect(block.locator("pre")).toBeVisible();
+  await block.getByRole("button", { name: "Show test results" }).click();
+  await card.getByRole("button", { name: /Open apps\/web\/lib\/checkout\/createOrder\.test\.ts line 42/ }).click();
+  await expect(app.page.locator("[data-testid=file-pane][data-path='apps/web/lib/checkout/createOrder.test.ts']")).toBeVisible();
+});
+
 test("an edit opens to its change, highlighted", async ({ app }) => {
   mockOnly();
   await app.openWorktree("devl/checkout-fix");
