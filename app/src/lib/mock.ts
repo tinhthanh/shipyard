@@ -7,6 +7,7 @@ import { mockRequirements } from "@/lib/mock-requirements";
 import { browserCall, mockScreencast, mockShotSvg, wireBrowserMock } from "@/lib/mock-browser";
 import { mockDevtoolsCall } from "@/lib/mock-devtools";
 import { phoneCall } from "@/lib/mock-phone";
+import { turnCheckCall } from "@/lib/mock-turncheck";
 import { worktreesCall } from "@/lib/mock-worktrees";
 import { kitsCall, kitsStream } from "@/lib/mock-kits";
 import { marketplaceCall, marketplaceFile, marketplaceReady, type MockPlugin, seededPlugins } from "@/lib/mock-marketplace";
@@ -179,7 +180,7 @@ const sessions: Record<string, Session[]> = {
     // Three agents in one worktree, so the board has to tell them apart.
     { name: "order-export-claude", title: "Export orders as CSV from the admin", location: "shop/order-export", dir: "/home/me/work/shop-order-export", command: "claude 'Export orders as CSV from the admin'", created: ago(1700), attached: 0, exited: false, agent: "claude", agent_state: "finished", state_since: ago(1560) },
     { name: "order-export-claude-2", location: "shop/order-export", dir: "/home/me/work/shop-order-export", command: "claude", created: ago(320), attached: 0, exited: false, agent: "claude", agent_state: "idle", state_since: ago(290) },
-    { name: "order-export-claude-3", title: "Add tests for the export job", location: "shop/order-export", dir: "/home/me/work/shop-order-export", command: "claude 'Add tests for the export job'", created: ago(140), attached: 0, exited: false, agent: "claude", agent_state: "finished", state_since: ago(75) },
+    { name: "order-export-claude-3", title: "Add tests for the export job", location: "shop/order-export", dir: "/home/me/work/shop-order-export", command: "claude 'Add tests for the export job'", created: ago(140), attached: 0, exited: false, agent: "claude", agent_state: "finished", state_since: ago(75), unfinished: true },
     // Its repository's Playwright tests run near its 12 GB memory limit
     // (mock-processes).
     { name: "https-linear-app-acme-claude", title: "Fix the cart badge after a refund", location: "shop/https-linear-app-acme", dir: "/home/me/work/shop-https-linear-app-acme", command: "claude", created: ago(44), attached: 0, exited: false, agent: "claude", agent_state: "idle", state_since: ago(40), scope: "berth-https-linear-app-acme-claude-tq1.scope", usage: LINEAR_USAGE },
@@ -188,6 +189,8 @@ const sessions: Record<string, Session[]> = {
   gpu: [
     { name: "ci-flake-claude", title: "Move acme billing to the new ledger", location: "shop/ci-flake", dir: "/home/me/shop-ci-flake", command: "claude", created: ago(30), attached: 0, exited: false, agent: "claude", agent_state: "finished", state_since: ago(6) },
     { name: "judge-v2-claude", title: "Tune the judge prompt", location: "evals/judge-v2", dir: "/home/me/evals-judge-v2", command: "claude", created: ago(9), attached: 0, exited: false, agent: "claude", agent_state: "running", state_since: ago(1) },
+    // Turn check read its turn as parked: it checks back on a reply later.
+    { name: "evals-claude", title: "Rerun the evals once the vendor replies", location: "evals", dir: "/home/me/evals", command: "claude", created: ago(400), attached: 0, exited: false, agent: "claude", agent_state: "finished", state_since: ago(180), parked: true },
     { name: "evals-codex", location: "evals", dir: "/home/me/evals", command: "codex", created: ago(3), attached: 0, exited: false, agent: "codex", agent_state: "idle", state_since: ago(3) },
     // Asks a form of questions (AskUserQuestion) after a reply with code.
     { name: "shop-claude", title: "Plan the checkout release", location: "shop", dir: "/home/me/shop", command: "claude", created: ago(12), attached: 0, exited: false, agent: "claude", agent_state: "waiting", state_since: ago(2), ask: { tool: "AskUserQuestion", message: "Three questions about the release window" } },
@@ -219,6 +222,13 @@ const stats: Record<string, Stats> = {
 
 // ?mock=1&crowd=1: many more agents, on more boxes (lib/mock-crowd.ts).
 if (new URLSearchParams(location.search).has("crowd")) crowd({ status, locations, sessions, stats });
+// ?structured: search-perf's Claude runs structured (Labs), its chat's
+// /resume the app's own picker of Claude's past conversations there.
+const structuredDemo = new URLSearchParams(location.search).has("structured");
+if (structuredDemo) {
+  const s = sessions.devl?.find((x) => x.name === "search-perf-claude");
+  if (s) s.driver = "claude";
+}
 // ?mock=1&bench=…: far more than the fixtures, for measuring (lib/mock-bench.ts).
 if (BENCH === "fleet") benchFleet({ status, locations, sessions, stats });
 if (BENCH === "chat") seedBenchChats();
@@ -675,6 +685,8 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
   if (thisMac) return thisMac;
   const phone = phoneCall(box, method, path, body, delay);
   if (phone) return phone;
+  const turnCheck = turnCheckCall(box, method, path, body, delay);
+  if (turnCheck) return turnCheck;
   const usage = usageCall(box, method, path, body, delay);
   if (usage) return usage;
   const wts = worktreesCall(box, method, path, body, { locations, sessions }, emit, delay);
@@ -749,7 +761,7 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
       home: HOME,
       // gpu runs an older berthd (mockBuilds): it can't keep worktree names,
       // and its agent browser has no tabs.
-      capabilities: ["diff", "turns", "queue", "ask", "answer", "journal", "runs", "exec.detach", "browser", "browser.devtools", "titles", "sample", "service.terminal", "session.home", "agents.install", "artifacts", "processes", ...(box === "gpu" ? [] : ["worktree.titles", "agents.paths", "browser.tabs"])],
+      capabilities: ["diff", "turns", "queue", "ask", "answer", "journal", "runs", "exec.detach", "browser", "browser.devtools", "titles", "sample", "service.terminal", "session.home", "agents.install", "artifacts", "processes", ...(box === "gpu" ? [] : ["worktree.titles", "agents.paths", "browser.tabs"]), ...(structuredDemo ? ["driver.claude", "conversations", "sessions.past"] : [])],
       // Claude Code from npm under nvm, as the person's shell finds it;
       // Codex from Shipyard's own installer.
       agent_paths: [
@@ -864,6 +876,24 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
     setTimeout(() => emit({ type: "worktree.renamed", box, data: { location: loc, name: wt, path: w.path } }), 30);
     return delay({ ...w });
   }
+  // A structured chat's /resume: Claude's past conversations in its
+  // folder, and carrying one on in the session.
+  const past = /^sessions\/([^/]+)\/past$/.exec(path);
+  if (method === "GET" && past) {
+    const s = sessions[box]?.find((x) => x.name === decodeURIComponent(past[1]));
+    if (!s?.driver) return Promise.reject(new ApiError(`${s?.name ?? "it"} runs in its terminal: its agent's own /resume works there`, 409));
+    return delay({ agent: "claude", sessions: mockPast(s) });
+  }
+  const carry = /^sessions\/([^/]+)\/resume$/.exec(path);
+  if (method === "POST" && carry && (body as { agent_session_id?: string } | undefined)?.agent_session_id) {
+    const s = sessions[box]?.find((x) => x.name === decodeURIComponent(carry[1]));
+    const p = s && mockPast(s).find((x) => x.id === (body as { agent_session_id: string }).agent_session_id);
+    if (!s || !p) return Promise.reject(new ApiError("Claude has no such conversation in this folder", 404));
+    s.title = p.title;
+    mockCarried.set(s.name, p.id);
+    setTimeout(() => emit({ type: "session.renamed", box, data: { name: s.name } }), 30);
+    return delay({ ...s });
+  }
   // Renaming a session: its title, or "" to clear it.
   if (method === "PATCH" && /^sessions\/[^/]+$/.test(path)) {
     const s = sessions[box]?.find((x) => x.name === decodeURIComponent(path.slice("sessions/".length)));
@@ -940,6 +970,8 @@ function mockAttach(box: string, session: string, h: TerminalHandlers) {
   return {
     send(data: Uint8Array | string) {
       const text = typeof data === "string" ? data : new TextDecoder().decode(data);
+      // A test that sets window.__berthSent = [] gets what each terminal sent.
+      (window as { __berthSent?: string[] }).__berthSent?.push(text);
       const echo = text.replace(/\r/g, "\r\n\x1b[2m(mock: nothing runs here)\x1b[0m\r\n\x1b[1m❯\x1b[0m ").replace(/\x7f/g, "\b \b");
       if (!ECHO_DELAY) h.onData(echo);
       else timers.push(window.setTimeout(() => open && h.onData(echo), ECHO_DELAY));
@@ -1625,3 +1657,20 @@ export function mockNotifications() {
 
 // ?notify=1 plays them on start.
 if (!fresh && new URLSearchParams(location.search).has("notify")) setTimeout(mockNotifications, 2500);
+
+// mockPast is what Claude has had in a structured session's folder, newest
+// first: the chat's own conversation, ones had in its terminal, and one
+// running in another session.
+const mockCarried = new Map<string, string>();
+function mockPast(s: Session): { id: string; title: string; updated: string; current?: boolean; session?: string }[] {
+  const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+  const list = [
+    { id: "6f1c2a9e-4b7d-4e21-9a35-0c8d5e7f1a20", title: "Speed up product search", updated: minsAgo(23) },
+    { id: "b2d84f10-93ae-4c55-8e1b-7a6c0f3d2e91", title: "Cache facet counts in Redis", updated: minsAgo(140), session: "search-perf-claude-2" },
+    { id: "0e9a7c35-1f2b-4d68-b4c0-5e3a9d8f7b16", title: "Find why search is slow on mobile", updated: minsAgo(60 * 26) },
+    { id: "c7f05b2d-8e41-4a9c-9d3e-2b6f1a0c4e58", title: "Add a search-results skeleton", updated: minsAgo(60 * 24 * 3) },
+    { id: "4a6e9d13-2c5f-4b07-a8e2-9f1d3c7b5a64", title: "Try Postgres trigram search", updated: minsAgo(60 * 24 * 9) },
+  ];
+  const current = mockCarried.get(s.name) ?? list[0].id;
+  return list.map((p) => ({ ...p, current: p.id === current || undefined }));
+}

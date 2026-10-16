@@ -37,6 +37,176 @@ again.
   look like one shown twice. A box with no projects yet is left out instead
   of listed as one it couldn't read, and in the Medium size that line now
   takes the week's place rather than being cut off.
+- **A box newer than the app is no longer called outdated.** An older
+  Shipyard used to offer to update a box that already ran a newer release,
+  and *Update all* (or updating boxes automatically) would put its older
+  `berthd` on it. Now a newer box is left alone, and `berth upgrade` refuses
+  to downgrade one unless you pass `--force`. This works once both the app
+  and the box are on this release or later.
+
+## v0.3.22
+
+- **Mac terminal keys work in terminals.** ⇧↵ starts a new line in Claude
+  Code instead of sending, ⌥← and ⌥→ move a word, ⌘← and ⌘→ go to the
+  start and end of the line, and ⌘⌫ deletes back to its start. ⇧↵ needs
+  the box upgraded; a session's agent started before then picks it up
+  when it restarts.
+  [Terminals](/guides/terminals#keys)
+- **`/resume` works in a structured agent's chat.** It opens a list of the
+  agent's past conversations in that folder, newest first, including the ones
+  you had in Claude Code's own terminal. Pick one and it carries on in the
+  same tab, with what was said before shown in the chat. The conversation you
+  leave stays under *Resume a conversation*. ACP agents that can list their
+  sessions (OpenCode, for one) get the same list; Codex's isn't there yet.
+  Needs the box upgraded.
+- **A skill Claude loads shows as one step.** In a structured chat, the
+  skill's whole text used to show up as a message from you. Now the chat
+  says "Used the berth-orchestrate skill" among the agent's steps. Needs
+  the box upgraded.
+- **New terminals no longer open with a systemd warning.** On boxes with
+  systemd 258 or later, every new tab started with *D-Bus property
+  CPUAccounting is deprecated*. Sessions still report their CPU use as
+  before. Needs the box upgraded.
+
+## v0.3.21
+
+- **The phone app pairs from a pasted link.** Its Pair and Boxes screens have
+  *Or paste a pairing link*, for a phone app added to the home screen, which
+  keeps its own storage apart from the browser. A good pairing link no longer
+  says it is damaged, and Back always returns to the list instead of leaving
+  the app. Needs the box upgraded.
+  [Phone](/guides/phone)
+
+- **Turn check: a turn that ends on a question needs you.** Off by
+  default; turned on for a box in Settings → Agents, berthd asks a
+  decision model you pick about each finished Claude Code or Codex turn:
+  **Jev on Vercel AI Gateway**, **OpenAI Decisions** (`gpt-6-luna`), or
+  **Laya** on a server you run, which keeps turns on your machines. One
+  that asks you something or is blocked shows as **Needs you**; one that
+  stopped while something it started still runs (a build, a deploy, a
+  watcher) as **Working**; and one parked until someone else replies or a
+  later time ("check again in 24 hours"), with nothing running, as
+  **Idle**. Neither of those notifies you. A failed or unsure answer, or
+  work that is done, leaves it Done. It sends the turn's prompt (its first 4,000 characters,
+  looked for further back when a long turn's tool calls pushed it out of
+  view), the end of its reply and the session's title, with anything that
+  looks like a secret taken out first. It is set only from a paired laptop,
+  never from the box's own socket; each provider's key is kept apart and
+  goes only to that provider.
+- **Switchboard:** Pick up focused and recent conversations and worktrees with ⌘⇧K or from Home. Type to find one, ↑ ↓ and ↵ to open it, ⌘S to star it into Focus, ⌘E to leave a pickup note, and Tab to step through your areas. Right-click a row (or ⇧F10) to move it to another area. Your focus, areas and notes stay on this computer.
+- **Choose the picture at the top of a new chat.** Settings › Appearance ›
+  Header picture picks the painting across the top of a new chat, an empty
+  worktree and Home: the harbour (still the default), one of six new
+  paintings (Alpine lake, Meadow, Desert mesa, Snowy fjord, Lavender fields,
+  Sea of clouds), a picture of your own, or none. Each new painting has its
+  own night version for dark themes, as the harbour does, and a picture of
+  your own is dimmed there.
+- **Six new chat backgrounds.** The same six paintings are scenes under
+  Settings › Appearance › Chat background, at night in a dark theme.
+- **Math in code blocks draws too.** A ` ```math ` block, as GitHub writes a
+  formula, and a ` ```latex ` or ` ```tex ` block of equations now show as
+  typeset math. A whole LaTeX document (with `\documentclass`, meant for
+  `pdflatex`) stays code, as does a block still being written.
+- **Agents started by other agents follow Structured agents too.** With
+  *Structured agents* on in Settings › Labs, an agent that another agent
+  starts with the berth tools, one started with `berth task new` or
+  `berth session new`, and the agents of runs and automations now run
+  structured, with your *Permissions* choice, instead of always in their
+  terminals. Update your boxes (`berth upgrade BOX`, or Update all) for it
+  to take effect.
+- **Mermaid flowcharts in a reply draw as diagrams.** A `mermaid` code
+  block with a flowchart shows as the diagram, in the theme's colours, the
+  way a diagram artifact does; *Source* in its corner shows what it was
+  drawn from, and *Copy* still copies that. Other Mermaid diagrams, such
+  as sequence diagrams, show as written, and a reply still being written
+  shows its blocks as text until it's done.
+- **Mermaid flowcharts draw as they were written.** Subgraphs show as
+  titled, tinted boxes around their nodes, nested where they nest, and a
+  `<br/>` in a label starts a new line. Labels lose their quotes, codes
+  such as `#quot;` and `&amp;` show as the characters they stand for, and
+  nodes keep their shapes: pills, cylinders, circles, hexagons and slanted
+  boxes. Every kind of arrow is read, labelled or not, as are chains like
+  `a --> b --> c` and `a & b --> c`. A loop back up the chart curves round
+  the side instead of stretching it. This goes for diagram artifacts too.
+- **Diffs in a reply look like the chat's edits.** A `diff` or `patch`
+  code block draws with file names, line numbers and highlighting, as an
+  agent's edits do. Plain lines of `+` and `-` show coloured, without
+  numbers. A block that isn't really a diff stays as written.
+
+## v0.3.20
+
+- **Pictures from a worktree show in replies.** An agent can include a
+  Markdown image such as `![Checkout](screenshots/checkout.png)` and the chat
+  shows a thumbnail after checking it belongs to that worktree. Click the
+  image to open its File tab, or use *Source* to see the Markdown. External
+  image addresses stay as text instead of loading in the app.
+- **Tables in a reply can be explored.** An agent's Markdown table gets
+  an *Explore* view with sortable columns and a failures filter for status
+  results. A small numeric table can switch to a chart in Shipyard's theme.
+  *Original* brings back the table exactly as written.
+- **Test failures in a reply have a short result card.** Vitest,
+  Playwright and Go test output in a code block shows pass and fail counts
+  and the failed tests. A file and line in the worktree opens from the card;
+  *Source* shows the full output.
+
+- **Updating lands on the newest release.** An update the app had already
+  downloaded used to wait for your restart even after a newer one came out,
+  so you went one version at a time. Now a newer release replaces the one
+  waiting, and *Restart to update* checks once more before it installs.
+- **A new agent no longer flashes "has ended" as it opens.** For a moment
+  after it started, its chat showed *Claude Code has ended* with *Start
+  Claude Code again*, before the box had listed the new session.
+- **Callouts in a reply look like GitHub's.** A quote that starts with
+  `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` shows as
+  a tinted box with its icon and name, in your theme's colours.
+- **Issues, pull requests and commits in a reply are links.** In a chat
+  whose repository is on GitHub, `#123`, `acme/shop#45` and a commit's hash
+  open on GitHub when you click them. Colours like `#fff`, line anchors like
+  `#L14`, code blocks and existing links stay as they are.
+- **Files an agent names link to them.** A path of the worktree in a
+  reply's code, like `src/app.ts:14` or `src/app.ts:14-30`, gets a faint
+  dotted underline. Hovering it shows those lines, drawn like the chat's
+  edits; clicking opens the file at that line (⌥-click beside the chat,
+  ⌘-click in your editor). Commands and names that aren't files stay as
+  they were.
+- **Math in the chat.** Replies with LaTeX (`$$…$$`, `\(…\)` and `\[…\]`)
+  show as typeset math, centred on its own lines for a display. A single
+  `$` is left alone, so "costs $5 and $10" reads as it was written, and
+  math in code stays as code. A formula that doesn't parse shows as its
+  source, in red.
+
+
+## v0.3.19
+
+- **Labs: a structured agent keeps its permission mode when it's resumed.**
+  A mode chosen while the agent was working could be lost, so a Codex
+  agent set to *Bypass permissions* came back asking again once
+  resumed.
+- **Labs: a structured agent's chat no longer opens a terminal under it.**
+  When the agent was idle, *"Claude Code is showing its own screen — answer
+  it here"* opened with the log of the process running the agent, and
+  typing went into that log. Now it opens only for agents running in their
+  terminal. For a structured Claude Code, *Show terminal* opens Claude
+  Code's own terminal on the same conversation, as the pane's terminal
+  toggle does. Structured Codex and ACP agents have no terminal of their
+  own, so they don't offer one.
+
+## v0.3.18
+
+- **Labs: every way of starting an agent starts it structured.** With
+  *Structured agents* on, only the composer started agents structured; the
+  sidebar's and a worktree's *New agent*, the launcher, the new-tab and split
+  menus, the worktree picker and hand-offs (and reviews) started them in
+  their terminal. They all start structured now.
+- **oh-my-pi is a built-in agent.** Start it from a project like any other
+  (`omp`), with a model and thinking level. With *Structured agents* on, it runs
+  through the Agent Client Protocol: its replies and tool calls fill the chat
+  and its permission requests come to it. `berthd integrations install omp`
+  adds a small extension to `~/.omp/agent/extensions` so a terminal session
+  says when it is working, needs you or is done, and adds Shipyard's MCP
+  server to `~/.omp/agent/mcp.json` so omp can drive other sessions; a box
+  that has omp gets both with the other agents' hooks. Needs the box
+  upgraded.
 - **Labs: a structured agent's first permission waits for you.** When a
   structured agent asked for a permission in its very first turn, with
   *Permissions: Ask*, the box read the session's screen, which shows nothing
@@ -74,6 +244,14 @@ again.
   About point at `tinhthanh/shipyard` instead of upstream, and agents no
   longer add a "Review in Shipyard" button that goes through berthd.app to
   the pull requests they open.
+  Needs the box upgraded.
+- **Settings › Boxes reads correctly to a screen reader.** A box with no
+  browsers running put its "No browsers running" note inside the browsers
+  list, so assistive tech announced an empty list with a stray line in it.
+  The note now stands on its own.
+
+## v0.3.17
+
 - **Agents sharing a worktree each get a browser tab of their own.** When
   several agents check pages in one worktree at once, each passes
   `--tab NAME` to `berthd browser` and gets its own page, cookies and size,
@@ -81,8 +259,6 @@ again.
   at full speed while nobody watches it. The agent's view in a browser pane
   shows the tabs, stays on the one you pick, and no longer jumps from one
   agent's page to the next. Needs the box upgraded.
-
-## v0.3.17
 
 - **Labs: OpenCode, Gemini CLI and Cursor Agent run structured too.** With
   *Structured agents* on, they start through the Agent Client Protocol: their
@@ -120,7 +296,6 @@ again.
   as Allow / Always allow / Deny, or with *Permissions: Bypass* (the
   default) the box allows them for you; questions and plans always wait for
   you. They open as conversations. Needs the box upgraded.
-
 - **Doctor no longer says berthd runs "not as a service" when it does.**
   `berthd install` puts your login shell's PATH in the service, and doctor
   compared the service with one that had no PATH, so on a Mac it always

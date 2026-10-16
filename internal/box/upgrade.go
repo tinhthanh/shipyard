@@ -28,6 +28,9 @@ type Info struct {
 	OS    string `json:"os"`
 	Arch  string `json:"arch"`
 	Build string `json:"build"`
+	// Version is the release it is ("v0.3.22"), or "dev": a laptop on an
+	// older release must not take it for outdated (berth upgrade).
+	Version string `json:"version,omitempty"`
 	// User and Home are the account berthd runs as, which is the one to
 	// log in as over SSH, for editors.
 	User  string   `json:"user,omitempty"`
@@ -43,6 +46,9 @@ type Info struct {
 	Capabilities []string `json:"capabilities"`
 	// Adapters say what each agent can report, for the app.
 	Adapters map[string]adapters.Caps `json:"adapters,omitempty"`
+	// AgentDefaults is how agents start when what starts them names no
+	// driver, on a box with "agents.defaults".
+	AgentDefaults *AgentDefaults `json:"agent_defaults,omitempty"`
 }
 
 // BuildID identifies a daemon build by its bytes.
@@ -70,7 +76,7 @@ func (u *SelfUpdate) info() (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	return Info{OS: runtime.GOOS, Arch: runtime.GOARCH, Build: BuildID(b), Tools: Tools()}, nil
+	return Info{OS: runtime.GOOS, Arch: runtime.GOARCH, Build: BuildID(b), Version: version.Version, Tools: Tools()}, nil
 }
 
 // Install verifies binary and swaps it in for the running executable. The old
@@ -117,6 +123,10 @@ func (b *Box) handleInfo(w http.ResponseWriter, r *http.Request) error {
 		i.Agents = []AgentPreset{}
 	}
 	i.Capabilities = b.Capabilities()
+	if b.AgentDefaults != nil {
+		d := b.AgentDefaults.Get()
+		i.AgentDefaults = &d
+	}
 	i.Adapters = map[string]adapters.Caps{}
 	for _, a := range adapters.All() {
 		i.Adapters[a.Name] = a.Caps
@@ -172,7 +182,15 @@ func (b *Box) Capabilities() []string {
 		// driver.codex: "driver": "codex", Codex's app server (codexdriver.go).
 		// driver.acp: "driver": "acp", an agent whose preset says how it
 		// speaks ACP (acpdriver.go).
-		caps = append(caps, "driver.claude", "driver.codex", "driver.acp", "driver.switch", "conversations")
+		// sessions.past: GET /v1/sessions/{name}/past, and .../resume
+		// {agent_session_id}: a structured chat's /resume (pastsessions.go).
+		caps = append(caps, "driver.claude", "driver.codex", "driver.acp", "driver.switch", "conversations", "sessions.past")
+		if b.AgentDefaults != nil {
+			// agents.defaults: GET and PUT /v1/agents/defaults, how agents
+			// start when what starts them names no driver
+			// (agentdefaults.go), also in info as agent_defaults.
+			caps = append(caps, "agents.defaults")
+		}
 	}
 	if b.Artifacts != nil {
 		// artifacts: berthd artifact add, a worktree's artifacts and their
