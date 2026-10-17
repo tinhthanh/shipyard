@@ -266,9 +266,12 @@ func TestAttachPassesShiftEnter(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	master.Write([]byte("\x1b[13;2u......."))
-	// tmux writes it in xterm's form (CSI 27;2;13~) or as CSI 13;2u.
-	xterm, csiu := "1b 5b 32 37 3b 32 3b", "1b 5b 31 33 3b 32 75"
-	for !strings.Contains(screen.String(), xterm) && !strings.Contains(screen.String(), csiu) {
+	// tmux writes it in xterm's form (CSI 27;2;13~) or as CSI 13;2u. od
+	// spaces the bytes one apart on Linux and two apart on macOS: compare
+	// them without the spaces.
+	xterm, csiu := "1b5b32373b323b", "1b5b31333b3275"
+	seen := func() string { return strings.Join(strings.Fields(screen.String()), "") }
+	for !strings.Contains(seen(), xterm) && !strings.Contains(seen(), csiu) {
 		if time.Now().After(deadline.Add(5 * time.Second)) {
 			t.Fatalf("Shift+Enter didn't reach the program as Shift+Enter: %q", screen.String())
 		}
