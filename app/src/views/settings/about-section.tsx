@@ -11,6 +11,7 @@ import { openDocs, openUrl } from "@/lib/open-url";
 import { useOutdatedBoxes } from "@/lib/outdated";
 import { LINUX_ALPHA, LINUX_BUGS } from "@/lib/platform";
 import { NONE, useStore } from "@/lib/store";
+import { NO_APP_RELEASE_LINE, noAppRelease } from "@/lib/fork-updates";
 import { checkForUpdate, restartToUpdate, updatesSupported, useUpdater } from "@/lib/updater";
 import { cn } from "@/lib/utils";
 import { hasWhatsNew, openWhatsNew } from "@/lib/whats-new";
@@ -96,6 +97,17 @@ function useUpdates(): { line: string; dot?: string; action?: ReactNode } {
     case "current":
       return { line: `Up to date · checked ${ago(new Date(u.checkedAt).toISOString())}`, dot: "bg-success", action: check };
     case "error":
+      if (noAppRelease(u.error)) {
+        return {
+          line: NO_APP_RELEASE_LINE,
+          action: (
+            <Button size="sm" variant="outline" onClick={() => void openUrl(RELEASES)}>
+              Releases
+              <ArrowUpRightIcon />
+            </Button>
+          ),
+        };
+      }
       return { line: `Couldn't check for updates: ${u.error}`, dot: "bg-warning", action: check };
     default:
       return { line: u.status === "checking" ? "Checking for updates…" : "Checks when it opens and every few hours", action: check };
