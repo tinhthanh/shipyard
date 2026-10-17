@@ -241,6 +241,8 @@ type Agent struct {
 	proxySt  ProxyStatus
 	queue    *promptQueue
 	local    localBox
+	// boxPlugins notes the boxes plugins were put on (boxplugins.go).
+	boxPlugins boxPluginLedger
 	// imageGenBusy lets one chat background generate at a time.
 	imageGenBusy sync.Mutex
 	// outdated remembers which boxes run an older berthd (outdated.go).
@@ -379,6 +381,8 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.watchTeamUpdates(ctx)
 	go a.watchTeamSuggestions(ctx)
 	go a.keepHelpersTidy(ctx)
+	// Plugins off here come off the boxes too (boxplugins.go).
+	go a.keepBoxPluginsTidy(ctx)
 	a.hooks = &hooks.Runner{Path: filepath.Join(cfg.UserDir, "hooks.json"), PluginsDir: filepath.Join(cfg.UserDir, "plugins"), Log: cfg.Log}
 	go a.hooks.Run(ctx, &a.bus)
 

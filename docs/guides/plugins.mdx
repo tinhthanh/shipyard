@@ -287,6 +287,33 @@ and Shipyard only stores keys the plugin lists.
 Settings say what the plugin's tools should do. They don't sandbox it: the
 plugin's binary enforces them.
 
+### On boxes
+
+A plugin's tools can go to your boxes too, so the agents running there get
+them. Under a plugin that is on, Settings → Plugins lists each online box
+with a switch: turning it on sends the box the plugin's folder as you
+allowed it on this computer, with the hash you allowed. The box takes it
+only if it is that plugin, every file its manifest pins hashes to its pin,
+and its binaries run on the box (a plugin built for Apple silicon doesn't
+go to an Intel Mac or a Linux box). It records the grant in its own
+`~/.berth/plugins.json` and gives its agents the tools at once. Only a
+paired laptop can put a plugin on a box or take one off; an agent on the
+box can't.
+
+When you allow a new version here, the box keeps the old one until you
+**Update** it there. A plugin's [setup](#setup) runs on the box: **Set up
+on box…** opens it on that box's screen, for whoever is at it, or reaching
+it by remote desktop, to finish (macOS permissions can't be given from
+another computer). A box on this computer doesn't show: its agents have
+this computer's plugins already. Settings stay each box's own; the box
+starts from the plugin's defaults.
+
+Turning a plugin off here, or uninstalling it, takes it off the boxes you
+put it on: at once from those online, and from the others when they next
+connect. Turning it back on puts it on no box; you do, box by box. A
+plugin whose files changed, and that waits for you to allow them again,
+stays on its boxes in the version you allowed.
+
 <Callout title="Tools run as you">
   A plugin's MCP server runs with the agent's access, like any other tool
   the agent uses. Allowing a plugin decides whether its tools exist; what an

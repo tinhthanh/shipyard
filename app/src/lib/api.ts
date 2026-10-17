@@ -549,6 +549,13 @@ export const laptopApi = {
   pluginSettings: (c: Client, id: string) => c.laptop<PluginSettingsState>("GET", `/v1/plugins/${encodeURIComponent(id)}/settings`),
   setPluginSetting: (c: Client, id: string, key: string, value: boolean) =>
     c.laptop<PluginSettingsState>("PUT", `/v1/plugins/${encodeURIComponent(id)}/settings`, { key, value }),
+  // A plugin's tools on boxes (internal/agent/boxplugins.go): each online
+  // box's state, putting it on one or updating it there, taking it off, and
+  // starting its setup on the box's screen.
+  pluginBoxes: (c: Client, id: string) => c.laptop<PluginBoxes>("GET", `/v1/plugins/${encodeURIComponent(id)}/boxes`),
+  installPluginOnBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
+  removePluginFromBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("DELETE", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
+  startPluginSetupOnBox: (c: Client, id: string, box: string) => c.laptop<{ started: boolean }>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/setup`),
   // Where a plugin's helper is, to say before turning the plugin off.
   pluginHelpers: (c: Client, id: string) => c.laptop<PluginHelpers>("GET", `/v1/plugins/${encodeURIComponent(id)}/helpers`),
   // The plugin listing (lib/marketplace.ts). The agent reads it from the
@@ -576,6 +583,26 @@ export interface PluginSetting {
 export interface PluginSettingsState {
   label?: string;
   settings: PluginSetting[];
+}
+
+// A plugin's tools on one box: off (not there), on (as allowed here),
+// outdated (another version), unsupported (built for another platform),
+// old_berthd (the box can't take plugins yet) or error.
+export interface PluginOnBox {
+  box: string;
+  state: "off" | "on" | "outdated" | "unsupported" | "old_berthd" | "error";
+  platform?: string;
+  version?: string;
+  setup?: PluginSetupState;
+  error?: string;
+}
+
+export interface PluginBoxes {
+  plugin: string;
+  tools: boolean;
+  enabled: boolean;
+  platforms?: string[];
+  boxes: PluginOnBox[];
 }
 
 export interface PluginSetupState {

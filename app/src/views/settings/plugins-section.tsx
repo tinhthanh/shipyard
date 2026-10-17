@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toastManager } from "@/components/ui/toast";
-import { ApiError, laptopApi, type PluginInfo, type PluginSetting, type PluginSettingsState, type PluginSetupState } from "@/lib/api";
+import { ApiError, laptopApi, type PluginBoxes, type PluginInfo, type PluginOnBox, type PluginSetting, type PluginSettingsState, type PluginSetupState } from "@/lib/api";
 import { plainError } from "@/lib/errors";
 import { bytes, errorMessage } from "@/lib/format";
 import { marketAction, marketNote, type Marketplace, type MarketPlugin } from "@/lib/marketplace";
 import { openDocs, openUrl } from "@/lib/open-url";
+import { boxPollMs, boxRowView } from "@/lib/plugin-boxes";
 import { heldNote, type PluginHelpers, stopNote, stoppedNote } from "@/lib/plugin-helpers";
 import { builtinOn, setBuiltinOn, usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
@@ -312,6 +313,7 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
         <AgentTools plugin={p} />
         {enabled && p.setup && <PluginSetupRow key={settingsChanges} plugin={p} />}
         {enabled && p.settings && <PluginSettingsRows plugin={p} onChanged={() => setSettingsChanges((n) => n + 1)} />}
+        {enabled && <PluginBoxesRows plugin={p} />}
         <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/80">
           {p.id}
           {hooks > 0 && ` · ${hooks} hook${hooks === 1 ? "" : "s"}`}
@@ -499,6 +501,95 @@ function PluginSetupRow({ plugin: p }: { plugin: PluginInfo }) {
         Set up…
       </Button>
       {(error || state?.error) && <ErrorText className="text-destructive-foreground text-xs" text={error ?? state?.error ?? ""} />}
+    </div>
+  );
+}
+
+// PluginBoxesRows puts a plugin's tools on boxes too: for each online box,
+// whether its agents have them, a switch to put them there or take them off,
+// and what is left to do there (an update, or the plugin's setup, which
+// opens on the box's screen for the person at it or reaching it remotely).
+// Nothing shows for a plugin that gives agents no tools.
+function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
+  const [state, setState] = useState<PluginBoxes>();
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  const load = useCallback(async () => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    try {
+      setState(await laptopApi.pluginBoxes(client, p.id));
+    } catch {
+      // A plugin that isn't one of this computer's, or an older agent:
+      // nothing to offer.
+      setState(undefined);
+    }
+  }, [p.id]);
+  // When a setup was last started on a box: the rows look more often then.
+  const [setupAt, setSetupAt] = useState<number>();
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    let live = true;
+    const tick = async () => {
+      await load();
+      if (live) timer = setTimeout(() => void tick(), boxPollMs(setupAt, Date.now()));
+    };
+    void tick();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [load, setupAt]);
+  if (!state?.tools || !state.boxes.length) return null;
+  const act = async (row: PluginOnBox, what: "install" | "remove" | "setup") => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    setBusy(`${row.box}:${what}`);
+    setError(undefined);
+    try {
+      if (what === "install") await laptopApi.installPluginOnBox(client, p.id, row.box);
+      else if (what === "remove") await laptopApi.removePluginFromBox(client, p.id, row.box);
+      else {
+        await laptopApi.startPluginSetupOnBox(client, p.id, row.box);
+        setSetupAt(Date.now());
+        toastManager.add({ type: "info", title: `Setup opened on ${row.box}`, description: "Finish it on that box's screen, there or by remote desktop." });
+      }
+      await load();
+    } catch (err) {
+      setError(`${row.box}: ${plainError(err)}`);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+  return (
+    <div className="mt-2 space-y-1.5 rounded-md border px-2.5 py-2" data-testid={`plugin-boxes-${p.id}`}>
+      <p className="text-muted-foreground text-xs">On boxes: their agents get these tools too.</p>
+      {state.boxes.map((row) => {
+        const v = boxRowView(row);
+        return (
+          <div key={row.box} className="flex items-center gap-2 text-xs" data-testid={`plugin-box-${row.box}`}>
+            <Switch
+              checked={v.on}
+              disabled={!v.canToggle || !!busy || (!state.enabled && !v.on)}
+              aria-label={`${p.name} on ${row.box}`}
+              onCheckedChange={(on) => void act(row, on ? "install" : "remove")}
+            />
+            <span className="font-medium">{row.box}</span>
+            <span className={cn("min-w-0 flex-1 truncate", v.tone === "success" ? "text-success-foreground" : v.tone === "warning" ? "text-warning-foreground" : v.tone === "error" ? "text-destructive-foreground" : "text-muted-foreground")}>{v.note}</span>
+            {v.action === "update" && (
+              <Button size="xs" variant="outline" loading={busy === `${row.box}:install`} disabled={!!busy || !state.enabled} onClick={() => void act(row, "install")}>
+                Update
+              </Button>
+            )}
+            {v.action === "setup" && (
+              <Button size="xs" variant="outline" loading={busy === `${row.box}:setup`} disabled={!!busy} onClick={() => void act(row, "setup")}>
+                Set up on box…
+              </Button>
+            )}
+          </div>
+        );
+      })}
+      {error && <ErrorText className="text-destructive-foreground text-xs" text={error} />}
     </div>
   );
 }

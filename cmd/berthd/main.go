@@ -394,6 +394,16 @@ func serve(b boxHome, args []string) error {
 	defer bx.Helpers.Stop()
 	// A worktree that is removed, however it was, is one they forget.
 	defer bx.Helpers.Watch(bus)()
+	// Plugins a laptop puts here, for the box's agents (box/plugins.go):
+	// in the same ~/.berth/plugins that berthd syncs agents' tools from.
+	if dir, err := pluginsDir(); err == nil {
+		home, _ := os.UserHomeDir()
+		exe, _ := os.Executable()
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		bx.Plugins = &box.BoxPlugins{Dir: dir, Home: home, Exe: exe}
+	}
 	bx.AutoFix = &box.AutoFixStore{Path: filepath.Join(b.dir, "autofix.json")}
 	// How agents start when what starts them names no driver
 	// (agentdefaults.go): the app keeps it to the person's Labs setting.

@@ -102,6 +102,8 @@ func (a *Agent) ui(token, hostport string, inner http.Handler) http.Handler {
 	a.manageRoutes(mux)
 	a.marketplaceRoutes(mux)
 	a.helperRoutes(mux)
+	// Plugins' tools on boxes (boxplugins.go).
+	a.boxPluginRoutes(mux)
 	a.helperTidyRoutes(mux)
 	a.guidedRoutes(mux)
 	a.outdatedRoutes(mux)
