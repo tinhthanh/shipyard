@@ -721,6 +721,8 @@ func (a *Agent) marketplaceRoutes(mux *http.ServeMux) {
 		if carries {
 			out.Helpers = a.removeHelpers(id, true, "its plugin was uninstalled", helperRemovalWait)
 		}
+		// And its tools off the boxes they were put on (boxplugins.go).
+		a.wakeBoxPluginTidy()
 		writeJSON(w, http.StatusOK, out)
 	})
 }

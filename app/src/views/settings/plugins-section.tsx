@@ -12,7 +12,7 @@ import { plainError } from "@/lib/errors";
 import { bytes, errorMessage } from "@/lib/format";
 import { marketAction, marketNote, type Marketplace, type MarketPlugin } from "@/lib/marketplace";
 import { openDocs, openUrl } from "@/lib/open-url";
-import { boxRowView } from "@/lib/plugin-boxes";
+import { boxPollMs, boxRowView } from "@/lib/plugin-boxes";
 import { heldNote, type PluginHelpers, stopNote, stoppedNote } from "@/lib/plugin-helpers";
 import { builtinOn, setBuiltinOn, usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
@@ -525,12 +525,21 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
       setState(undefined);
     }
   }, [p.id]);
+  // When a setup was last started on a box: the rows look more often then.
+  const [setupAt, setSetupAt] = useState<number>();
   useEffect(() => {
-    void load();
-    // While a box's setup is waiting on the person there, check again.
-    const timer = setInterval(() => void load(), 5000);
-    return () => clearInterval(timer);
-  }, [load]);
+    let timer: ReturnType<typeof setTimeout>;
+    let live = true;
+    const tick = async () => {
+      await load();
+      if (live) timer = setTimeout(() => void tick(), boxPollMs(setupAt, Date.now()));
+    };
+    void tick();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [load, setupAt]);
   if (!state?.tools || !state.boxes.length) return null;
   const act = async (row: PluginOnBox, what: "install" | "remove" | "setup") => {
     const client = useStore.getState().client;
@@ -542,6 +551,7 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
       else if (what === "remove") await laptopApi.removePluginFromBox(client, p.id, row.box);
       else {
         await laptopApi.startPluginSetupOnBox(client, p.id, row.box);
+        setSetupAt(Date.now());
         toastManager.add({ type: "info", title: `Setup opened on ${row.box}`, description: "Finish it on that box's screen, there or by remote desktop." });
       }
       await load();

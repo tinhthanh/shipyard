@@ -400,6 +400,8 @@ func (a *Agent) manageRoutes(mux *http.ServeMux) {
 			if err = hooks.ForbidPlugin(dir); err == nil && carries {
 				helpers = a.removeHelpers(id, false, "its plugin was turned off", helperRemovalWait)
 			}
+			// Its tools come off the boxes they were put on (boxplugins.go).
+			a.wakeBoxPluginTidy()
 		case "setup":
 			// The one-time step its agent tools need here (macOS permissions,
 			// say), run from the binary the user allowed: it opens a window for

@@ -36,3 +36,14 @@ export function boxRowView(row: PluginOnBox): BoxRowView {
       return { on: false, canToggle: false, note: row.error ?? "Couldn't reach the box", tone: "error" };
   }
 }
+
+// How often the rows look again: every 30 s, and every 4 s for the two
+// minutes after a setup was started on a box, while the person finishes it
+// there.
+export const BOX_POLL_IDLE_MS = 30_000;
+export const BOX_POLL_SETUP_MS = 4_000;
+export const BOX_SETUP_WATCH_MS = 120_000;
+
+export function boxPollMs(setupStartedAt: number | undefined, now: number): number {
+  return setupStartedAt !== undefined && now - setupStartedAt < BOX_SETUP_WATCH_MS ? BOX_POLL_SETUP_MS : BOX_POLL_IDLE_MS;
+}

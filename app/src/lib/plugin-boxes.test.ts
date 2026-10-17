@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { boxRowView } from "./plugin-boxes.ts";
+import { BOX_POLL_IDLE_MS, BOX_POLL_SETUP_MS, boxPollMs, boxRowView } from "./plugin-boxes.ts";
 
 test("a box without the plugin can take it", () => {
   assert.deepEqual(boxRowView({ box: "devl", state: "off" }), { on: false, canToggle: true, note: "Not on this box", tone: "muted" });
@@ -32,4 +32,10 @@ test("a box it can't run on, or that can't take plugins, can't be switched", () 
   assert.equal(boxRowView({ box: "ci", state: "unsupported", error: "built for darwin-arm64; ci is linux-amd64" }).canToggle, false);
   assert.equal(boxRowView({ box: "old", state: "old_berthd" }).canToggle, false);
   assert.equal(boxRowView({ box: "away", state: "error", error: "away" }).tone, "error");
+});
+
+test("the rows look often only for a while after a setup was started", () => {
+  assert.equal(boxPollMs(undefined, 1_000_000), BOX_POLL_IDLE_MS);
+  assert.equal(boxPollMs(1_000_000, 1_000_000 + 10_000), BOX_POLL_SETUP_MS);
+  assert.equal(boxPollMs(1_000_000, 1_000_000 + 121_000), BOX_POLL_IDLE_MS);
 });

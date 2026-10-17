@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/events"
@@ -36,6 +37,7 @@ type pluginsRig struct {
 	agent  *runningAgent
 	token  string
 	boxDir string
+	box    *testBox
 }
 
 func newPluginsRig(t *testing.T) *pluginsRig {
@@ -45,7 +47,7 @@ func newPluginsRig(t *testing.T) *pluginsRig {
 	b := newBoxWith(t, func(s *wire.Server) { bx.MountPlugins(s) })
 	a := startAgentConfig(t, b.pairLaptop(), &fakeNetworks{}, nil)
 	eventually(t, "box online", func() bool { return stateOf(t, a) == StateOnline })
-	return &pluginsRig{agent: a, token: uiToken(t, a), boxDir: boxDir}
+	return &pluginsRig{agent: a, token: uiToken(t, a), boxDir: boxDir, box: b}
 }
 
 func (r *pluginsRig) boxes(t *testing.T) PluginBoxes {
@@ -136,5 +138,97 @@ func TestAPluginForAnotherPlatformIsMarkedAndNotSent(t *testing.T) {
 	}
 	if resp, _ := uiCall(t, r.agent, "POST", "/v1/plugins/acme/boxes/devbox", r.token); resp.StatusCode != 409 {
 		t.Fatalf("sending it anyway should be refused by the box: %d", resp.StatusCode)
+	}
+}
+
+func (r *pluginsRig) ledger() boxPluginLedgerDoc {
+	var doc boxPluginLedgerDoc
+	if b, err := os.ReadFile(filepath.Join(r.agent.dir, "box-plugins.json")); err == nil {
+		json.Unmarshal(b, &doc)
+	}
+	return doc
+}
+
+func (r *pluginsRig) onBox() bool {
+	_, err := os.Stat(filepath.Join(r.boxDir, "acme"))
+	return err == nil
+}
+
+func (r *pluginsRig) putOn(t *testing.T) {
+	t.Helper()
+	if resp, body := uiCall(t, r.agent, "POST", "/v1/plugins/acme/boxes/devbox", r.token); resp.StatusCode != 200 {
+		t.Fatalf("install: %d %s", resp.StatusCode, body)
+	}
+	if on := r.ledger().On["acme"]; len(on) != 1 || on[0] != "devbox" {
+		t.Fatalf("box-plugins.json after the install: %+v", r.ledger())
+	}
+}
+
+func TestAPluginTurnedOffHereComesOffTheBoxes(t *testing.T) {
+	r := newPluginsRig(t)
+	dir := toolsPlugin(t, r.agent, "1.0.0", []byte("#!/bin/sh\necho one\n"))
+	allowPlugin(t, dir)
+	r.putOn(t)
+
+	if resp, body := uiCall(t, r.agent, "POST", "/v1/plugins/acme/disable", r.token); resp.StatusCode != 200 {
+		t.Fatalf("disable: %d %s", resp.StatusCode, body)
+	}
+	eventually(t, "acme off the box", func() bool { return !r.onBox() })
+	eventually(t, "nothing left to do", func() bool {
+		doc := r.ledger()
+		return len(doc.On) == 0 && len(doc.Pending) == 0
+	})
+
+	// Turning it back on here puts it on no box: the person does.
+	allowPlugin(t, dir)
+	if got := r.state(t); got != "off" {
+		t.Fatalf("after turning it back on: %s", got)
+	}
+}
+
+func TestAPluginTurnedOffWhileItsBoxIsAwayComesOffWhenItIsBack(t *testing.T) {
+	r := newPluginsRig(t)
+	dir := toolsPlugin(t, r.agent, "1.0.0", []byte("#!/bin/sh\necho one\n"))
+	allowPlugin(t, dir)
+	r.putOn(t)
+
+	addr := r.box.address
+	r.box.stop()
+	eventually(t, "devbox offline", func() bool { return stateOf(t, r.agent) == StateOffline })
+	if resp, body := uiCall(t, r.agent, "POST", "/v1/plugins/acme/disable", r.token); resp.StatusCode != 200 {
+		t.Fatalf("disable: %d %s", resp.StatusCode, body)
+	}
+	eventually(t, "the removal written down", func() bool { return len(r.ledger().Pending) == 1 })
+	if !r.onBox() {
+		t.Fatal("the box was away: nothing could have taken it off")
+	}
+
+	r.box.start(addr)
+	eventually(t, "acme off the box once it is back", func() bool { return !r.onBox() })
+	eventually(t, "the removal struck off", func() bool { return len(r.ledger().Pending) == 0 })
+}
+
+func TestAPluginWaitingToBeAllowedAgainStaysOnTheBoxes(t *testing.T) {
+	r := newPluginsRig(t)
+	dir := toolsPlugin(t, r.agent, "1.0.0", []byte("#!/bin/sh\necho one\n"))
+	allowPlugin(t, dir)
+	r.putOn(t)
+
+	// Its files change (an update): off here until the person allows them,
+	// but the box keeps the version that was allowed.
+	toolsPlugin(t, r.agent, "2.0.0", []byte("#!/bin/sh\necho two\n"))
+	// The box reconnecting has the agent look.
+	addr := r.box.address
+	r.box.stop()
+	eventually(t, "devbox offline", func() bool { return stateOf(t, r.agent) == StateOffline })
+	r.box.start(addr)
+	eventually(t, "devbox back", func() bool { return stateOf(t, r.agent) == StateOnline })
+	time.Sleep(500 * time.Millisecond)
+	if !r.onBox() || len(r.ledger().Pending) != 0 || len(r.ledger().On["acme"]) != 1 {
+		t.Fatalf("a changed plugin was taken off its box: %+v", r.ledger())
+	}
+	allowPlugin(t, dir)
+	if got := r.state(t); got != "outdated" {
+		t.Fatalf("its box once the new files are allowed: %s", got)
 	}
 }

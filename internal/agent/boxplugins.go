@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/hooks"
 	"github.com/cosscom/shipyard/internal/integrations"
+	"github.com/cosscom/shipyard/internal/statefile"
 )
 
 // A plugin's tools on boxes (box/plugins.go): the person turns a plugin on
@@ -212,6 +214,7 @@ func (a *Agent) installPluginOnBox(ctx context.Context, id, name string) (Plugin
 		pr.CloseWithError(err)
 		return PluginOnBox{}, a.boxProblem(err)
 	}
+	a.notePluginOnBox(id, name, true)
 	return a.pluginOnBox(ctx, id, name, lp), nil
 }
 
@@ -226,6 +229,7 @@ func (a *Agent) removePluginFromBox(ctx context.Context, id, name string) (Plugi
 	if err := bc.RemoveBoxPlugin(ctx, id); err != nil {
 		return PluginOnBox{}, a.boxProblem(err)
 	}
+	a.notePluginOnBox(id, name, false)
 	return PluginOnBox{Box: name, State: "off"}, nil
 }
 
@@ -368,4 +372,183 @@ func (a *Agent) boxPluginRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"started": true})
 	})
+}
+
+// A plugin's tools do not outlive it on the boxes either. The boxes a
+// plugin was put on are noted in box-plugins.json in the agent's state
+// directory; when the plugin is turned off here, or uninstalled, it is
+// taken off each of them: at once from those online, and from the others
+// when they next connect (the note is kept until then, for the next agent
+// too). A plugin whose files changed is off here until the person allows
+// the new ones, but the boxes keep the version they were allowed: it is
+// held, as a plugin's helper is, and Update sends the new one. Turning a
+// plugin back on puts it on no box: the person does, box by box.
+
+type boxPluginRemoval struct {
+	Plugin string    `json:"plugin"`
+	Box    string    `json:"box"`
+	Since  time.Time `json:"since"`
+}
+
+type boxPluginLedgerDoc struct {
+	// On: the boxes each plugin was put on from here.
+	On      map[string][]string `json:"on,omitempty"`
+	Pending []boxPluginRemoval  `json:"pending,omitempty"`
+}
+
+type boxPluginLedger struct {
+	once sync.Once
+	mu   sync.Mutex
+	path string
+	doc  boxPluginLedgerDoc
+	wake chan struct{}
+}
+
+const boxPluginTidyEvery = 2 * time.Minute
+
+func (a *Agent) boxPluginLedger() *boxPluginLedger {
+	l := &a.boxPlugins
+	l.once.Do(func() {
+		l.path = filepath.Join(a.cfg.Dir, "box-plugins.json")
+		l.wake = make(chan struct{}, 1)
+		if b, err := os.ReadFile(l.path); err == nil {
+			_ = json.Unmarshal(b, &l.doc)
+		}
+	})
+	return l
+}
+
+// change edits the note and saves it when fn says it changed.
+func (l *boxPluginLedger) change(fn func(doc *boxPluginLedgerDoc) bool) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.doc.On == nil {
+		l.doc.On = map[string][]string{}
+	}
+	if !fn(&l.doc) {
+		return nil
+	}
+	b, err := json.MarshalIndent(l.doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	return statefile.Write(l.path, append(b, '\n'))
+}
+
+func (l *boxPluginLedger) snapshot() boxPluginLedgerDoc {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := boxPluginLedgerDoc{On: map[string][]string{}, Pending: append([]boxPluginRemoval(nil), l.doc.Pending...)}
+	for k, v := range l.doc.On {
+		out.On[k] = append([]string(nil), v...)
+	}
+	return out
+}
+
+func (a *Agent) notePluginOnBox(id, name string, on bool) {
+	err := a.boxPluginLedger().change(func(doc *boxPluginLedgerDoc) bool {
+		boxes := slices.DeleteFunc(doc.On[id], func(b string) bool { return b == name })
+		if on {
+			boxes = append(boxes, name)
+		}
+		if len(boxes) == 0 {
+			delete(doc.On, id)
+		} else {
+			doc.On[id] = boxes
+		}
+		// Put back on by hand: no longer to be taken off.
+		doc.Pending = slices.DeleteFunc(doc.Pending, func(p boxPluginRemoval) bool { return p.Plugin == id && p.Box == name })
+		return true
+	})
+	if err != nil {
+		a.cfg.Log.Printf("plugins on boxes: %v", err)
+	}
+}
+
+// wakeBoxPluginTidy has the tidy loop look now: a plugin was turned off or
+// uninstalled.
+func (a *Agent) wakeBoxPluginTidy() {
+	select {
+	case a.boxPluginLedger().wake <- struct{}{}:
+	default:
+	}
+}
+
+// keepBoxPluginsTidy takes plugins that are off here off the boxes: when
+// the agent starts, when told, when a box connects, and now and then.
+func (a *Agent) keepBoxPluginsTidy(ctx context.Context) {
+	l := a.boxPluginLedger()
+	stop := a.bus.Observe(func(e Event) {
+		if e.Type == EventBoxConnected {
+			a.wakeBoxPluginTidy()
+		}
+	})
+	defer stop()
+	ticker := time.NewTicker(boxPluginTidyEvery)
+	defer ticker.Stop()
+	for {
+		a.sweepBoxPlugins()
+		a.runBoxPluginRemovals(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-l.wake:
+		}
+	}
+}
+
+// sweepBoxPlugins queues for removal every box of a plugin that is off
+// here or gone; one waiting for the person to allow new files is held.
+func (a *Agent) sweepBoxPlugins() {
+	for id, boxes := range a.boxPluginLedger().snapshot().On {
+		_, state, err := hooks.AllowedPluginManifest(filepath.Join(a.pluginsDir(), id))
+		if err == nil && (state.Enabled || state.Changed) {
+			continue
+		}
+		now := time.Now().UTC()
+		_ = a.boxPluginLedger().change(func(doc *boxPluginLedgerDoc) bool {
+			for _, b := range boxes {
+				if !slices.ContainsFunc(doc.Pending, func(p boxPluginRemoval) bool { return p.Plugin == id && p.Box == b }) {
+					doc.Pending = append(doc.Pending, boxPluginRemoval{Plugin: id, Box: b, Since: now})
+				}
+			}
+			delete(doc.On, id)
+			return true
+		})
+	}
+}
+
+// runBoxPluginRemovals takes plugins off the boxes they are queued for. A
+// box that is away keeps its turn; one no longer paired, or that never
+// could hold plugins, is let go.
+func (a *Agent) runBoxPluginRemovals(ctx context.Context) {
+	for _, p := range a.boxPluginLedger().snapshot().Pending {
+		done := false
+		if _, ok := a.client(p.Box); !ok {
+			done = true
+		} else if _, _, away := a.away(p.Box); !away {
+			if bc, err := a.helperBox(p.Box); err == nil {
+				rctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+				err = bc.RemoveBoxPlugin(rctx, p.Plugin)
+				cancel()
+				var he *box.HelperError
+				switch {
+				case err == nil:
+					a.cfg.Log.Printf("plugins on boxes: took %s off %s: it is off here", p.Plugin, p.Box)
+					done = true
+				case errors.As(err, &he) && he.NoHelpers:
+					done = true
+				default:
+					a.cfg.Log.Printf("plugins on boxes: taking %s off %s: %v", p.Plugin, p.Box, err)
+				}
+			}
+		}
+		if done {
+			_ = a.boxPluginLedger().change(func(doc *boxPluginLedgerDoc) bool {
+				doc.Pending = slices.DeleteFunc(doc.Pending, func(q boxPluginRemoval) bool { return q.Plugin == p.Plugin && q.Box == p.Box })
+				return true
+			})
+		}
+	}
 }
