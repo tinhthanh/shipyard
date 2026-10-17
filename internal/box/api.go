@@ -130,6 +130,9 @@ type Box struct {
 	// Helpers runs the helper programs plugins bring (helpers.go); nil on a
 	// box without them.
 	Helpers *Helpers
+	// Plugins keeps the plugins a laptop put here for the box's agents
+	// (plugins.go); nil on a box without them.
+	Plugins *BoxPlugins
 }
 
 func (b *Box) own(path string) {
@@ -280,6 +283,7 @@ func (b *Box) Mount(s *wire.Server) {
 	b.mountNotify(route)
 	b.mountArtifacts(route)
 	b.mountHelpers(s, route)
+	b.mountPlugins(route)
 	b.mountPairing(s, route)
 }
 

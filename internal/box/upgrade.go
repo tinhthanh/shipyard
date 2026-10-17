@@ -229,6 +229,11 @@ func (b *Box) Capabilities() []string {
 		// (/v1/helpers, helpers.go).
 		caps = append(caps, "helpers")
 	}
+	if b.Plugins != nil {
+		// plugins: a laptop puts plugins' tools here for the box's agents
+		// (/v1/plugins, plugins.go).
+		caps = append(caps, "plugins")
+	}
 	return caps
 }
 
