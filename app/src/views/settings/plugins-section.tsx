@@ -302,7 +302,9 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
   };
 
   return (
-    <div className="flex items-center gap-4 py-4" data-testid="plugin-row" data-plugin={p.id}>
+    // A plugin with agent tools grows rows under it (setup, settings, boxes):
+    // its controls stay by its name rather than float down the middle.
+    <div className={cn("flex gap-4 py-4", enabled && (p.mcp?.length || p.skills?.length) ? "items-start" : "items-center")} data-testid="plugin-row" data-plugin={p.id}>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 font-medium text-sm leading-[18px]">
           <StatusDot state={state} />
