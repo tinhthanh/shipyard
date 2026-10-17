@@ -130,6 +130,16 @@ func (a *Agent) pluginBoxes(ctx context.Context, id string) (PluginBoxes, error)
 	wg.Wait()
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Box < rows[j].Box })
 	out.Boxes = rows
+	// A box holding exactly the version allowed here got it from here (or
+	// before box-plugins.json was kept): note it, so turning the plugin
+	// off takes it off there too.
+	if lp.enabled {
+		for _, r := range rows {
+			if r.State == "on" {
+				a.notePluginSeenOnBox(id, r.Box)
+			}
+		}
+	}
 	return out, nil
 }
 
@@ -463,6 +473,15 @@ func (a *Agent) notePluginOnBox(id, name string, on bool) {
 	if err != nil {
 		a.cfg.Log.Printf("plugins on boxes: %v", err)
 	}
+}
+
+// notePluginSeenOnBox is notePluginOnBox for a box found holding the
+// plugin, written only when it is news.
+func (a *Agent) notePluginSeenOnBox(id, name string) {
+	if slices.Contains(a.boxPluginLedger().snapshot().On[id], name) {
+		return
+	}
+	a.notePluginOnBox(id, name, true)
 }
 
 // wakeBoxPluginTidy has the tidy loop look now: a plugin was turned off or

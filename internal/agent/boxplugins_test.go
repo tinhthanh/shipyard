@@ -232,3 +232,27 @@ func TestAPluginWaitingToBeAllowedAgainStaysOnTheBoxes(t *testing.T) {
 		t.Fatalf("its box once the new files are allowed: %s", got)
 	}
 }
+
+func TestABoxFoundHoldingThePluginIsNoted(t *testing.T) {
+	r := newPluginsRig(t)
+	dir := toolsPlugin(t, r.agent, "1.0.0", []byte("#!/bin/sh\necho one\n"))
+	allowPlugin(t, dir)
+	r.putOn(t)
+	// As if it had been put there before box-plugins.json was kept.
+	os.Remove(filepath.Join(r.agent.dir, "box-plugins.json"))
+	r.agent.stop()
+	r.agent = startAgentConfig(t, r.agent.dir, &fakeNetworks{}, nil)
+	eventually(t, "box online", func() bool { return stateOf(t, r.agent) == StateOnline })
+	r.token = uiToken(t, r.agent)
+
+	if got := r.state(t); got != "on" {
+		t.Fatalf("state: %s", got)
+	}
+	if on := r.ledger().On["acme"]; len(on) != 1 || on[0] != "devbox" {
+		t.Fatalf("box-plugins.json after looking: %+v", r.ledger())
+	}
+	if resp, body := uiCall(t, r.agent, "POST", "/v1/plugins/acme/disable", r.token); resp.StatusCode != 200 {
+		t.Fatalf("disable: %d %s", resp.StatusCode, body)
+	}
+	eventually(t, "acme off the box", func() bool { return !r.onBox() })
+}
