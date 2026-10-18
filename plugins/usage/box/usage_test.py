@@ -307,3 +307,20 @@ class ClaudeLimitsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClaudeAccountTest(unittest.TestCase):
+    def test_an_account_says_its_organisation(self):
+        # One email can sign in to a team seat and a personal Max: the
+        # organisation tells the two logins apart.
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            d = pathlib.Path(tmp) / "max"
+            d.mkdir()
+            (d / ".claude.json").write_text(json.dumps({"oauthAccount": {
+                "emailAddress": "thanh@acme.test", "organizationUuid": "org-max",
+                "organizationName": "Thanh's Organization", "organizationRateLimitTier": "default_claude_max_20x"}}))
+            a = usage.claude_account("max", d)
+            self.assertEqual((a["email"], a["org"], a["org_id"], a["tier"]),
+                             ("thanh@acme.test", "Thanh's Organization", "org-max", "default_claude_max_20x"))

@@ -175,3 +175,29 @@ test("limits by login leave out windows that have reset, and logins with none le
   old.limits = { primary: win(3, 300, -1), secondary: win(10, 10080, -2) };
   assert.deepEqual(limitsByLogin([{ report: report([old]) }], NOW), []);
 });
+
+test("one email signed in to two plans (a team seat and a personal Max) shows both, named by account", () => {
+  // What the floating bar showed for real: one row for the person, the
+  // team seat's numbers, and the personal plan's 20% session gone.
+  const team = { ...claude("thanh-5x", at("2026-10-14T11:00:00Z"), 0, 1, undefined, 4), email: "thanh@acme.test", org: "org-team" };
+  const max = { ...claude("thanh-20x", at("2026-10-14T11:00:00Z"), 20, 3, undefined, 2), email: "thanh@acme.test", org: "org-max" };
+  const rows = limitsByLogin([{ report: report([team, max]) }], NOW);
+  assert.deepEqual(
+    rows.map((r) => [r.name, r.windows.map((w) => Math.round(w.used * 100))]),
+    [
+      ["thanh · thanh-20x", [20, 3]],
+      ["thanh · thanh-5x", [0, 1]],
+    ],
+  );
+  const s = summarizeUsage([{ box: "devl", report: report([team, max]) }], [], NOW);
+  assert.ok(s.limits.some((l) => l.label === "Claude Code · 5h · thanh · thanh-20x" && Math.round(l.used * 100) === 20));
+});
+
+test("one email in one organisation on two boxes is still one login", () => {
+  const a = { ...claude("default", at("2026-10-14T11:00:00Z"), 3, 10), email: "ana@acme.test", org: "org-1" };
+  const b = { ...claude("work", at("2026-10-14T11:30:00Z"), 4, 10), email: "ana@acme.test", org: "org-1" };
+  const rows = limitsByLogin([{ report: report([a]) }, { report: report([b]) }], NOW);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].name, "ana");
+  assert.equal(Math.round(rows[0].windows[0].used * 100), 4);
+});
