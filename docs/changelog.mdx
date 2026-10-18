@@ -10,6 +10,107 @@ upgrades with `berth upgrade BOX`, or by running the
 again.
 
 ## Unreleased
+
+- **A two-column sidebar, in Labs.** Turn it on in Settings › Labs and your
+  projects sit in one column, with the tasks of the one you pick in the
+  next. A project's row turns amber when something in it needs you and
+  blue while something works. The tasks column can be resized or folded
+  away, and opening a worktree shows its project.
+- **The sidebar is quieter.** Its text is one colour in a few strengths,
+  and colour means only two things: amber when an agent needs you, blue
+  while one works. A finished task gets a quiet check, an idle one no mark
+  at all, and times show only on tasks that are doing something.
+- **Boxes stay out of the way until they matter.** They no longer have rows
+  in the list: a project on a box that's away dims and says "offline", and
+  the line at the foot of the sidebar says which boxes are up. Its tooltip
+  has each box's load, which leaves the status bar. A box's actions are in
+  its projects' menus and in the foot's menu.
+- **Text is the same size for the same thing on every page.** Chats,
+  Settings, onboarding, Home, Review and the rest use one set of sizes, and
+  ⌘+ makes all of them bigger.
+- **A queued prompt that failed is amber in the status bar,** like anything
+  else that needs you, rather than red.
+- **A helper that is back shows as back in a chat session.** In a chat
+  (structured) Claude session, a helper Claude left working in the
+  background stayed "working" in Crew, its time running on, after it had
+  come back: the stream says so in a line of its own that wasn't read. It
+  now shows back, its time stopped when it returned.
+- **A turn Claude starts by itself shows as working.** When a helper
+  (subagent) Claude left in the background came back, Claude went on in a
+  turn no prompt started, and the session showed as done while it worked:
+  no spinner and no Stop. That turn now shows as working until it ends.
+- **A helper's permission no longer gets lost.** When Claude Code started
+  helpers (subagents) in a chat session and they asked to run something
+  while Claude asked too, or after its turn ended, the app showed the newest
+  ask while Yes answered the oldest, moved on to "working" after one answer,
+  and dropped the helpers' asks when the turn ended: they waited forever.
+  Each ask now shows in turn, the one shown is the one you answer, and a
+  helper's ask stays until you answer it or the helper is stopped.
+- **Another Claude in the same folder no longer stalls a session.** A Claude
+  that Shipyard didn't start (in an editor, or a one-off `claude -p` a tool
+  runs) in a session's folder could mark the session's agent exited when it
+  quit; the session then showed as working for good and Stop did nothing.
+  Its events are now told apart by its own conversation.
+- **About says how this fork's app updates.** The fork's releases carry
+  `berth` and `berthd` only, so the app's update check found nothing to read
+  and showed "Couldn't check for updates". It now says the app updates by
+  building it from source, with a link to the releases.
+- **A plugin's tools on your boxes.** Settings → Plugins lists each online
+  box under a plugin that gives agents tools (MCP servers, skills): turn it
+  on and the box gets the plugin as you allowed it here, checked file by
+  file and for the box's platform, and its agents get the tools.
+  **Update** sends a newer version you allowed, and **Set up on box…**
+  opens the plugin's setup (such as macOS permissions) on that box's
+  screen, to finish there or by remote desktop. Turning the plugin off
+  here, or uninstalling it, takes it off those boxes too. Needs the box
+  upgraded.
+- **A floating bar over every app.** Settings → Appearance → Floating bar
+  (macOS) keeps a small bar on the right edge of the screen, or around the
+  notch, over every app and full-screen ones: a ring for each Claude Code
+  and Codex login's plan limits (with the Usage & accounts plugin on), and
+  how many agents need you or are working. It waits as a sliver on the
+  edge (or inside the notch) and opens under the pointer, whatever app is
+  in front; rest on it for each window's reset and the agents' names, and
+  click one to open it in Shipyard. It is a native macOS panel after
+  Codenotch's.
+- **Usage shows Claude Code's plan limits.** The Usage screen and its home
+  widget now show each Claude login's current session, its week and any week
+  for one model (such as Fable), with when each resets — what Claude Code's
+  own `/usage` prints. The box asks `/usage` at most every ten minutes per
+  login, all logins at once and for at most 12 seconds, in a way that leaves
+  no transcript and starts no MCP server; if it fails, the tokens still show.
+- **The Agent usage widget shows each plan window once.** A login used on
+  several boxes was listed once per box, pushing the other windows out of
+  the widget; it is now shown once, as most recently read, even when the
+  boxes printed its reset a minute apart.
+- **The Agent usage widget says whose window each row is.** With more than
+  one login of an agent, each row ends with the login's email name (such as
+  "Claude Code · 5h · ana"), so two logins with the same numbers no longer
+  look like one shown twice. A box with no projects yet is left out instead
+  of listed as one it couldn't read, and in the Medium size that line now
+  takes the week's place rather than being cut off.
+
+## v0.3.25
+
+- **The sidebar is a size smaller.** Its rows are the size of Settings' list:
+  13px names with small icons, project names as quiet labels, and the same
+  height for tasks, the worktrees under them and your boxes.
+- **Boxes that are offline or slow sit at the foot of the sidebar,** just
+  above the boxes' line, so your projects stay at the top.
+- **A worktree's menu is shorter.** It is four groups: what to start in it;
+  where to open it and what to run; its name, colour and what to copy (path,
+  branch, URL and review links are under Copy); then stop, archive and
+  remove. Resuming a conversation is under New agent, and Compare and tabs
+  beside are under Open in.
+- **A chat that recovers from a read error no longer crashes the app.** A
+  pane that went from "Couldn't read the conversation" to its chat drew with
+  one hook more than before and showed "Shipyard hit an error".
+
+## v0.3.24
+
+- **Sidebar rows hover cleanly.** A row stays lit while the pointer is on its
+  + and ⋯, instead of the buttons sitting on a patch of their own, and folded
+  projects sit one under another without big gaps.
 - **The sidebar lists your tasks.** Each row names what its agent is working
   on, with a dot, spinner or check for how it's going and how long it has
   been that way. Worktrees an agent handed work to sit under it on a line, a
@@ -55,68 +156,6 @@ again.
   It used to show as **Working**. Work still running in the background, a
   re-check or a watcher that reports back, stays **Working**.
   [Sessions and agents](/concepts/sessions-and-agents#agent-state)
-
-- **A helper that is back shows as back in a chat session.** In a chat
-  (structured) Claude session, a helper Claude left working in the
-  background stayed "working" in Crew, its time running on, after it had
-  come back: the stream says so in a line of its own that wasn't read. It
-  now shows back, its time stopped when it returned.
-- **A turn Claude starts by itself shows as working.** When a helper
-  (subagent) Claude left in the background came back, Claude went on in a
-  turn no prompt started, and the session showed as done while it worked:
-  no spinner and no Stop. That turn now shows as working until it ends.
-- **A helper's permission no longer gets lost.** When Claude Code started
-  helpers (subagents) in a chat session and they asked to run something
-  while Claude asked too, or after its turn ended, the app showed the newest
-  ask while Yes answered the oldest, moved on to "working" after one answer,
-  and dropped the helpers' asks when the turn ended: they waited forever.
-  Each ask now shows in turn, the one shown is the one you answer, and a
-  helper's ask stays until you answer it or the helper is stopped.
-- **Another Claude in the same folder no longer stalls a session.** A Claude
-  that Shipyard didn't start (in an editor, or a one-off `claude -p` a tool
-  runs) in a session's folder could mark the session's agent exited when it
-  quit; the session then showed as working for good and Stop did nothing.
-  Its events are now told apart by its own conversation.
-- **About says how this fork's app updates.** The fork's releases carry
-  `berth` and `berthd` only, so the app's update check found nothing to read
-  and showed "Couldn't check for updates". It now says the app updates by
-  building it from source, with a link to the releases.
-- **A plugin's tools on your boxes.** Settings → Plugins lists each online
-  box under a plugin that gives agents tools (MCP servers, skills): turn it
-  on and the box gets the plugin as you allowed it here, checked file by
-  file and for the box's platform, and its agents get the tools.
-  **Update** sends a newer version you allowed, and **Set up on box…**
-  opens the plugin's setup (such as macOS permissions) on that box's
-  screen, to finish there or by remote desktop. Turning the plugin off
-  here, or uninstalling it, takes it off those boxes too. Needs the box
-  upgraded.
-
-- **A floating bar over every app.** Settings → Appearance → Floating bar
-  (macOS) keeps a small bar on the right edge of the screen, or around the
-  notch, over every app and full-screen ones: a ring for each Claude Code
-  and Codex login's plan limits (with the Usage & accounts plugin on), and
-  how many agents need you or are working. It waits as a sliver on the
-  edge (or inside the notch) and opens under the pointer, whatever app is
-  in front; rest on it for each window's reset and the agents' names, and
-  click one to open it in Shipyard. It is a native macOS panel after
-  Codenotch's.
-
-- **Usage shows Claude Code's plan limits.** The Usage screen and its home
-  widget now show each Claude login's current session, its week and any week
-  for one model (such as Fable), with when each resets — what Claude Code's
-  own `/usage` prints. The box asks `/usage` at most every ten minutes per
-  login, all logins at once and for at most 12 seconds, in a way that leaves
-  no transcript and starts no MCP server; if it fails, the tokens still show.
-- **The Agent usage widget shows each plan window once.** A login used on
-  several boxes was listed once per box, pushing the other windows out of
-  the widget; it is now shown once, as most recently read, even when the
-  boxes printed its reset a minute apart.
-- **The Agent usage widget says whose window each row is.** With more than
-  one login of an agent, each row ends with the login's email name (such as
-  "Claude Code · 5h · ana"), so two logins with the same numbers no longer
-  look like one shown twice. A box with no projects yet is left out instead
-  of listed as one it couldn't read, and in the Medium size that line now
-  takes the week's place rather than being cut off.
 
 ## v0.3.23
 - **Project settings opens for a project with a kit's flows.** A kit whose
@@ -295,7 +334,6 @@ again.
   `$` is left alone, so "costs $5 and $10" reads as it was written, and
   math in code stays as code. A formula that doesn't parse shows as its
   source, in red.
-
 
 ## v0.3.19
 
@@ -1384,7 +1422,6 @@ October 5, 2026.
 
 Worktree pages open on a Mac's own box, in your browser and in Berth's.
 
-
 - **Worktree URLs work on a Mac's own box, and in the Browser tab.** On
   this Mac's box, `http://WORKTREE.LOCATION.BOX.localhost:1377/` said "not
   found" for a dev server started in the worktree (`npm start` on 3000), since
@@ -1405,7 +1442,6 @@ Worktree pages open on a Mac's own box, in your browser and in Berth's.
 October 5, 2026.
 
 Agents start however long the prompt, and on a fresh Mac.
-
 
 - **Long prompts start.** A task or session whose prompt was over about
   16 KB failed with "tmux new-session: ." and its worktree was removed: the
@@ -1436,7 +1472,6 @@ October 5, 2026.
 
 Two worktrees side by side, nineteen themes, a chat that keeps every
 turn, and browsers that show you the page.
-
 
 - **Fix a blocked agent's browser from Berth.** On Ubuntu 24.04, whose
   sandbox setting stops Chromium starting, the browser pane marks the
@@ -1507,7 +1542,6 @@ October 5, 2026.
 
 The chat takes on the rest of what a terminal does: Claude's questions,
 its artifacts, its edits as diffs, and dev servers in tabs of their own.
-
 
 - **Archiving follows through.** Archive or remove a worktree from the
   sidebar, zen, the launcher or the Worktrees table and it shows as
