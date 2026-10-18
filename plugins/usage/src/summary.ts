@@ -30,8 +30,13 @@ const SAME_RESET_MS = 2 * 60_000;
 // One plan window of one login, as most recently read.
 interface OpenWindow {
   agent: Agent;
-  // The login: its email, or the account name when it has none.
+  // The login: its email (and organisation, when it has one), or the
+  // account name when it has none.
   login: string;
+  // What it goes by: its email, or the account name.
+  email: string;
+  // The account folder it was read from ("default", "thanh-20x").
+  account: string;
   // "Claude Code · 5h"
   label: string;
   // "5h", "week (Fable)"
@@ -46,21 +51,23 @@ interface OpenWindow {
 // open at now. One login read on several boxes reports the same window,
 // ending at the same moment give or take a minute (Claude Code prints it to
 // the minute, so two reads half a minute apart can say 12:29 and 12:30): it
-// is kept once, as most recently read. A login is its email; every box has
-// a "default".
+// is kept once, as most recently read. A login is its email and its
+// organisation (one email can sign in to a team seat and a personal plan);
+// every box has a "default".
 function openWindows(reports: { report: Report }[], from: string, now: number): OpenWindow[] {
   const windows: OpenWindow[] = [];
   for (const { report } of reports) {
     for (const l of report.limits) {
       if (l.at.slice(0, 10) < from) continue;
-      const login = l.email || l.account;
+      const email = l.email || l.account;
+      const login = l.email && l.org ? `${l.email}#${l.org}` : email;
       for (const w of [l.limits.primary, l.limits.secondary, ...(l.limits.extra ?? [])]) {
         if (!w?.resets_at) continue;
         const name = windowName(w);
         const label = `${AGENT_NAME[l.agent]} · ${name}`;
         const resets = w.resets_at * 1000;
         const i = windows.findIndex((x) => x.label === label && x.login === login && Math.abs(x.resets - resets) <= SAME_RESET_MS);
-        const read = { agent: l.agent, login, label, name, minutes: w.window_minutes, used: w.used_percent / 100, resets, at: l.at };
+        const read = { agent: l.agent, login, email, account: l.account, label, name, minutes: w.window_minutes, used: w.used_percent / 100, resets, at: l.at };
         if (i < 0) windows.push(read);
         else if (windows[i].at < l.at) windows[i] = read;
       }
@@ -70,15 +77,24 @@ function openWindows(reports: { report: Report }[], from: string, now: number): 
 }
 
 // loginNames is what each login goes by: the email's name, or the whole
-// email when two logins of an agent share that. With only means just the
-// agents that have more than one login.
+// email when two logins of an agent share that name, and its account
+// folder's name too when two share the email (two plans of one person).
+// With only means just the agents that have more than one login.
 function loginNames(windows: OpenWindow[], only = false): Map<string, string> {
   const who = new Map<string, string>();
   for (const agent of new Set(windows.map((w) => w.agent))) {
-    const logins = [...new Set(windows.filter((w) => w.agent === agent).map((w) => w.login))];
+    const mine = windows.filter((w) => w.agent === agent);
+    const logins = [...new Set(mine.map((w) => w.login))];
     if (only && logins.length < 2) continue;
-    const names = logins.map((l) => l.split("@")[0]);
-    logins.forEach((l, i) => who.set(`${agent}:${l}`, names.filter((n) => n === names[i]).length > 1 ? l : names[i]));
+    // Each login's email and account, as most recently read.
+    const of = (l: string) => mine.filter((w) => w.login === l).reduce((a, b) => (b.at > a.at ? b : a));
+    const emails = logins.map((l) => of(l).email);
+    const names = emails.map((e) => e.split("@")[0]);
+    logins.forEach((l, i) => {
+      let name = names.filter((n) => n === names[i]).length > 1 ? emails[i] : names[i];
+      if (emails.filter((e) => e === emails[i]).length > 1) name = `${names[i]} · ${of(l).account}`;
+      who.set(`${agent}:${l}`, name);
+    });
   }
   return who;
 }

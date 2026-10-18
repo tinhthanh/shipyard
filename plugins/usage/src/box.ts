@@ -56,6 +56,9 @@ export interface Limits {
   account: string;
   // The login's email, when the agent recorded one.
   email?: string | null;
+  // Its organisation's id: one email can sign in to two plans (a team seat
+  // and a personal Max).
+  org?: string | null;
   at: string;
   // Codex reports a 5-hour and a weekly window in its transcripts; Claude Code
   // reports its session, its week and a week per scoped model in `/usage`.

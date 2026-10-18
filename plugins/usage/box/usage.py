@@ -102,7 +102,8 @@ def claude_account(name, d):
         "agent": "claude", "id": name, "dir": str(d), "exists": d.is_dir(),
         "signed_in": bool(o),
         "email": o.get("emailAddress"), "name": o.get("displayName"),
-        "org": o.get("organizationName"), "billing": o.get("billingType"), "tier": tier or None,
+        "org": o.get("organizationName"), "org_id": o.get("organizationUuid"),
+        "billing": o.get("billingType"), "tier": tier or None,
     }
 
 
@@ -474,10 +475,14 @@ def report(days):
         pass
     # Who each login is: every box has a "default", so the account name alone
     # can't tell one login read on two boxes from two logins.
-    who = {("claude", n): claude_account(n, d)["email"] for n, d in claude_dirs()}
-    who.update({("codex", n): codex_account(n, d)["email"] for n, d in codex_dirs()})
+    # One email can sign in to two plans (a team seat and a personal Max,
+    # say): its organisation tells them apart.
+    who = {("claude", n): claude_account(n, d) for n, d in claude_dirs()}
+    who.update({("codex", n): codex_account(n, d) for n, d in codex_dirs()})
     for k, l in limits.items():
-        l["email"] = who.get(k)
+        a = who.get(k) or {}
+        l["email"] = a.get("email")
+        l["org"] = a.get("org_id")
 
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
