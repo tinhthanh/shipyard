@@ -203,6 +203,17 @@ func (p *BoxPlugins) sync() {
 // unpackPlugin writes a tar.gz of a plugin's folder into dir, through an
 // os.Root so nothing lands outside it: no absolute paths, no "..", and
 // symbolic links (an app bundle has some) only to somewhere inside.
+// macMetadata says whether a path in an archive is a Mac's metadata, not a
+// file: an AppleDouble "._name", or anything under "__MACOSX/".
+func macMetadata(name string) bool {
+	for _, part := range strings.Split(name, "/") {
+		if strings.HasPrefix(part, "._") || part == "__MACOSX" {
+			return true
+		}
+	}
+	return false
+}
+
 // UnpackPlugin is unpackPlugin for the laptop's agent, which installs a
 // plugin from a release archive the same careful way.
 func UnpackPlugin(dir string, archive io.Reader) error { return unpackPlugin(dir, archive) }
@@ -237,6 +248,12 @@ func unpackPlugin(dir string, archive io.Reader) error {
 				continue
 			}
 			return fmt.Errorf("%q is not a path inside the plugin", h.Name)
+		}
+		if macMetadata(name) {
+			// A Mac's tar adds "._x" beside each file with extended
+			// attributes: none of the plugin's, and inside an app bundle
+			// they'd break its signature.
+			continue
 		}
 		switch h.Typeflag {
 		case tar.TypeDir:
