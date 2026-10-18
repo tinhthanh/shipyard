@@ -146,7 +146,7 @@ The folder's name is the plugin's id. The manifest's fields:
 | `kits` | Kit folders to offer, relative to the folder |
 | `mcp` | MCP servers to give agents: `{"name": {"command", "args", "sha256"}}`. See [Tools for agents](#tools-for-agents) |
 | `skills` | Skills to give agents: `{"name": {"path", "sha256"}}`, each a `SKILL.md` in the folder |
-| `setup` | A one-time step its tools need on this computer: `{"server", "args", "status", "ready", "label"}`. See [Setup](#setup) |
+| `setup` | A one-time step its tools need on this computer: `{"server", "args", "status", "ready", "problem", "label"}`. See [Setup](#setup) |
 | `author`, `homepage`, `marketplace` | For a plugin in [the listing](#publish-it-to-the-listing): who it is from, a web page about it, and `true` to list it |
 | `box.helper` | A [program the plugin runs on a box](#give-a-plugin-a-helper), with the checksum of its build for each platform |
 
@@ -252,6 +252,7 @@ servers, so it needs no pin of its own:
   "args": [],
   "status": ["doctor", "--json"],
   "ready": "allGranted",
+  "problem": "missingPermissions",
   "label": "Allow Accessibility and Screen Recording for Open Computer Use"
 }
 ```
@@ -262,6 +263,13 @@ whether it is done, by running `status` every few seconds until the JSON it
 prints has `ready` set to true (or, without `ready`, until it exits 0), and
 offers **Set up…** until then. Both run only while the plugin is on and its
 binary is the one you allowed.
+
+`problem`, when set, names the key of that JSON that says what is left, in
+the plugin's words: a string ("turn on the extension in the Agent profile")
+or a list of strings (shown as "Still needs: …"). Settings shows it instead
+of `label` while setup isn't done, here and on each box. On a Mac box whose
+screen is locked, the box's row says so: setup there waits for someone to
+unlock it.
 
 ### Settings
 

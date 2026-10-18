@@ -221,7 +221,7 @@ func TestOnlyAPairedLaptopPutsAPluginOnABox(t *testing.T) {
 	if err := local.RemoveBoxPlugin(ctx, "acme"); !errors.As(err, &he) || he.Status != 403 {
 		t.Fatalf("a removal from the box itself: %v", err)
 	}
-	if err := local.StartBoxPluginSetup(ctx, "acme"); !errors.As(err, &he) || he.Status != 403 {
+	if _, err := local.StartBoxPluginSetup(ctx, "acme"); !errors.As(err, &he) || he.Status != 403 {
 		t.Fatalf("a setup from the box itself: %v", err)
 	}
 }

@@ -61,6 +61,9 @@ type PluginSetup struct {
 	// a JSON object whose Ready key is true, or an exit code of 0 without Ready.
 	Status []string `json:"status,omitempty"`
 	Ready  string   `json:"ready,omitempty"`
+	// Problem, when set, is the status report's key that says what is left
+	// to do, in the plugin's words: a string, or a list of strings.
+	Problem string `json:"problem,omitempty"`
 	// Label says what setup does, for the app's button.
 	Label string `json:"label,omitempty"`
 }
@@ -624,6 +627,12 @@ type PluginSetupState struct {
 	// command or the check failed.
 	Known bool   `json:"known"`
 	Error string `json:"error,omitempty"`
+	// Problem: what is left to do, as the plugin says it (its manifest's
+	// setup.problem key), when it is not ready.
+	Problem string `json:"problem,omitempty"`
+	// Locked: the box's screen is locked, so a setup that needs the person
+	// waits until someone unlocks it (berthd fills it in on macOS).
+	Locked bool `json:"locked,omitempty"`
 }
 
 // PluginSetupStatus runs a plugin's status check, for at most a few seconds.
@@ -654,7 +663,30 @@ func PluginSetupStatus(ctx context.Context, pluginsDir, plugin string) (PluginSe
 	}
 	ready, ok := report[setup.Ready].(bool)
 	st.Known, st.Ready = ok, ready
+	if setup.Problem != "" && !st.Ready {
+		st.Problem = problemText(report[setup.Problem])
+	}
 	return st, nil
+}
+
+// problemText is a status report's problem: its string, or its strings
+// joined, or "" when it says nothing.
+func problemText(v any) string {
+	switch v := v.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []any:
+		var parts []string
+		for _, x := range v {
+			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
+				parts = append(parts, strings.TrimSpace(s))
+			}
+		}
+		if len(parts) > 0 {
+			return "Still needs: " + strings.Join(parts, ", ")
+		}
+	}
+	return ""
 }
 
 // StartPluginSetup starts a plugin's setup and returns without waiting for
