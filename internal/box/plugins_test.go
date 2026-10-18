@@ -230,3 +230,34 @@ func hasCode(err error, code string) bool {
 	var rc reviewCode
 	return errors.As(err, &rc) && rc.code == code
 }
+
+// An archive a Mac's tar made carries "._name" AppleDouble files beside the
+// real ones (extended attributes, such as com.apple.provenance): they are
+// left out, so the plugin's folder holds only its files and an app bundle in
+// it keeps a valid signature.
+func TestAMacsMetadataInAnArchiveIsLeftOut(t *testing.T) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for _, name := range []string{"._acme", "acme/._" + hooks.PluginManifest, "acme/" + hooks.PluginManifest, "acme/App.app/Contents/._Info.plist", "acme/App.app/Contents/Info.plist", "__MACOSX/acme/x"} {
+		tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: 2, Typeflag: tar.TypeReg})
+		tw.Write([]byte("{}"))
+	}
+	tw.Close()
+	gz.Close()
+	dir := t.TempDir()
+	if err := UnpackPlugin(dir, &buf); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if !d.IsDir() {
+			rel, _ := filepath.Rel(dir, p)
+			got = append(got, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if strings.Join(got, " ") != "acme/App.app/Contents/Info.plist acme/"+hooks.PluginManifest {
+		t.Fatalf("unpacked %v", got)
+	}
+}
