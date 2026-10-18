@@ -14,8 +14,9 @@ import {
 import { memo, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import { AgentIcon, BoxStateDot } from "@/components/agent-glyph";
-import { BranchMark, childRowClass, TaskGlyph, taskRowClass, TimeLane, toneOf } from "@/components/sidebar/task-parts";
+import { AgentIcon } from "@/components/agent-glyph";
+import { ink } from "@/components/sidebar/ink";
+import { awayText, BoxDot, BranchMark, childRowClass, TaskGlyph, taskRowClass, TimeLane, toneOf } from "@/components/sidebar/task-parts";
 import { type Action, Armed, boxActions, useArmed, ContextRow, DotsMenu, newSection, projectActions, projectGroupActions, removeWorktree, worktreeActions } from "@/components/sidebar/actions";
 import { ReviewNotice, ReviewTag } from "@/views/pr-review/review-marks";
 import { confirm } from "@/components/sidebar/confirm";
@@ -34,6 +35,7 @@ import { addGroup, refOf, selectWorktree, useWorkspaces, wsKey } from "@/lib/wor
 import { armDrag } from "@/components/workspace/tab-drag";
 import { WtDot } from "@/components/workspace/worktree-tone";
 import { BOX_WORDS, boxState, WORKTREE_WORDS } from "@/lib/state-model";
+import { useOutdatedBoxes } from "@/lib/outdated";
 import { useNotifications } from "@/lib/notifications";
 import { usePrefs } from "@/lib/prefs";
 import { removalLabel, removalOf, useRemoval, useRemovals } from "@/lib/removing";
@@ -52,7 +54,7 @@ import { orgName, suggestionFor } from "@/lib/team-suggest-model";
 export type GroupBy = "project" | "box";
 export type Show = "active" | "all";
 
-interface SidebarPrefs {
+export interface SidebarPrefs {
   groupBy: GroupBy;
   show: Show;
   collapsed: Record<string, boolean>;
@@ -80,13 +82,13 @@ export function useSidebarPrefs() {
 const urgency: Record<SessionState, number> = { waiting: 0, running: 1, finished: 2, ready: 3, idle: 4, exited: 5 };
 
 // summary is the one status a row shows: its most urgent session's.
-function summary(sessions: Session[], data?: BoxData): { state?: SessionState; count: number } {
+export function summary(sessions: Session[], data?: BoxData): { state?: SessionState; count: number } {
   const states = sessions.map((s) => sessionState(s, data?.stats)).filter((s) => s !== "exited");
   states.sort((a, b) => urgency[a] - urgency[b]);
   return { state: states[0], count: sessions.length };
 }
 
-interface Repo {
+export interface Repo {
   key: string;
   box: BoxStatus;
   loc: Location;
@@ -94,11 +96,12 @@ interface Repo {
   worktrees: Worktree[];
 }
 
-export function Projects({ prefs, update }: { prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+// useRepos is every project on every box as Group by: Box lists them, one
+// per box, by name.
+export function useRepos(): Repo[] {
   const boxes = useStore((s) => s.status?.boxes ?? NONE);
   const data = useStore((s) => s.boxes);
-
-  const repos = useMemo(() => {
+  return useMemo(() => {
     const out: Repo[] = [];
     for (const b of boxes) {
       for (const loc of data[b.name]?.locations ?? []) {
@@ -108,27 +111,22 @@ export function Projects({ prefs, update }: { prefs: SidebarPrefs; update(p: Par
     }
     return out.sort((a, b) => a.loc.name.localeCompare(b.loc.name) || a.box.name.localeCompare(b.box.name));
   }, [boxes, data]);
+}
+
+export function Projects({ prefs, update }: { prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+  const boxes = useStore((s) => s.status?.boxes ?? NONE);
+  const data = useStore((s) => s.boxes);
+  const repos = useRepos();
 
   const group = (list: Repo[], chip: boolean) => list.map((r) => <RepoGroup key={r.key} repo={r} chip={chip} prefs={prefs} update={update} />);
 
-  // By repository, boxes only appear when there is something to say: an
-  // empty box, one that is not online, or one whose link is slow (below the
-  // projects, so nothing above it moves).
-  const notable = boxes.filter((b) => b.state !== "online" || b.link?.slow || !data[b.name]?.locations?.length);
-
+  // By project, boxes are a detail: a project on an away box dims and says
+  // so, and the boxes themselves live in the sidebar's foot (BoxesFoot), with
+  // their actions in its menu and each project's.
   return (
     <>
       {prefs.groupBy === "project" ? (
-        <>
-          <ProjectSections prefs={prefs} update={update} />
-          {notable.length > 0 && (
-            <div className="mt-3">
-              {notable.map((b) => (
-                <BoxHeader key={b.name} box={b} empty={!data[b.name]?.locations?.length} />
-              ))}
-            </div>
-          )}
-        </>
+        <ProjectSections prefs={prefs} update={update} />
       ) : (
         boxes.map((b) => (
           <div key={b.name} className="mb-3">
@@ -148,8 +146,11 @@ export function Projects({ prefs, update }: { prefs: SidebarPrefs; update(p: Par
 
 // BoxHeader heads a box: its name, state and latency, with a way to add a
 // project to it, or to reconnect when it is not online.
-function BoxHeader({ box, empty }: { box: BoxStatus; empty: boolean }) {
+export function BoxHeader({ box, empty }: { box: BoxStatus; empty: boolean }) {
   const online = box.state === "online";
+  const data = useStore((s) => s.boxes[box.name]);
+  const outdated = useOutdatedBoxes().includes(box.name);
+  const state = boxState(box, data, outdated);
   return (
     <ContextRow items={() => boxActions(box)}>
       {/* Focusable for its menu (Shift-F10 or the menu key). */}
@@ -157,23 +158,22 @@ function BoxHeader({ box, empty }: { box: BoxStatus; empty: boolean }) {
         tabIndex={0}
         role="group"
         aria-label={`${box.name}, ${online ? (box.link?.slow ? "online, slow link" : "online") : awayText(box)}`}
-        className="group/row relative flex h-7 outline-none focus-visible:ring-2 focus-visible:ring-ring items-center gap-1.5 rounded-md pr-1 pl-2 font-medium text-[11px] text-muted-foreground hover:bg-sidebar-accent"
+        className={cn("group/row relative flex h-side-row items-center gap-2 rounded-lg px-2 text-desc outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-ring", online ? ink.row : ink.quiet)}
       >
-        {online ? <ServerIcon className="size-3" /> : <ServerOffIcon className="size-3" />}
-        <span className="truncate normal-case tracking-normal">{box.name}</span>
-        {online ? (
-          <span className="ml-auto flex items-center gap-1.5 font-normal normal-case tracking-normal tabular-nums">
-            {empty && <span>no projects</span>}
-            {/* A slow link says so instead of its latency: still online, not alarming. */}
-            {box.link?.slow ? <span data-testid="box-slow">slow</span> : box.latency_ms !== undefined && <span>{box.latency_ms} ms</span>}
-            <BoxStateDot box={box.name} />
-          </span>
-        ) : (
-          <span className="ml-auto flex items-center gap-1.5 font-normal normal-case tracking-normal">
-            {awayText(box)}
-            <BoxStateDot box={box.name} />
-          </span>
-        )}
+        {online ? <ServerIcon className={cn("size-3", ink.glyph)} /> : <ServerOffIcon className={cn("size-3", ink.glyph)} />}
+        <span className="truncate">{box.name}</span>
+        <span className={cn("ml-auto flex items-center gap-1.5 text-tag tabular-nums", ink.faint)}>
+          {online ? (
+            <>
+              {empty && <span>no projects</span>}
+              {/* A slow link says so instead of its latency: still online, not alarming. */}
+              {box.link?.slow ? <span data-testid="box-slow">slow</span> : box.latency_ms !== undefined && <span>{box.latency_ms} ms</span>}
+            </>
+          ) : (
+            awayText(box)
+          )}
+          <BoxDot state={state} />
+        </span>
         <RowOverlay className="rounded-r-md">
           {online ? (
             <RowButton label={`Add a project on ${box.name}`} onClick={() => useStore.getState().openAddLocation(box.name)}>
@@ -191,35 +191,29 @@ function BoxHeader({ box, empty }: { box: BoxStatus; empty: boolean }) {
   );
 }
 
-// BoxChip names the box a repository is on; it only draws attention when the
-// box is not online.
+// BoxChip names the box a project is on, when there are several: a small
+// note in the faint ink, nothing more. Its tip says why when the box is slow
+// or away.
 function BoxChip({ box }: { box: BoxStatus }) {
   const online = box.state === "online";
-  const chip = (
-    <span
-      className={cn(
-        "inline-flex h-4 shrink-0 items-center gap-1 rounded px-1 font-mono font-normal text-[10px] leading-none",
-        online ? "bg-sidebar-accent/70 text-muted-foreground" : "bg-sidebar-accent/40 text-muted-foreground",
-      )}
-    >
-      {!online && <span className="size-1.5 rounded-full bg-muted-foreground/50" />}
-      {online && box.link?.slow && <span className="size-1.5 rounded-full bg-success/45" />}
-      {box.name}
-    </span>
-  );
+  const chip = <span data-testid="box-chip" className={cn("shrink-0 text-tag font-normal", ink.faint)}>{box.name}</span>;
   // The name says it all while the box is up; otherwise say why it is dim.
   if (online && box.link?.slow) return <Tip label={`${box.name}'s link is slow; requests still go through`}>{chip}</Tip>;
   return online ? chip : <Tip label={`${box.name} is ${awayText(box)}`}>{chip}</Tip>;
 }
 
-function RepoGroup({ repo, chip, prefs, update }: { repo: Repo; chip: boolean; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+// useRepoTree is what a project on one box shows under its header: its
+// main checkout while it has work or is open, and its worktrees, the quiet
+// ones folded away. foldable says whether the header's fold applies (the
+// two-column sidebar's tasks never fold).
+export function useRepoTree(repo: Repo, prefs: SidebarPrefs, foldable = true) {
   const { box, loc, main, worktrees } = repo;
   const data = useStore((s) => s.boxes[box.name]);
   const removals = useRemovals((s) => s.byKey);
   const current = useWorkspaces((s) => s.current);
   const inWorkspace = useStore((s) => s.view.kind === "workspace");
   const online = box.state === "online";
-  const collapsed = prefs.collapsed[repo.key] ?? false;
+  const collapsed = foldable && (prefs.collapsed[repo.key] ?? false);
   const all = prefs.show === "all";
   const expanded = all || (prefs.expanded[repo.key] ?? false);
 
@@ -243,13 +237,36 @@ function RepoGroup({ repo, chip, prefs, update }: { repo: Repo; chip: boolean; p
   const tree = nest(rows, (r) => r.key, (r) => r.wt.parent);
   const shown = expanded ? tree : prune(tree, isActive);
   const hidden = rows.length - size(shown);
+  return { data, online, collapsed, all, expanded, mainSessions, mainSel, mainRow, rows, active, shown, hidden, any: mainRow || shown.length > 0 || hidden > 0 };
+}
+
+// RepoTreeRows are a project's task rows on one box (useRepoTree).
+export function RepoTreeRows({ repo, t, prefs, update }: { repo: Repo; t: ReturnType<typeof useRepoTree>; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+  const { box, loc, main } = repo;
+  const open = (wt: Worktree) => selectWorktree(refOf(box.name, loc, wt));
+  return (
+    <>
+      {t.mainRow && main && <WorktreeRow box={box.name} loc={loc} wt={main} sessions={t.mainSessions} data={t.data} selected={t.mainSel} onOpen={() => open(main)} away={t.online ? undefined : box} />}
+      <WorktreeNodes nodes={t.shown} depth={0} prefs={prefs} update={update} />
+      {t.hidden > 0 && <FoldRow label={`Show ${t.hidden} older`} onClick={() => update({ expanded: { ...prefs.expanded, [repo.key]: true } })} />}
+      {!t.all && t.expanded && t.rows.length > t.active.length && <FoldRow label="Show fewer" onClick={() => update({ expanded: { ...prefs.expanded, [repo.key]: false } })} />}
+    </>
+  );
+}
+
+function RepoGroup({ repo, chip, prefs, update }: { repo: Repo; chip: boolean; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+  const { box, loc, main } = repo;
+  const t = useRepoTree(repo, prefs);
+  const { online, collapsed } = t;
   const open = (wt: Worktree) => selectWorktree(refOf(box.name, loc, wt));
   const toggle = () => update({ collapsed: { ...prefs.collapsed, [repo.key]: !collapsed } });
 
   return (
-    <SidebarMenuItem className="mb-5 last:mb-0">
+    // A project showing tasks has room under it; a folded or empty one sits
+    // right under the one before, like any other row.
+    <SidebarMenuItem className={cn(!collapsed && t.any ? "mb-3" : "mb-0.5", "last:mb-0")}>
       <ContextRow items={() => projectActions(box.name, loc)} className="group/row relative">
-        <Tip side="right" delay={700} wrapClassName="flex w-full min-w-0" label={<PlaceTip name={`${loc.name} on ${box.name}`} lines={[loc.path]} />}>
+        <Tip side="right" delay={700} wrapClassName="flex w-full min-w-0" label={<PlaceTip name={`${loc.name} on ${box.name}`} lines={[loc.path, ...(online ? [] : [`${box.name} is ${awayText(box)}`])]} />}>
           <SidebarMenuButton
             size="sm"
             disabled={!online || !main}
@@ -274,20 +291,22 @@ function RepoGroup({ repo, chip, prefs, update }: { repo: Repo; chip: boolean; p
               </span>
             )}
             <span className="ml-auto" />
+            {!online && <AwayWord boxes={[box]} />}
             {online && main && <HeaderPlus />}
           </SidebarMenuButton>
         </Tip>
-        {online && main && (
+        {online && main ? (
           <RowActions box={box.name} loc={loc} wt={main} project onNewWorktree={() => useStore.getState().openNewWorktree({ box: box.name, location: loc.name })} />
+        ) : (
+          <RowOverlay>
+            <DotsMenu label={`${loc.name} actions`} items={() => projectActions(box.name, loc)} />
+          </RowOverlay>
         )}
       </ContextRow>
 
-      {!collapsed && (mainRow || shown.length > 0 || hidden > 0) && (
+      {!collapsed && t.any && (
         <SidebarMenuSub className={rowsClass}>
-          {mainRow && main && <WorktreeRow box={box.name} loc={loc} wt={main} sessions={mainSessions} data={data} selected={mainSel} onOpen={() => open(main)} away={online ? undefined : box} />}
-          <WorktreeNodes nodes={shown} depth={0} prefs={prefs} update={update} />
-          {hidden > 0 && <FoldRow label={`Show ${hidden} older`} onClick={() => update({ expanded: { ...prefs.expanded, [repo.key]: true } })} />}
-          {!all && expanded && rows.length > active.length && <FoldRow label="Show fewer" onClick={() => update({ expanded: { ...prefs.expanded, [repo.key]: false } })} />}
+          <RepoTreeRows repo={repo} t={t} prefs={prefs} update={update} />
         </SidebarMenuSub>
       )}
     </SidebarMenuItem>
@@ -299,7 +318,7 @@ function RepoGroup({ repo, chip, prefs, update }: { repo: Repo; chip: boolean; p
 function FoldRow({ label, onClick }: { label: string; onClick(): void }) {
   return (
     <SidebarMenuSubItem>
-      <SidebarMenuSubButton render={<button type="button" />} size="sm" className={cn(taskRowClass, "pl-9 text-muted-foreground")} onClick={onClick}>
+      <SidebarMenuSubButton render={<button type="button" />} size="sm" className={cn(taskRowClass, "pl-[30px]", ink.faint)} onClick={onClick}>
         <span>{label}</span>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
@@ -315,7 +334,8 @@ function FoldToggle({ collapsed, name, onToggle }: { collapsed: boolean; name: s
         aria-hidden
         data-fold=""
         className={cn(
-          "inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground",
+          "inline-flex size-4 shrink-0 items-center justify-center rounded hover:text-foreground",
+          ink.glyph,
           !collapsed && "opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100",
         )}
         onClick={(e) => {
@@ -438,13 +458,13 @@ const WorktreeRow = memo(function WorktreeRow({ box, loc, wt, sessions, data, se
               }
             }}
             onPointerDown={(e: React.PointerEvent<HTMLElement>) => labs && !away && armDrag(e, { kind: "worktree", key }, wt.main ? loc.name : self, wt.main ? <HomeIcon className="size-3" /> : <GitBranchIcon className="size-3" />)}
-            className={cn(taskRowClass, child && childRowClass, toneOf(state), away && "text-muted-foreground")}
+            className={cn(taskRowClass, child && childRowClass, toneOf(state), away && ink.quiet)}
           >
             <TaskGlyph state={state} small={child} />
-            <span className={cn("mr-auto min-w-0 truncate", away && "opacity-70")}>{name}</span>
+            <span className="mr-auto min-w-0 truncate">{name}</span>
             {/* Its own name beside the title, when the sidebar is wide enough. */}
             {((!wt.main && wt.title) || task) && (
-              <span data-testid="worktree-row-name" className="hidden min-w-0 max-w-max grow basis-0 truncate font-mono text-[11px] text-muted-foreground @min-[22rem]/side:inline">
+              <span data-testid="worktree-row-name" className={cn("hidden min-w-0 max-w-max grow basis-0 truncate font-mono text-tag @min-[22rem]/side:inline", ink.faint)}>
                 {self}
               </span>
             )}
@@ -461,7 +481,9 @@ const WorktreeRow = memo(function WorktreeRow({ box, loc, wt, sessions, data, se
             {!away && <ReviewTag box={box} wt={wt} />}
             {/* Room for the fold of its children, drawn over this spot. */}
             {fold && <FoldMarks count={fold.count} className="invisible" />}
-            {away ? <AwayMark box={away} short={!!chip} /> : <TimeLane since={top ? (top.state_since ?? top.created) : undefined} tip={timeTip(live, top)} />}
+            {/* Away, a row says nothing of what it last ran; the project's header
+                says its box is away, or with several boxes, the row does. */}
+            {away ? chip ? <AwayWord boxes={[away]} lane /> : <TimeLane /> : <TimeLane state={state} since={top ? (top.state_since ?? top.created) : undefined} tip={timeTip(live, top)} />}
           </SidebarMenuSubButton>
         </Tip>
         {fold && <FoldChip fold={fold} label={worktreeLabel(wt)} />}
@@ -534,7 +556,7 @@ const WorktreeNode = memo(function WorktreeNode({ node, depth, prefs, update }: 
           {/* Its children hang under it on a guide from its status lane.
               Up to MAX_INDENT levels step in; deeper ones line up with
               their parent. */}
-          <SidebarMenuSub className={cn("mx-0 translate-x-0 gap-px py-0 pr-0", depth + 1 < MAX_INDENT ? (depth === 0 ? "ml-[17px] pl-2" : "ml-3 pl-2") : "ml-0 border-l-0 pl-0")}>
+          <SidebarMenuSub className={cn("mx-0 translate-x-0 gap-px py-0 pr-0", depth + 1 < MAX_INDENT ? (depth === 0 ? "ml-[14px] pl-2" : "ml-3 pl-2") : "ml-0 border-l-0 pl-0")}>
             <WorktreeNodes nodes={node.children} depth={depth + 1} prefs={prefs} update={update} />
           </SidebarMenuSub>
         </SidebarMenuSubItem>
@@ -547,7 +569,7 @@ const WorktreeNode = memo(function WorktreeNode({ node, depth, prefs, update }: 
 // work to.
 function FoldMarks({ count, className }: { count: number; className?: string }) {
   return (
-    <span aria-hidden className={cn("flex shrink-0 items-center gap-[3px] text-label tabular-nums", className)}>
+    <span aria-hidden className={cn("flex shrink-0 items-center gap-[3px] text-tag tabular-nums", className)}>
       <BranchMark />
       {count}
     </span>
@@ -559,7 +581,7 @@ function FoldMarks({ count, className }: { count: number; className?: string }) 
 // agent among them instead of the fork.
 function FoldChip({ fold, label }: { fold: Fold; label: string }) {
   const what = `${fold.count} ${fold.count === 1 ? "child" : "children"}`;
-  const urgent = fold.closed && (fold.state === "running" || fold.state === "waiting" || fold.state === "finished");
+  const urgent = fold.closed && (fold.state === "running" || fold.state === "waiting");
   return (
     <Tip label={fold.closed ? `Show ${what}` : `Hide ${what}`} side="right">
       <button
@@ -568,7 +590,7 @@ function FoldChip({ fold, label }: { fold: Fold; label: string }) {
         aria-expanded={!fold.closed}
         aria-label={`${fold.closed ? "Show" : "Hide"} ${what} of ${label}`}
         onClick={fold.toggle}
-        className="absolute top-1/2 right-11 flex h-6 -translate-y-1/2 items-center gap-[3px] rounded-md px-1 text-label text-muted-foreground tabular-nums outline-none group-has-[[data-active=true]]/row:text-sidebar-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn("absolute top-1/2 right-11 flex h-6 -translate-y-1/2 items-center gap-[3px] rounded-md px-1 text-tag tabular-nums outline-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring", ink.faint)}
       >
         {urgent ? <TaskGlyph state={fold.state} small /> : <BranchMark />}
         <span>{fold.count}</span>
@@ -583,10 +605,10 @@ function LeavingRow({ wt, label, script }: { wt: Worktree; label: string; script
   return (
     <SidebarMenuSubItem>
       <Tip side="right" delay={400} label={script ? "The repo's archive script is running on the box. The worktree goes when it finishes, or comes back if it fails." : "Waiting for the box."}>
-        <div aria-disabled="true" aria-busy="true" data-leaving="" className="flex h-side-row w-full cursor-default items-center gap-2 rounded-lg px-2 text-[13px] text-muted-foreground">
+        <div aria-disabled="true" aria-busy="true" data-leaving="" className={cn("flex h-side-row w-full cursor-default items-center gap-2 rounded-lg px-2 text-desc", ink.quiet)}>
           <Spinner className="size-3.5 shrink-0 opacity-70" />
-          <span className="min-w-0 truncate line-through decoration-muted-foreground/40 opacity-70">{worktreeLabel(wt)}</span>
-          <span className="ml-auto shrink-0 text-[10px]">{label}</span>
+          <span className="min-w-0 truncate line-through decoration-foreground/30">{worktreeLabel(wt)}</span>
+          <span className={cn("ml-auto shrink-0 text-tag", ink.faint)}>{label}</span>
         </div>
       </Tip>
     </SidebarMenuSubItem>
@@ -601,19 +623,14 @@ function awayActions(box: BoxStatus): Action[] {
   return items;
 }
 
-// awayText is a box's state in the model's words: offline, unreachable,
-// connecting.
-function awayText(box: BoxStatus) {
-  return BOX_WORDS[boxState(box)].lower;
-}
-
-// AwayMark ends a row whose box is not online: the box's state, small, or
-// just its icon when the row's box chip already says which box.
-function AwayMark({ box, short }: { box: BoxStatus; short?: boolean }) {
+// AwayWord says a project's box is away, where a time would be: the
+// state's word, small and faint ("offline"). The row's or header's own tip
+// names the box and how long it has been gone. lane gives it a row's time
+// lane to sit in.
+export function AwayWord({ boxes, lane }: { boxes: BoxStatus[]; lane?: boolean }) {
   return (
-    <span className="flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-      <ServerOffIcon aria-label={short ? `${box.name} is ${awayText(box)}` : undefined} aria-hidden={!short} className="size-3" />
-      {!short && awayText(box)}
+    <span data-testid="away-word" className={cn("shrink-0 text-tag", lane && "min-w-7 text-right", ink.faint)}>
+      {BOX_WORDS[boxState(boxes[0])].lower}
     </span>
   );
 }
@@ -624,14 +641,16 @@ function AwayMark({ box, short }: { box: BoxStatus; short?: boolean }) {
 
 // A project's own row is a quiet label over its tasks, with a + to start
 // one in it; it still opens the main checkout when clicked.
-const headerClass = "h-7 gap-1.5 rounded-lg px-2.5 text-label tracking-[0.01em] text-muted-foreground hover:bg-sidebar-accent hover:text-foreground";
+// Lit while the pointer is anywhere on the row, its buttons too, so they sit
+// on the row's own highlight rather than a patch of their own.
+const headerClass = cn("h-6 gap-1.5 rounded-lg px-2 text-tag font-medium hover:bg-sidebar-accent hover:text-foreground group-hover/row:bg-sidebar-accent group-hover/row:text-foreground", ink.faint);
 // A project's tasks line up with the places above, not indented under it.
 const rowsClass = "mx-0 mt-px translate-x-0 gap-px border-l-0 px-0 py-0";
 
 // HeaderPlus is the header's +, drawn where its real button fades in on
 // hover (RowOverlay), so the header always shows you can start a task.
 function HeaderPlus() {
-  return <PlusIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />;
+  return <PlusIcon aria-hidden className={cn("size-3.5 shrink-0", ink.glyph)} />;
 }
 
 // topSession is the session a row speaks for: its most urgent one, an
@@ -657,7 +676,7 @@ function timeTip(sessions: Session[], top?: Session) {
 // under it and nothing in the row moves. beside puts it just before a
 // parent row's fold, which stays where it is. Its buttons and their menus
 // are only made once the row is first pointed at or focused (Armed).
-function RowOverlay({ className, selected, beside, children }: { className?: string; selected?: boolean; beside?: boolean; children: React.ReactNode }) {
+export function RowOverlay({ className, selected, beside, children }: { className?: string; selected?: boolean; beside?: boolean; children: React.ReactNode }) {
   if (!useArmed()) return null;
   return (
     <div
@@ -726,14 +745,14 @@ function RowActions({ box, loc, wt, project, onNewWorktree, selected, beside }: 
   );
 }
 
-function RowButton({ label, ...props }: React.ComponentProps<"button"> & { label: string }) {
+export function RowButton({ label, ...props }: React.ComponentProps<"button"> & { label: string }) {
   return (
     <Tip label={label}>
       <button
         type="button"
         aria-label={label}
         {...props}
-        className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground data-popup-open:bg-sidebar-accent [&_svg]:size-3.5"
+        className={cn("inline-flex size-6 items-center justify-center rounded-md hover:bg-sidebar-accent hover:text-foreground data-popup-open:bg-sidebar-accent [&_svg]:size-3.5", ink.glyph)}
       />
     </Tip>
   );
@@ -741,7 +760,9 @@ function RowButton({ label, ...props }: React.ComponentProps<"button"> & { label
 
 // ProjectSections lists projects under their sections (Work, Personal…);
 // projects in none come first. Drag a project onto a section to move it.
-function ProjectSections({ prefs, update }: { prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+// row draws a project another way (the two-column sidebar's project rows);
+// by default it is the project with its tasks under it.
+export function ProjectSections({ prefs, update, row }: { prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void; row?: (p: Project) => React.ReactNode }) {
   const { projects, sections } = useProjects();
   const multiBox = useStore((s) => (s.status?.boxes.length ?? 0) > 1);
   const [over, setOver] = useState<string>();
@@ -760,7 +781,7 @@ function ProjectSections({ prefs, update }: { prefs: SidebarPrefs; update(p: Par
       if (p && p.section !== section) void groupActions.setSection(p, section);
     },
   });
-  const list = (ps: Project[]) => ps.map((p) => <ProjectGroup key={p.id} project={p} chips={multiBox} prefs={prefs} update={update} />);
+  const list = (ps: Project[]) => ps.map((p) => (row ? row(p) : <ProjectGroup key={p.id} project={p} chips={multiBox} prefs={prefs} update={update} />));
 
   return (
     <>
@@ -774,15 +795,15 @@ function ProjectSections({ prefs, update }: { prefs: SidebarPrefs; update(p: Par
         return (
           <div key={name} {...drop(name)} className={cn("mt-2 rounded-md", over === name && "bg-sidebar-accent/40 ring-1 ring-ring/40")}>
             <ContextRow items={() => sectionActions(name)}>
-              <div className="group/row flex h-7 items-center gap-1 rounded-md pr-1 pl-1.5 hover:bg-sidebar-accent/40">
+              <div className="group/row flex h-6 items-center gap-1 rounded-md pr-1 pl-1.5 hover:bg-sidebar-accent/40">
                 <button
                   type="button"
                   onClick={() => update({ collapsed: { ...prefs.collapsed, [key]: !closed } })}
-                  className="flex min-w-0 flex-1 items-center gap-1 font-medium text-[11px] text-muted-foreground"
+                  className={cn("flex min-w-0 flex-1 items-center gap-1 text-tag font-medium hover:text-foreground", ink.faint)}
                 >
                   <ChevronRightIcon className={cn("size-3 transition-transform", !closed && "rotate-90")} />
                   <span className="truncate">{name}</span>
-                  <span className="font-normal normal-case tracking-normal">{inside.length || ""}</span>
+                  <span className="font-normal tabular-nums">{inside.length || ""}</span>
                 </button>
                 <span className="opacity-0 group-hover/row:opacity-100 has-[[data-popup-open]]:opacity-100">
                   <Armed>
@@ -792,7 +813,7 @@ function ProjectSections({ prefs, update }: { prefs: SidebarPrefs; update(p: Par
               </div>
             </ContextRow>
             {!closed &&
-              (inside.length ? <SidebarMenu className="gap-px">{list(inside)}</SidebarMenu> : <p className="px-6 py-1 text-muted-foreground text-xs">Drag a project here.</p>)}
+              (inside.length ? <SidebarMenu className="gap-px">{list(inside)}</SidebarMenu> : <p className={cn("px-6 py-1 text-meta", ink.faint)}>Drag a project here.</p>)}
           </div>
         );
       })}
@@ -838,7 +859,11 @@ const sameProject = (a: Project, b: Project) =>
   a === b ||
   (a.id === b.id && a.name === b.name && a.slug === b.slug && a.section === b.section && a.defaultBox === b.defaultBox && a.remote === b.remote && a.members.length === b.members.length && a.members.every((m, i) => sameMember(m, b.members[i])));
 
-function ProjectGroupBody({ project: p, chips, prefs, update }: { project: Project; chips: boolean; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+// useProjectTree is what a project shows under its header: with one box
+// its main checkout while it has work or is open, and the worktrees from
+// all its boxes, the quiet ones folded away. foldable says whether the
+// header's fold applies (the two-column sidebar's tasks never fold).
+export function useProjectTree(p: Project, prefs: SidebarPrefs, foldable = true) {
   // Only its own boxes' data: agents changing on another box leave it be.
   const memberData = useStore(useShallow((s) => p.members.map((m) => s.boxes[m.box.name])));
   const boxes = useMemo(() => Object.fromEntries(p.members.map((m, i) => [m.box.name, memberData[i]])) as Record<string, BoxData | undefined>, [p.members, memberData]);
@@ -846,7 +871,7 @@ function ProjectGroupBody({ project: p, chips, prefs, update }: { project: Proje
   const current = useWorkspaces((s) => s.current);
   const inWorkspace = useStore((s) => s.view.kind === "workspace");
   const key = `project:${p.id}`;
-  const collapsed = prefs.collapsed[key] ?? false;
+  const collapsed = foldable && (prefs.collapsed[key] ?? false);
   const all = prefs.show === "all";
   const expanded = all || (prefs.expanded[key] ?? false);
   const multi = p.members.length > 1;
@@ -900,11 +925,43 @@ function ProjectGroupBody({ project: p, chips, prefs, update }: { project: Proje
   // With one box, its main checkout is a task row while it has work in it
   // or is open (or every worktree shows); the header only names the project.
   const mainRow = !multi && !!defMain && (all || mainSel || glyphSessions.some((s) => !s.exited));
+  return { boxes, key, collapsed, all, expanded, multi, def, defMain, rows, active, shown, hidden, mainSel, glyphSessions, online, mainRow, any: mainRow || shown.length > 0 || hidden > 0 };
+}
+
+// ProjectTreeRows are a project's task rows (useProjectTree).
+export function ProjectTreeRows({ t, prefs, update }: { t: ReturnType<typeof useProjectTree>; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+  const { def, defMain, key } = t;
+  return (
+    <>
+      {t.mainRow && defMain && (
+        <WorktreeRow
+          box={def.box.name}
+          loc={def.loc}
+          wt={defMain}
+          sessions={t.glyphSessions}
+          data={t.boxes[def.box.name]}
+          selected={t.mainSel}
+          onOpen={() => selectWorktree(refOf(def.box.name, def.loc, defMain))}
+          away={def.box.state === "online" ? undefined : def.box}
+        />
+      )}
+      <WorktreeNodes nodes={t.shown} depth={0} prefs={prefs} update={update} />
+      {t.hidden > 0 && <FoldRow label={`Show ${t.hidden} older`} onClick={() => update({ expanded: { ...prefs.expanded, [key]: true } })} />}
+      {!t.all && t.expanded && t.rows.length > t.active.length && <FoldRow label="Show fewer" onClick={() => update({ expanded: { ...prefs.expanded, [key]: false } })} />}
+    </>
+  );
+}
+
+function ProjectGroupBody({ project: p, chips, prefs, update }: { project: Project; chips: boolean; prefs: SidebarPrefs; update(p: Partial<SidebarPrefs>): void }) {
+  const t = useProjectTree(p, prefs);
+  const { boxes, key, collapsed, multi, def, defMain, shown, hidden, mainRow, glyphSessions, online } = t;
 
   return (
-    <SidebarMenuItem className="mb-5 last:mb-0">
+    // A project showing tasks has room under it; a folded or empty one sits
+    // right under the one before, like any other row.
+    <SidebarMenuItem className={cn(!collapsed && (mainRow || shown.length > 0 || hidden > 0) ? "mb-3" : "mb-0.5", "last:mb-0")}>
       <ContextRow items={() => projectGroupActions(p)} className="group/row relative">
-        <Tip side="right" delay={700} wrapClassName="flex w-full min-w-0" label={<PlaceTip name={`${p.name}${p.slug ? ` (${p.slug})` : ""}`} lines={p.members.map((m) => `${m.box.name}: ${m.loc.path}`)} />}>
+        <Tip side="right" delay={700} wrapClassName="flex w-full min-w-0" label={<PlaceTip name={`${p.name}${p.slug ? ` (${p.slug})` : ""}`} lines={[...p.members.map((m) => `${m.box.name}: ${m.loc.path}`), ...p.members.filter((m) => m.box.state !== "online").map((m) => `${m.box.name} is ${awayText(m.box)}`)]} />}>
           <SidebarMenuButton
             size="sm"
             draggable
@@ -928,59 +985,48 @@ function ProjectGroupBody({ project: p, chips, prefs, update }: { project: Proje
             <TeamSuggestMark places={p.members.map((m) => ({ box: m.box.name, location: m.loc.name }))} />
             {chips && (
               // Which boxes, only when there is room; the tip says them too.
-              <span className="hidden min-w-0 shrink items-center gap-0.5 overflow-hidden @min-[22rem]/side:flex">
+              <span className="hidden min-w-0 shrink items-center gap-1.5 overflow-hidden @min-[22rem]/side:flex">
                 {p.members.slice(0, 3).map((m) => (
                   <BoxChip key={m.box.name} box={m.box} />
                 ))}
-                {p.members.length > 3 && <span className="text-[10px] text-muted-foreground">+{p.members.length - 3}</span>}
+                {p.members.length > 3 && <span className={cn("text-tag font-normal", ink.faint)}>+{p.members.length - 3}</span>}
               </span>
             )}
             <span className="ml-auto" />
-            {/* Folded, the header still says how its most urgent agent is. */}
-            {collapsed && <HeaderState sessions={glyphSessions} data={boxes[def.box.name]} />}
+            {/* Folded, the header still says when an agent inside needs you or works. */}
+            {collapsed && online && <HeaderState sessions={glyphSessions} data={boxes[def.box.name]} />}
+            {/* Every box it is on is away: the word, where a time would be. */}
+            {!online && <AwayWord boxes={p.members.map((m) => m.box)} />}
             {online && <HeaderPlus />}
           </SidebarMenuButton>
         </Tip>
-        {online && (
-          <RowOverlay>
+        <RowOverlay>
+          {online && (
             <RowButton
               label={multi ? `New task on ${p.defaultBox}` : `New task in ${p.name}`}
               onClick={() => useStore.getState().openNewWorktree({ box: def.box.name, location: def.loc.name })}
             >
               <PlusIcon />
             </RowButton>
-            <DotsMenu label={`${p.name} actions`} items={() => projectGroupActions(p)} />
-          </RowOverlay>
-        )}
+          )}
+          <DotsMenu label={`${p.name} actions`} items={() => projectGroupActions(p)} />
+        </RowOverlay>
       </ContextRow>
 
       {!collapsed && (mainRow || shown.length > 0 || hidden > 0) && (
         <SidebarMenuSub className={rowsClass}>
-          {mainRow && defMain && (
-            <WorktreeRow
-              box={def.box.name}
-              loc={def.loc}
-              wt={defMain}
-              sessions={glyphSessions}
-              data={boxes[def.box.name]}
-              selected={mainSel}
-              onOpen={() => selectWorktree(refOf(def.box.name, def.loc, defMain))}
-              away={def.box.state === "online" ? undefined : def.box}
-            />
-          )}
-          <WorktreeNodes nodes={shown} depth={0} prefs={prefs} update={update} />
-          {hidden > 0 && <FoldRow label={`Show ${hidden} older`} onClick={() => update({ expanded: { ...prefs.expanded, [key]: true } })} />}
-          {!all && expanded && rows.length > active.length && <FoldRow label="Show fewer" onClick={() => update({ expanded: { ...prefs.expanded, [key]: false } })} />}
+          <ProjectTreeRows t={t} prefs={prefs} update={update} />
         </SidebarMenuSub>
       )}
     </SidebarMenuItem>
   );
 }
 
-// HeaderState is a folded project's most urgent agent, on its header.
+// HeaderState is a folded project's agent that needs you or works, on its
+// header; done and idle say nothing there.
 function HeaderState({ sessions, data }: { sessions: Session[]; data?: BoxData }) {
   const { state } = summary(sessions, data);
-  if (state !== "running" && state !== "waiting" && state !== "finished") return null;
+  if (state !== "running" && state !== "waiting") return null;
   return <TaskGlyph state={state} small />;
 }
 
@@ -989,18 +1035,18 @@ const ProjectGroup = memo(ProjectGroupBody, (a, b) => a.chips === b.chips && a.p
 const NO_SESSIONS: Session[] = [];
 
 // PlaceTip says where a sidebar row is: its name, then its path on each box.
-function PlaceTip({ name, sub, lines, work = [] }: { name: string; sub?: string; lines: string[]; work?: string[] }) {
+export function PlaceTip({ name, sub, lines, work = [] }: { name: string; sub?: string; lines: string[]; work?: string[] }) {
   return (
     <span className="flex max-w-96 flex-col gap-0.5">
       <span>{name}</span>
-      {sub && <span className="font-mono text-[11px] text-muted-foreground">{sub}</span>}
+      {sub && <span className="font-mono text-tag text-muted-foreground">{sub}</span>}
       {work.map((w, i) => (
-        <span key={i} className="truncate text-[12px]">
+        <span key={i} className="truncate text-meta">
           {w}
         </span>
       ))}
       {lines.map((l) => (
-        <span key={l} className="break-all font-mono text-[11px] text-muted-foreground">
+        <span key={l} className="break-all font-mono text-tag text-muted-foreground">
           {l}
         </span>
       ))}
@@ -1013,11 +1059,11 @@ function PlaceTip({ name, sub, lines, work = [] }: { name: string; sub?: string;
 function SetupMark({ box, wt }: { box: string; wt: Worktree }) {
   // Setup and archive failures share a category; the title tells them apart.
   const failed = useNotifications((s) => s.notes.find((n) => n.category === "setupFailed" && !n.resolved && n.box === box && n.path === wt.path));
-  if (wt.setting_up) return <span className="shrink-0 text-[10px] text-muted-foreground">{WORKTREE_WORDS["setting-up"].lower}</span>;
+  if (wt.setting_up) return <span className={cn("shrink-0 text-tag", ink.faint)}>{WORKTREE_WORDS["setting-up"].lower}</span>;
   if (wt.setup_on_open && !failed) {
     return (
       <Tip label="It was there before Shipyard set this repo up. Its setup runs the first time you open a terminal or start an agent in it; its files are as you left them.">
-        <span data-testid="setup-on-open" className="shrink-0 text-[10px] text-muted-foreground">
+        <span data-testid="setup-on-open" className={cn("shrink-0 text-tag", ink.faint)}>
           set up on first open
         </span>
       </Tip>
@@ -1027,8 +1073,9 @@ function SetupMark({ box, wt }: { box: string; wt: Worktree }) {
   const archive = failed.title.startsWith("Archiving");
   return (
     <Tip label={`Its ${archive ? "archive" : "setup"} script failed. The notification has its output.`}>
-      <span className="flex shrink-0 items-center gap-1 text-[10px] text-destructive-foreground">
-        <span className="size-1.5 rounded-full bg-destructive" />
+      {/* It needs you to look: amber, as an agent that needs you. */}
+      <span className={cn("flex shrink-0 items-center gap-1 text-tag", ink.row)}>
+        <span className="size-1.5 rounded-full bg-warning" />
         {archive ? "archive failed" : WORKTREE_WORDS["setup-failed"].lower}
       </span>
     </Tip>
@@ -1038,7 +1085,7 @@ function SetupMark({ box, wt }: { box: string; wt: Worktree }) {
 // TeamSuggestMark is a project row's quiet note that its org publishes a
 // team setup the person hasn't looked at (lib/team-suggest.ts): one small
 // muted icon, and the row's menu says the rest.
-function TeamSuggestMark({ places }: { places: { box: string; location: string }[] }) {
+export function TeamSuggestMark({ places }: { places: { box: string; location: string }[] }) {
   const list = useTeamSuggestions();
   if (!list.length) return null;
   const found = places.map((p) => suggestionFor(list, p.box, p.location)).find(Boolean);
@@ -1046,7 +1093,7 @@ function TeamSuggestMark({ places }: { places: { box: string; location: string }
   const name = orgName(found.suggestion);
   return (
     <Tip label={`${name} has a team setup for this project. Review it from the project's menu.`} side="right">
-      <span data-testid="team-suggest-mark" role="img" aria-label={`${name} has a team setup`} className="inline-flex shrink-0 items-center text-muted-foreground/60">
+      <span data-testid="team-suggest-mark" role="img" aria-label={`${name} has a team setup`} className={cn("inline-flex shrink-0 items-center", ink.glyph)}>
         <UsersRoundIcon className="size-3" />
       </span>
     </Tip>
