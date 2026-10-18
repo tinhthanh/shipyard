@@ -552,6 +552,8 @@ export const laptopApi = {
   // A plugin's tools on boxes (internal/agent/boxplugins.go): each online
   // box's state, putting it on one or updating it there, taking it off, and
   // starting its setup on the box's screen.
+  installPluginFromURL: (c: Client, url: string, sha256: string, replace: boolean) =>
+    c.laptop<{ id: string; name?: string; version?: string; sha256: string; replaced?: boolean }>("POST", "/v1/plugins/install-url", { url, sha256, replace }),
   pluginBoxes: (c: Client, id: string) => c.laptop<PluginBoxes>("GET", `/v1/plugins/${encodeURIComponent(id)}/boxes`),
   installPluginOnBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
   removePluginFromBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("DELETE", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),

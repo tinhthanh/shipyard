@@ -203,6 +203,10 @@ func (p *BoxPlugins) sync() {
 // unpackPlugin writes a tar.gz of a plugin's folder into dir, through an
 // os.Root so nothing lands outside it: no absolute paths, no "..", and
 // symbolic links (an app bundle has some) only to somewhere inside.
+// UnpackPlugin is unpackPlugin for the laptop's agent, which installs a
+// plugin from a release archive the same careful way.
+func UnpackPlugin(dir string, archive io.Reader) error { return unpackPlugin(dir, archive) }
+
 func unpackPlugin(dir string, archive io.Reader) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {

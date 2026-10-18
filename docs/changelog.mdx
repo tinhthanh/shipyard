@@ -30,6 +30,11 @@ again.
   ⌘+ makes all of them bigger.
 - **A queued prompt that failed is amber in the status bar,** like anything
   else that needs you, rather than red.
+- **Install a plugin from its release.** Settings → Plugins → **Install
+  from URL…** takes an `https://` link to a plugin's `.tar.gz` and its
+  SHA-256 (or the `.sha256` beside it), checks both, and installs it off,
+  like one from Browse. A plugin that's there already is replaced only when
+  you say so.
 - **A plugin's setup says what is left.** Settings → Plugins shows what a
   plugin says is left to do (its manifest's new `setup.problem`), such as
   "turn on the extension in the Agent profile", instead of the same label

@@ -5,6 +5,7 @@ import { ErrorText } from "@/components/error-note";
 import { Tip } from "@/components/tip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toastManager } from "@/components/ui/toast";
 import { ApiError, laptopApi, type PluginBoxes, type PluginInfo, type PluginOnBox, type PluginSetting, type PluginSettingsState, type PluginSetupState } from "@/lib/api";
@@ -29,6 +30,7 @@ export function PluginsSection() {
   const [installed, setInstalled] = useState<PluginInfo[]>();
   const [builtins, setBuiltins] = useState<PluginInfo[]>();
   const [reloading, setReloading] = useState(false);
+  const [fromURL, setFromURL] = useState(false);
   useEffect(() => void builtinPlugins().then(setBuiltins), []);
 
   const refresh = useCallback(async () => {
@@ -82,12 +84,16 @@ export function PluginsSection() {
         actions={
           <span className="flex items-center gap-3">
             <span className="font-mono text-muted-foreground text-mono">~/.berth/plugins</span>
+            <Button size="xs" variant="ghost" onClick={() => setFromURL((v) => !v)} data-testid="plugin-install-url">
+              Install from URL…
+            </Button>
             <Button size="xs" variant="ghost" className="gap-1.5" loading={reloading} onClick={() => void reload()}>
               <RefreshCwIcon className="mr-0.5" /> Reload
             </Button>
           </span>
         }
       >
+        {fromURL && <InstallFromURL onDone={() => void reload()} onClose={() => setFromURL(false)} />}
         {installed === undefined ? (
           <div className="py-6 text-center text-muted-foreground text-body">Loading…</div>
         ) : installed.length === 0 ? (
@@ -739,4 +745,59 @@ function Contributions({ plugin }: { plugin: string }) {
   ];
   if (!parts.length) return null;
   return <div className="mt-0.5 text-muted-foreground text-meta">{parts.join(" · ")}</div>;
+}
+
+// InstallFromURL installs a plugin from a release: the .tar.gz of its
+// folder at an https address, checked against its SHA-256 (given here, or
+// published beside it as <url>.sha256). Like the listing, it never turns the
+// plugin on: it lands under Installed, off until you allow it.
+function InstallFromURL({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
+  const [url, setURL] = useState("");
+  const [sum, setSum] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [exists, setExists] = useState(false);
+  const install = async (replace: boolean) => {
+    const client = useStore.getState().client;
+    if (!client || !url.trim()) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const out = await laptopApi.installPluginFromURL(client, url.trim(), sum.trim(), replace);
+      toastManager.add({
+        type: "success",
+        title: `${out.name || out.id}${out.version ? ` ${out.version}` : ""} ${out.replaced ? "replaced" : "installed"}`,
+        description: "It's off until you allow it, below.",
+      });
+      setExists(false);
+      onDone();
+      onClose();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "plugin_exists") setExists(true);
+      setError(plainError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mb-3 space-y-2 rounded-md border px-3 py-2.5" data-testid="plugin-install-url-form">
+      <p className="text-muted-foreground text-meta">A plugin's release: the .tar.gz of its folder at an https:// address. Its SHA-256 is read from &lt;url&gt;.sha256 when you leave it empty.</p>
+      <Input placeholder="https://github.com/…/releases/download/…/chrome-…-darwin-universal.tar.gz" value={url} onChange={(e) => setURL(e.target.value)} aria-label="The plugin's address" />
+      <Input placeholder="SHA-256 (optional)" value={sum} onChange={(e) => setSum(e.target.value)} aria-label="The archive's SHA-256" className="font-mono" />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="xs" loading={busy && !exists} disabled={busy || !url.trim()} onClick={() => void install(false)}>
+          Install
+        </Button>
+        {exists && (
+          <Button size="xs" variant="destructive-outline" loading={busy} disabled={busy} onClick={() => void install(true)}>
+            Replace the installed one
+          </Button>
+        )}
+        <Button size="xs" variant="ghost" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+      {error && <ErrorText className="text-destructive-foreground text-meta" text={error} />}
+    </div>
+  );
 }
