@@ -398,6 +398,9 @@ func (b *Box) boxPluginSetup(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return setupProblem(err)
 	}
+	if !st.Ready {
+		st.Locked = screenLocked(r.Context())
+	}
 	writeJSON(w, st)
 	return nil
 }
@@ -416,7 +419,8 @@ func (b *Box) startBoxPluginSetup(w http.ResponseWriter, r *http.Request) error 
 	if err := integrations.StartPluginSetup(p.Dir, id); err != nil {
 		return setupProblem(err)
 	}
-	writeJSON(w, map[string]bool{"started": true})
+	// It opens all the same: the window waits there for whoever unlocks it.
+	writeJSON(w, map[string]bool{"started": true, "locked": screenLocked(r.Context())})
 	return nil
 }
 
@@ -454,7 +458,14 @@ func (c *Client) BoxPluginSetup(ctx context.Context, id string) (out integration
 	return out, c.helperCall(ctx, http.MethodGet, "/v1/plugins/"+id+"/setup", nil, nil, &out)
 }
 
+// PluginSetupStarted is what starting a plugin's setup on a box says: Locked,
+// the box's screen is locked, so the window waits for whoever unlocks it.
+type PluginSetupStarted struct {
+	Started bool `json:"started"`
+	Locked  bool `json:"locked,omitempty"`
+}
+
 // StartBoxPluginSetup opens a plugin's setup on the box's screen.
-func (c *Client) StartBoxPluginSetup(ctx context.Context, id string) error {
-	return c.helperCall(ctx, http.MethodPost, "/v1/plugins/"+id+"/setup", nil, nil, nil)
+func (c *Client) StartBoxPluginSetup(ctx context.Context, id string) (out PluginSetupStarted, err error) {
+	return out, c.helperCall(ctx, http.MethodPost, "/v1/plugins/"+id+"/setup", nil, nil, &out)
 }

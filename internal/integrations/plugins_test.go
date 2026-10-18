@@ -374,3 +374,35 @@ func TestPluginSettingsNeedAKnownServer(t *testing.T) {
 		t.Fatal("settings naming a server the plugin does not ship must be refused")
 	}
 }
+
+// A plugin says what is left in its own words (setup.problem names the
+// key): the app shows that instead of the setup's fixed label.
+func TestPluginSetupSaysWhatIsLeftInThePluginsWords(t *testing.T) {
+	for _, tc := range []struct{ out, want string }{
+		{`{"ready": false, "problem": "turn on the extension in the Agent profile"}`, "turn on the extension in the Agent profile"},
+		{`{"ready": false, "problem": ["Accessibility", "Screen Recording"]}`, "Still needs: Accessibility, Screen Recording"},
+		{`{"ready": false}`, ""},
+		{`{"ready": true, "problem": "stale words"}`, ""},
+	} {
+		plugins := t.TempDir()
+		dir := filepath.Join(plugins, "acme")
+		bin := []byte("#!/bin/sh\necho '" + tc.out + "'\n")
+		writePluginFile(t, filepath.Join(dir, "bin", "acme"), bin)
+		manifest := `{"mcp":{"acme":{"command":"bin/acme","args":["mcp"],"sha256":"` + sum(bin) + `"}},"setup":{"server":"acme","status":["status"],"ready":"ready","problem":"problem","label":"Set it up"}}`
+		writePluginFile(t, filepath.Join(dir, hooks.PluginManifest), []byte(manifest))
+		h, err := hooks.PluginHash(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := hooks.AllowPlugin(dir, h); err != nil {
+			t.Fatal(err)
+		}
+		st, err := PluginSetupStatus(context.Background(), plugins, "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Problem != tc.want || st.Label != "Set it up" {
+			t.Errorf("%s: problem %q, want %q (%+v)", tc.out, st.Problem, tc.want, st)
+		}
+	}
+}

@@ -35,6 +35,13 @@ again.
   SHA-256 (or the `.sha256` beside it), checks both, and installs it off,
   like one from Browse. A plugin that's there already is replaced only when
   you say so.
+- **A plugin's setup says what is left.** Settings → Plugins shows what a
+  plugin says is left to do (its manifest's new `setup.problem`), such as
+  "turn on the extension in the Agent profile", instead of the same label
+  every time, here and on each box. A box whose screen is locked says so,
+  since setup there waits for someone to unlock it, and opening setup on it
+  warns. With more than one box on an older version of a plugin, **Update
+  all** sends the allowed version to each.
 - **Two plans on one email both show.** One email signed in to two plans
   (a team seat and a personal Max, as two accounts in Usage & accounts)
   showed as one login in the floating bar and the Agent usage widget, with

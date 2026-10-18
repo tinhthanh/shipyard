@@ -13,7 +13,7 @@ import { plainError } from "@/lib/errors";
 import { bytes, errorMessage } from "@/lib/format";
 import { marketAction, marketNote, type Marketplace, type MarketPlugin } from "@/lib/marketplace";
 import { openDocs, openUrl } from "@/lib/open-url";
-import { boxPollMs, boxRowView } from "@/lib/plugin-boxes";
+import { boxPollMs, boxRowView, outdatedBoxes } from "@/lib/plugin-boxes";
 import { heldNote, type PluginHelpers, stopNote, stoppedNote } from "@/lib/plugin-helpers";
 import { builtinOn, setBuiltinOn, usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
@@ -505,7 +505,7 @@ function PluginSetupRow({ plugin: p }: { plugin: PluginInfo }) {
   }
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-      <span className="text-warning-foreground text-meta">{state?.label || p.setup?.label || "Needs one more step on this computer"}</span>
+      <span className="text-warning-foreground text-meta">{state?.problem || state?.label || p.setup?.label || "Needs one more step on this computer"}</span>
       <Button size="xs" variant="outline" loading={starting} onClick={() => void start()}>
         Set up…
       </Button>
@@ -559,9 +559,13 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
       if (what === "install") await laptopApi.installPluginOnBox(client, p.id, row.box);
       else if (what === "remove") await laptopApi.removePluginFromBox(client, p.id, row.box);
       else {
-        await laptopApi.startPluginSetupOnBox(client, p.id, row.box);
+        const started = await laptopApi.startPluginSetupOnBox(client, p.id, row.box);
         setSetupAt(Date.now());
-        toastManager.add({ type: "info", title: `Setup opened on ${row.box}`, description: "Finish it on that box's screen, there or by remote desktop." });
+        toastManager.add(
+          started.locked
+            ? { type: "warning", title: `${row.box}'s screen is locked`, description: "Setup opened there, but it waits for someone to unlock the screen, there or by remote desktop." }
+            : { type: "info", title: `Setup opened on ${row.box}`, description: "Finish it on that box's screen, there or by remote desktop." },
+        );
       }
       await load();
     } catch (err) {
@@ -570,9 +574,36 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
       setBusy(undefined);
     }
   };
+  const outdated = outdatedBoxes(state.boxes);
+  // updateAll sends the version allowed here to every box with another, one
+  // after the other, and says which it couldn't reach.
+  const updateAll = async () => {
+    const client = useStore.getState().client;
+    if (!client) return;
+    setBusy("all:install");
+    setError(undefined);
+    const failed: string[] = [];
+    for (const name of outdated) {
+      try {
+        await laptopApi.installPluginOnBox(client, p.id, name);
+      } catch (err) {
+        failed.push(`${name}: ${plainError(err)}`);
+      }
+    }
+    if (failed.length) setError(failed.join("; "));
+    await load();
+    setBusy(undefined);
+  };
   return (
     <div className="mt-2 space-y-1.5 rounded-md border px-2.5 py-2" data-testid={`plugin-boxes-${p.id}`}>
-      <p className="text-muted-foreground text-meta">On boxes: their agents get these tools too.</p>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-muted-foreground text-meta">On boxes: their agents get these tools too.</p>
+        {outdated.length > 1 && (
+          <Button size="xs" variant="outline" loading={busy === "all:install"} disabled={!!busy || !state.enabled} onClick={() => void updateAll()} data-testid={`plugin-boxes-update-all-${p.id}`}>
+            Update all ({outdated.length})
+          </Button>
+        )}
+      </div>
       {state.boxes.map((row) => {
         const v = boxRowView(row);
         return (
