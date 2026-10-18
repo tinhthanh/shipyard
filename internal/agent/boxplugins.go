@@ -243,15 +243,16 @@ func (a *Agent) removePluginFromBox(ctx context.Context, id, name string) (Plugi
 	return PluginOnBox{Box: name, State: "off"}, nil
 }
 
-func (a *Agent) startPluginSetupOnBox(ctx context.Context, id, name string) error {
+func (a *Agent) startPluginSetupOnBox(ctx context.Context, id, name string) (box.PluginSetupStarted, error) {
 	bc, err := a.helperBox(name)
 	if err != nil {
-		return err
+		return box.PluginSetupStarted{}, err
 	}
-	if err := bc.StartBoxPluginSetup(ctx, id); err != nil {
-		return a.boxProblem(err)
+	out, err := bc.StartBoxPluginSetup(ctx, id)
+	if err != nil {
+		return box.PluginSetupStarted{}, a.boxProblem(err)
 	}
-	return nil
+	return out, nil
 }
 
 // packPlugin writes the plugin's folder as a tar.gz: its files with their
@@ -376,11 +377,13 @@ func (a *Agent) boxPluginRoutes(mux *http.ServeMux) {
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
-		if err := a.startPluginSetupOnBox(ctx, id, r.PathValue("box")); err != nil {
+		out, err := a.startPluginSetupOnBox(ctx, id, r.PathValue("box"))
+		if err != nil {
 			writeMarketError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]bool{"started": true})
+		out.Started = true
+		writeJSON(w, http.StatusOK, out)
 	})
 }
 

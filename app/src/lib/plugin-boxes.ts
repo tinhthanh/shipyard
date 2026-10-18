@@ -25,7 +25,11 @@ export function boxRowView(row: PluginOnBox): BoxRowView {
       return { on: true, canToggle: true, note: row.version ? `Has ${row.version}, not the version allowed here` : "Has another version", tone: "warning", action: "update" };
     case "on":
       if (row.setup && row.setup.known && !row.setup.ready) {
-        return { on: true, canToggle: true, note: row.setup.label ? `Needs setup on the box: ${row.setup.label}` : "Needs one more step on the box", tone: "warning", action: "setup" };
+        if (row.setup.locked) {
+          return { on: true, canToggle: true, note: "The box's screen is locked: unlock it (remote desktop) to finish setup", tone: "warning", action: "setup" };
+        }
+        const left = row.setup.problem || (row.setup.label ? `Needs setup on the box: ${row.setup.label}` : "Needs one more step on the box");
+        return { on: true, canToggle: true, note: left, tone: "warning", action: "setup" };
       }
       return { on: true, canToggle: true, note: row.setup?.known ? "On the box, and set up" : "On the box", tone: "success" };
     case "unsupported":
@@ -46,4 +50,10 @@ export const BOX_SETUP_WATCH_MS = 120_000;
 
 export function boxPollMs(setupStartedAt: number | undefined, now: number): number {
   return setupStartedAt !== undefined && now - setupStartedAt < BOX_SETUP_WATCH_MS ? BOX_POLL_SETUP_MS : BOX_POLL_IDLE_MS;
+}
+
+// outdatedBoxes are the boxes that hold another version than the one
+// allowed here: one Update all sends it to each.
+export function outdatedBoxes(rows: PluginOnBox[]): string[] {
+  return rows.filter((r) => r.state === "outdated").map((r) => r.box);
 }

@@ -555,7 +555,7 @@ export const laptopApi = {
   pluginBoxes: (c: Client, id: string) => c.laptop<PluginBoxes>("GET", `/v1/plugins/${encodeURIComponent(id)}/boxes`),
   installPluginOnBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
   removePluginFromBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("DELETE", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
-  startPluginSetupOnBox: (c: Client, id: string, box: string) => c.laptop<{ started: boolean }>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/setup`),
+  startPluginSetupOnBox: (c: Client, id: string, box: string) => c.laptop<{ started: boolean; locked?: boolean }>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/setup`),
   // Where a plugin's helper is, to say before turning the plugin off.
   pluginHelpers: (c: Client, id: string) => c.laptop<PluginHelpers>("GET", `/v1/plugins/${encodeURIComponent(id)}/helpers`),
   // The plugin listing (lib/marketplace.ts). The agent reads it from the
@@ -611,6 +611,11 @@ export interface PluginSetupState {
   ready: boolean;
   known: boolean;
   error?: string;
+  // What is left, in the plugin's own words, while it isn't ready.
+  problem?: string;
+  // On a box: its screen is locked, so setup there waits for someone to
+  // unlock it.
+  locked?: boolean;
 }
 
 export function httpClient(ep: Endpoint): Client {
