@@ -54,6 +54,20 @@ downloads the files. To browse another listing, start the agent with
 [what the checksum proves](#what-the-checksum-proves) for what the agent
 checks, and what it can't.
 
+### From a release
+
+A plugin that isn't listed can come from its own release. **Install from
+URL…**, beside Reload, takes an `https://` link to a `.tar.gz` of the
+plugin's folder (one top folder named after its id, such as `chrome/`, with
+`berth-plugin.json` in it), and its SHA-256: give it, or leave it empty when
+the release publishes it beside the archive as `<url>.sha256`. The agent
+downloads it (following redirects only to `https://`), checks the
+checksum, unpacks it with no path or link leading out of the folder, and
+swaps it into `~/.berth/plugins/<id>/` in one step. Nothing is written when
+a check fails. A plugin already there is replaced only when you choose
+**Replace the installed one**, and like an update, new files are off until
+you allow them again.
+
 ## The smallest plugin
 
 ```tsx title="src/index.tsx"
