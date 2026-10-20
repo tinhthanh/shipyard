@@ -11,25 +11,38 @@ again.
 
 ## Unreleased
 
-- **A two-column sidebar, in Labs.** Turn it on in Settings › Labs and your
-  projects sit in one column, with the tasks of the one you pick in the
-  next. A project's row turns amber when something in it needs you and
-  blue while something works. The tasks column can be resized or folded
-  away, and opening a worktree shows its project.
-- **The sidebar is quieter.** Its text is one colour in a few strengths,
-  and colour means only two things: amber when an agent needs you, blue
-  while one works. A finished task gets a quiet check, an idle one no mark
-  at all, and times show only on tasks that are doing something.
-- **Boxes stay out of the way until they matter.** They no longer have rows
-  in the list: a project on a box that's away dims and says "offline", and
-  the line at the foot of the sidebar says which boxes are up. Its tooltip
-  has each box's load, which leaves the status bar. A box's actions are in
-  its projects' menus and in the foot's menu.
-- **Text is the same size for the same thing on every page.** Chats,
-  Settings, onboarding, Home, Review and the rest use one set of sizes, and
-  ⌘+ makes all of them bigger.
-- **A queued prompt that failed is amber in the status bar,** like anything
-  else that needs you, rather than red.
+- **Answers from the question card reach Claude Code, long ones too.**
+  When Claude asked several questions with lists in them, or you wrote a
+  long answer, the card's answers often stopped before the first one and
+  left Claude's own form untouched: an agent nobody has open has a screen
+  too short for the form. Now the box makes room while it answers, then
+  puts the screen back.
+
+- **Answers that don't go are kept.** If the box still can't fill in
+  Claude's form, the card keeps every answer and says why, with Retry and
+  Copy answers, and Claude's own screen opens under it to finish there.
+
+- **⌘-click a Markdown path in a terminal to read it here.** A `.md` file
+  of the worktree, such as one an agent names in its reply, opens in a File
+  tab as a page. ⌘⇧-click sends it to your editor, as ⌘-click does with
+  every other file.
+
+- **Pictures show in a Markdown file's Preview again.** Since v0.3.27 a
+  `.md` file's pictures, from the worktree or the web, didn't show.
+
+- **A new Claude chat opens in Claude Code's terminal before you've said
+  anything.** Switching one to its terminal used to flash "No conversation
+  found" and end the session. Now the terminal opens on the same
+  conversation, and the chat picks it up again when you switch back.
+
+- **No made-up question card.** An agent whose last message asks you
+  something still shows as **Needs you**, but its chat no longer adds a
+  "Needs your answer" card with Yes and No that it can't answer with (the
+  card took its title from Claude Code's footer, often "/rc"), and the
+  Agent Dashboard no longer offers a numbered plan in that message as
+  options to pick: answer it from the reply box. Options show only when
+  the agent's own screen offers them, and the mode menu works while such an
+  agent waits.
 - **A plugin packed on a Mac installs.** A Mac's `tar` adds hidden `._`
   files for extended attributes; a release archive with them was refused
   ("no plugin folder") and, inside an app, would have broken its signature.
@@ -52,27 +65,6 @@ again.
   one plan's numbers and the other's gone. Logins are now told apart by
   their organisation too, and two that share an email are named by their
   account ("thanh · thanh-20x").
-- **A helper that is back shows as back in a chat session.** In a chat
-  (structured) Claude session, a helper Claude left working in the
-  background stayed "working" in Crew, its time running on, after it had
-  come back: the stream says so in a line of its own that wasn't read. It
-  now shows back, its time stopped when it returned.
-- **A turn Claude starts by itself shows as working.** When a helper
-  (subagent) Claude left in the background came back, Claude went on in a
-  turn no prompt started, and the session showed as done while it worked:
-  no spinner and no Stop. That turn now shows as working until it ends.
-- **A helper's permission no longer gets lost.** When Claude Code started
-  helpers (subagents) in a chat session and they asked to run something
-  while Claude asked too, or after its turn ended, the app showed the newest
-  ask while Yes answered the oldest, moved on to "working" after one answer,
-  and dropped the helpers' asks when the turn ended: they waited forever.
-  Each ask now shows in turn, the one shown is the one you answer, and a
-  helper's ask stays until you answer it or the helper is stopped.
-- **Another Claude in the same folder no longer stalls a session.** A Claude
-  that Shipyard didn't start (in an editor, or a one-off `claude -p` a tool
-  runs) in a session's folder could mark the session's agent exited when it
-  quit; the session then showed as working for good and Stop did nothing.
-  Its events are now told apart by its own conversation.
 - **About says how this fork's app updates.** The fork's releases carry
   `berth` and `berthd` only, so the app's update check found nothing to read
   and showed "Couldn't check for updates". It now says the app updates by
@@ -111,6 +103,124 @@ again.
   look like one shown twice. A box with no projects yet is left out instead
   of listed as one it couldn't read, and in the Medium size that line now
   takes the week's place rather than being cut off.
+
+## v0.3.28
+
+- **Every worktree shows in the sidebar.** Worktrees with nothing going on
+  are no longer folded under "Show N older", so the sidebar's room goes to
+  your worktrees. The Active / All worktrees choice went with it. A
+  project still folds from its header, and a worktree's handed-off
+  children from their count.
+
+## v0.3.27
+
+Keeping main up to date and opening Codex edits need each box's new
+`berthd`: use **Update all** in the status bar, or `berth upgrade BOX`.
+
+- **Main stays up to date.** A new worktree from `main` starts from what
+  `origin` has now, not from whenever the box last pulled: the box fetches
+  `main` first and fast-forwards your local one, so the main checkout and
+  diffs against `main` are current too. It never moves past uncommitted
+  changes or commits of your own. Turn it off per project under **Main
+  branch** in Project settings.
+
+- **Markdown files open as a page.** A `.md` File tab shows the rendered
+  page, its source, or both side by side, from three buttons in its header.
+  Links to other files open them in a tab, and the worktree's pictures
+  show. Pictures from the web, such as a README's badges, now load in the
+  app.
+
+- **Codex edits open again.** In a chat with Codex, opening an edit's
+  **This change** (or a command's output) said "that step is no longer in
+  the conversation". It now shows the change. Edits by Claude keep their
+  line numbers too.
+
+## v0.3.26
+- **The sidebar is a rail of your projects.** Each project is a tile on a
+  narrow rail, with its GitHub owner's picture or a pattern made from its
+  name, and a dot that turns amber when an agent in it needs you and blue
+  while one works. Pick a tile to see that project's worktrees beside it,
+  with search and New task at the top. Review, Automations and your other
+  places sit at the top of the rail, and Settings at its foot. With one
+  project there's no rail. Settings › Appearance › Sidebar switches back
+  to the single list or the two columns.
+- **Everything lines up.** The app is laid out on one grid. The bar
+  across the top is one height on every screen (the sidebar's strip, the
+  tabs, Review and the other full pages), with the window's buttons and
+  everything else in it on one centre line. Every pane's toolbar is one
+  height too. In each sidebar layout, rows, their icons and labels, and
+  their right ends sit on the same lines, and each full page's content
+  starts right under its title. Full pages now title themselves in the top
+  bar, at the size of a window's title.
+- **Agents run in chat, with nothing to turn on.** New Claude Code, Codex,
+  OpenCode, Gemini CLI, Cursor Agent and oh-my-pi agents open as a
+  conversation that the box drives directly, whether Labs is on or off.
+  The *Structured agents* switch is gone from Settings → Labs, and
+  *Permissions* (Bypass or Ask) moved to Settings → Agents and models.
+  Agents that other agents, the CLI, runs and automations start run in chat
+  too, asking for each permission on a box Shipyard hasn't reached yet.
+  Claude Code's own terminal is still one click away in its pane, and a box
+  too old for chat keeps running agents in their terminals until you
+  upgrade it. [Agents in chat](/guides/structured-agents) has the details.
+- **Attempts on a repository GitHub doesn't host finish with your pick.**
+  On Gitea, Forgejo, GitLab or a folder, picking an attempt with a draft PR
+  turned on failed the run at `gh pr create` and left every worktree
+  behind. Shipyard now pushes the picked branch, says plainly that it
+  didn't open a pull request there (with the forge's own link to open one
+  when it prints it), archives the other attempts and finishes the run.
+- **A pull request that doesn't open no longer fails the run.** When `gh`
+  can't open the pick's pull request (a sign-in that ran out, say), the
+  run waits with your pick kept and nothing archived, and says it is
+  publishing that failed, not the agents' work. Review's Compare and
+  Automations → Runs offer **Retry publishing** or **Finish without a pull
+  request**; `berth run approve` and `berth run reject` do the same.
+- **A saved Compare tab no longer leaves the window empty.** Quitting with
+  a Compare tab open left the next launch, and every one after, on a dark
+  grey window with no sidebar, until the saved tab was removed by hand. It
+  now opens as it was. Saved tabs that can't be drawn are left out rather
+  than stopping the app, and a pane that breaks says so in its own place,
+  with a way out (its terminal, or closing the tab), while the sidebar and
+  your other tabs carry on.
+- **A helper that is back shows as back in a chat session.** In a chat
+  (structured) Claude session, a helper Claude left working in the
+  background stayed "working" in Crew, its time running on, after it had
+  come back: the stream says so in a line of its own that wasn't read. It
+  now shows back, its time stopped when it returned.
+- **A turn Claude starts by itself shows as working.** When a helper
+  (subagent) Claude left in the background came back, Claude went on in a
+  turn no prompt started, and the session showed as done while it worked:
+  no spinner and no Stop. That turn now shows as working until it ends.
+- **A helper's permission no longer gets lost.** When Claude Code started
+  helpers (subagents) in a chat session and they asked to run something
+  while Claude asked too, or after its turn ended, the app showed the newest
+  ask while Yes answered the oldest, moved on to "working" after one answer,
+  and dropped the helpers' asks when the turn ended: they waited forever.
+  Each ask now shows in turn, the one shown is the one you answer, and a
+  helper's ask stays until you answer it or the helper is stopped.
+- **Another Claude in the same folder no longer stalls a session.** A Claude
+  that Shipyard didn't start (in an editor, or a one-off `claude -p` a tool
+  runs) in a session's folder could mark the session's agent exited when it
+  quit; the session then showed as working for good and Stop did nothing.
+  Its events are now told apart by its own conversation.
+- **A two-column sidebar.** Pick it in Settings › Appearance › Sidebar and
+  your projects sit in one column, with the tasks of the one you pick in
+  the next. A project's row turns amber when something in it needs you and
+  blue while something works. The tasks column can be resized or folded
+  away, and opening a worktree shows its project.
+- **The sidebar is quieter.** Its text is one colour in a few strengths,
+  and colour means only two things: amber when an agent needs you, blue
+  while one works. A finished task gets a quiet check, an idle one no mark
+  at all, and times show only on tasks that are doing something.
+- **Boxes stay out of the way until they matter.** They no longer have rows
+  in the list: a project on a box that's away dims and says "offline", and
+  the line at the foot of the sidebar says which boxes are up. Its tooltip
+  has each box's load, which leaves the status bar. A box's actions are in
+  its projects' menus and in the foot's menu.
+- **Text is the same size for the same thing on every page.** Chats,
+  Settings, onboarding, Home, Review and the rest use one set of sizes, and
+  ⌘+ makes all of them bigger.
+- **A queued prompt that failed is amber in the status bar,** like anything
+  else that needs you, rather than red.
 
 ## v0.3.25
 

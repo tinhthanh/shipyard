@@ -6,6 +6,7 @@ import { Tip } from "@/components/tip";
 import { AgentIcon, StateGlyph } from "@/components/agent-glyph";
 import { FileGlyph } from "@/components/files/file-bits";
 import { EmptySide } from "@/components/workspace/compare-view";
+import { CrashProbe } from "@/components/workspace/pane-guard";
 import { CompareSideContext, type CompareSide, pageLoading } from "@/lib/compare-actions";
 import { openChatBackgroundSettings } from "@/components/conversation/chat-background";
 import { ConversationPane } from "@/components/conversation/conversation-pane";
@@ -118,7 +119,7 @@ export function Pane({ wsKey, tab, pane, visible, focused, split, mixed, compare
           // the pane's worktree, and the focus line is in that one's colour.
           <div
             onPointerDown={(e) => armDrag(e, { kind: "pane", key: wsKey, tab, pane: pane.id }, (c.kind === "terminal" && (session?.title?.trim() || c.title)) || paneLabel(c, agent), <PaneIcon content={c} agent={agent} className="size-3" />)}
-            className={cn("group/header flex h-7 shrink-0 items-center gap-1.5 border-b px-2 text-meta", focused ? "bg-accent/50 text-foreground shadow-[inset_0_2px_0_var(--ring)]" : "text-muted-foreground")}
+            className={cn("group/header flex h-bar-pane shrink-0 items-center gap-1.5 border-b px-edge text-meta", focused ? "bg-accent/50 text-foreground shadow-[inset_0_2px_0_var(--ring)]" : "text-muted-foreground")}
             style={tone ? { boxShadow: focused ? `inset 0 2px 0 ${tone}` : `inset 0 1px 0 color-mix(in oklab, ${tone} 50%, transparent)` } : undefined}
           >
             {tone && <WtChip wsKey={owner} />}
@@ -143,6 +144,7 @@ export function Pane({ wsKey, tab, pane, visible, focused, split, mixed, compare
           {/* The terminal stays connected underneath, so switching back is instant. */}
           {c.kind === "terminal" && view === "conversation" && (
             <div className="absolute inset-0 z-10 flex flex-col">
+              <CrashProbe session={c.session} />
               <ConversationPane box={c.box} session={c.session} agent={c.agent} visible={visible} onStartAgain={() =>
                   useStore.getState().boxes[c.box]?.sessions?.find((x) => x.name === c.session)?.switch
                     ? void resumeSession(c.box, c.session)
@@ -221,8 +223,11 @@ function GonePane({ name, onClose }: { name: string; onClose(): void }) {
   );
 }
 
-// usePaneView is how an agent's pane shows: its terminal, or (Labs) its
-// conversation. Shells and other panes are always what they are.
+// usePaneView is how an agent's pane shows: its terminal, or its
+// conversation. An agent in chat (structured) is its conversation, Labs or
+// not, and a Claude moved to its own terminal keeps the switch back; for an
+// agent that runs in its terminal the Terminal | Conversation switch is
+// Labs. Shells and other panes are always what they are.
 export function usePaneView(pane: Leaf): "terminal" | "conversation" | undefined {
   const c = pane.content;
   const labs = usePrefs((p) => p.labs);
@@ -239,8 +244,11 @@ export function usePaneView(pane: Leaf): "terminal" | "conversation" | undefined
   // whatever the pane last showed. Claude Code's terminal is a move
   // (showTerminal), after which the session isn't structured.
   const structured = useStore((st) => c.kind === "terminal" && isStructured(st.boxes[c.box]?.sessions?.find((x) => x.name === c.session)?.driver));
-  if (c.kind !== "terminal" || !labs || !runsAgent) return undefined;
-  return structured ? "conversation" : (c.view ?? fallback);
+  const backToChat = useStore((st) => c.kind === "terminal" && st.boxes[c.box]?.sessions?.find((x) => x.name === c.session)?.switch === "chat");
+  if (c.kind !== "terminal" || !runsAgent) return undefined;
+  if (structured) return "conversation";
+  if (!labs) return backToChat ? "terminal" : undefined;
+  return c.view ?? fallback;
 }
 
 // showTerminal turns an agent's pane to its terminal. A structured Claude
