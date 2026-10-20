@@ -655,7 +655,9 @@ function Permission({ it, onAnswer, who }: { it: Extract<TranscriptItem, { kind:
 
 function Ask({ it, onAnswer }: { it: Extract<TranscriptItem, { kind: "ask" }>; onAnswer(id: string, key: string): void }) {
   const question = it.tool === "Question";
-  const choices = it.choices?.length ? it.choices : question ? [{ key: "yes", label: "Yes" }, { key: "no", label: "No" }] : [{ key: "yes", label: "Allow" }, { key: "no", label: "Deny" }];
+  // A question's options are the ones its screen shows: none read is none
+  // made up, since a "Yes" would type the word into whatever it shows.
+  const choices = it.choices?.length ? it.choices : question ? [] : [{ key: "yes", label: "Allow" }, { key: "no", label: "Deny" }];
   if (it.decided) {
     const c = choices.find((x) => x.key === it.decided);
     const no = it.decided === "no";
@@ -788,6 +790,7 @@ function Tools({ it, edits }: { it: Extract<TranscriptItem, { kind: "tools" }>; 
       </button>
       <div className="cv-fold" data-closed={open ? undefined : ""}>
         <div>
+          {/* grid-ok: the guide hangs under the tool icon's middle */}
           <ul className="pt-1 pl-[7px]">
             {(it.items ?? []).map((c, i, all) => (
               <ToolRow key={c.id ?? i} c={c} last={i === all.length - 1} Icon={Icon} edits={edits} />
