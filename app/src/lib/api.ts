@@ -557,6 +557,12 @@ export const laptopApi = {
   pluginBoxes: (c: Client, id: string) => c.laptop<PluginBoxes>("GET", `/v1/plugins/${encodeURIComponent(id)}/boxes`),
   installPluginOnBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
   removePluginFromBox: (c: Client, id: string, box: string) => c.laptop<PluginOnBox>("DELETE", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}`),
+  // A plugin's settings on one box: that box's own (which of its Chrome
+  // profiles its agents may use).
+  pluginSettingsOnBox: (c: Client, id: string, box: string) =>
+    c.laptop<PluginSettingsState>("GET", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/settings`),
+  setPluginSettingOnBox: (c: Client, id: string, box: string, key: string, value: boolean) =>
+    c.laptop<PluginSettingsState>("PUT", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/settings`, { key, value }),
   startPluginSetupOnBox: (c: Client, id: string, box: string) => c.laptop<{ started: boolean; locked?: boolean }>("POST", `/v1/plugins/${encodeURIComponent(id)}/boxes/${encodeURIComponent(box)}/setup`),
   // Where a plugin's helper is, to say before turning the plugin off.
   pluginHelpers: (c: Client, id: string) => c.laptop<PluginHelpers>("GET", `/v1/plugins/${encodeURIComponent(id)}/helpers`),

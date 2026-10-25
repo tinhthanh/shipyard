@@ -2,6 +2,7 @@ package box
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -38,6 +39,8 @@ import (
 //	DELETE /v1/plugins/{id}         remove one
 //	GET    /v1/plugins/{id}/setup   its setup's state on the box
 //	POST   /v1/plugins/{id}/setup   start its setup on the box's screen
+//	GET    /v1/plugins/{id}/settings   its settings' switches on the box
+//	PUT    /v1/plugins/{id}/settings   turn one on or off (a paired laptop's)
 
 // PluginHashHeader carries the hash of the plugin the person allowed
 // (hooks.PluginHash) with an upload.
@@ -330,6 +333,8 @@ func (b *Box) mountPlugins(route func(string, func(http.ResponseWriter, *http.Re
 	route("DELETE /v1/plugins/{id}", b.deleteBoxPlugin)
 	route("GET /v1/plugins/{id}/setup", b.boxPluginSetup)
 	route("POST /v1/plugins/{id}/setup", b.startBoxPluginSetup)
+	route("GET /v1/plugins/{id}/settings", b.boxPluginSettings)
+	route("PUT /v1/plugins/{id}/settings", b.setBoxPluginSetting)
 }
 
 // MountPlugins registers the plugin routes alone on s, for a laptop agent's
@@ -441,6 +446,72 @@ func (b *Box) startBoxPluginSetup(w http.ResponseWriter, r *http.Request) error 
 	return nil
 }
 
+// BoxPluginSettings is a plugin's settings on a box: the switches it lists
+// for its tools there (which Chrome profiles the box's agents may use).
+type BoxPluginSettings struct {
+	Label    string                       `json:"label,omitempty"`
+	Settings []integrations.PluginSetting `json:"settings"`
+}
+
+func (b *Box) boxPluginSettings(w http.ResponseWriter, r *http.Request) error {
+	id := r.PathValue("id")
+	p, err := b.boxPlugins(id)
+	if err != nil {
+		return err
+	}
+	return writeBoxPluginSettings(w, r, p.Dir, id)
+}
+
+// setBoxPluginSetting changes one of a plugin's settings on the box. Like
+// putting the plugin there, it is a paired laptop's to do: an agent on the
+// box must not turn on, say, a Chrome profile with the person's sign-ins.
+func (b *Box) setBoxPluginSetting(w http.ResponseWriter, r *http.Request) error {
+	id := r.PathValue("id")
+	p, err := b.boxPlugins(id)
+	if err != nil {
+		return err
+	}
+	if wire.IsLocal(r.Context()) {
+		return helperProblem(http.StatusForbidden, CodeRefused, "a plugin's settings on a box are changed from a paired laptop")
+	}
+	var req struct {
+		Key   string `json:"key"`
+		Value *bool  `json:"value"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&req); err != nil || req.Key == "" || req.Value == nil {
+		return helperProblem(http.StatusBadRequest, "setting_invalid", "send a key and a value")
+	}
+	if err := integrations.SetPluginSetting(r.Context(), p.Dir, id, req.Key, *req.Value); err != nil {
+		return settingsProblem(err)
+	}
+	b.publish(r, "plugin.settings", map[string]any{"plugin": id, "key": req.Key, "value": *req.Value})
+	return writeBoxPluginSettings(w, r, p.Dir, id)
+}
+
+func writeBoxPluginSettings(w http.ResponseWriter, r *http.Request, dir, id string) error {
+	def, list, err := integrations.ListPluginSettings(r.Context(), dir, id)
+	if err != nil {
+		return settingsProblem(err)
+	}
+	if list == nil {
+		list = []integrations.PluginSetting{}
+	}
+	writeJSON(w, BoxPluginSettings{Label: def.Label, Settings: list})
+	return nil
+}
+
+func settingsProblem(err error) error {
+	switch {
+	case errors.Is(err, integrations.ErrPluginOff), errors.Is(err, os.ErrNotExist):
+		return helperProblem(http.StatusConflict, "plugin_off", "the plugin is not on this box")
+	case errors.Is(err, integrations.ErrNoSettings):
+		return helperProblem(http.StatusConflict, "plugin_no_settings", "the plugin has no settings")
+	case strings.HasPrefix(err.Error(), "the plugin has no setting"):
+		return helperProblem(http.StatusBadRequest, "setting_invalid", "%s", err.Error())
+	}
+	return err
+}
+
 func setupProblem(err error) error {
 	switch {
 	case errors.Is(err, integrations.ErrPluginOff):
@@ -485,4 +556,19 @@ type PluginSetupStarted struct {
 // StartBoxPluginSetup opens a plugin's setup on the box's screen.
 func (c *Client) StartBoxPluginSetup(ctx context.Context, id string) (out PluginSetupStarted, err error) {
 	return out, c.helperCall(ctx, http.MethodPost, "/v1/plugins/"+id+"/setup", nil, nil, &out)
+}
+
+// BoxPluginSettings lists a plugin's settings on the box.
+func (c *Client) BoxPluginSettings(ctx context.Context, id string) (out BoxPluginSettings, err error) {
+	return out, c.helperCall(ctx, http.MethodGet, "/v1/plugins/"+id+"/settings", nil, nil, &out)
+}
+
+// SetBoxPluginSetting turns one of a plugin's settings on the box on or off.
+func (c *Client) SetBoxPluginSetting(ctx context.Context, id, key string, value bool) (out BoxPluginSettings, err error) {
+	body, err := json.Marshal(map[string]any{"key": key, "value": value})
+	if err != nil {
+		return out, err
+	}
+	header := http.Header{"Content-Type": {"application/json"}}
+	return out, c.helperCall(ctx, http.MethodPut, "/v1/plugins/"+id+"/settings", header, bytes.NewReader(body), &out)
 }

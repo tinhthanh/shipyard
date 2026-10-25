@@ -327,8 +327,15 @@ When you allow a new version here, the box keeps the old one until you
 on box…** opens it on that box's screen, for whoever is at it, or reaching
 it by remote desktop, to finish (macOS permissions can't be given from
 another computer). A box on this computer doesn't show: its agents have
-this computer's plugins already. Settings stay each box's own; the box
-starts from the plugin's defaults.
+this computer's plugins already.
+
+[Settings](#settings) stay each box's own, and a box starts from the
+plugin's defaults: which Chrome profiles agents may use differs from one
+computer to the next. **Settings** on a box's row opens that box's
+switches, read from the plugin on the box and kept in the box's
+`~/.berth/plugin-settings/<id>.json`. As on this computer, a switch with a
+warning asks first. Only a paired laptop can change them; an agent on the
+box can read them but not turn one on for itself.
 
 Turning a plugin off here, or uninstalling it, takes it off the boxes you
 put it on: at once from those online, and from the others when they next
