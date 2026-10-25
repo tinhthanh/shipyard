@@ -34,6 +34,8 @@ import (
 //	POST   /v1/plugins/{id}/boxes/{box}        put it on the box, or update it there
 //	DELETE /v1/plugins/{id}/boxes/{box}        take it off the box
 //	POST   /v1/plugins/{id}/boxes/{box}/setup  start its setup on the box's screen
+//	GET    /v1/plugins/{id}/boxes/{box}/settings  its settings on the box
+//	PUT    /v1/plugins/{id}/boxes/{box}/settings  turn one on or off there
 
 // PluginOnBox is one box's row for a plugin.
 type PluginOnBox struct {
@@ -255,6 +257,26 @@ func (a *Agent) startPluginSetupOnBox(ctx context.Context, id, name string) (box
 	return out, nil
 }
 
+// pluginSettingsOnBox lists a plugin's settings on a box, or with key set,
+// turns that one on or off there first. A box's settings are its own: which
+// Chrome profiles agents may use differs from one computer to the next.
+func (a *Agent) pluginSettingsOnBox(ctx context.Context, id, name, key string, value *bool) (box.BoxPluginSettings, error) {
+	bc, err := a.helperBox(name)
+	if err != nil {
+		return box.BoxPluginSettings{}, err
+	}
+	var out box.BoxPluginSettings
+	if value != nil {
+		out, err = bc.SetBoxPluginSetting(ctx, id, key, *value)
+	} else {
+		out, err = bc.BoxPluginSettings(ctx, id)
+	}
+	if err != nil {
+		return box.BoxPluginSettings{}, a.boxProblem(err)
+	}
+	return out, nil
+}
+
 // packPlugin writes the plugin's folder as a tar.gz: its files with their
 // modes and its links, but not "disabled" (that is the laptop's switch) or
 // Finder's litter.
@@ -383,6 +405,45 @@ func (a *Agent) boxPluginRoutes(mux *http.ServeMux) {
 			return
 		}
 		out.Started = true
+		writeJSON(w, http.StatusOK, out)
+	})
+	mux.HandleFunc("GET /v1/plugins/{id}/boxes/{box}/settings", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := plugin(w, r)
+		if !ok {
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		out, err := a.pluginSettingsOnBox(ctx, id, r.PathValue("box"), "", nil)
+		if err != nil {
+			writeMarketError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
+	mux.HandleFunc("PUT /v1/plugins/{id}/boxes/{box}/settings", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := plugin(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			Key   string `json:"key"`
+			Value *bool  `json:"value"`
+		}
+		if !decodeBody(w, r, &req) {
+			return
+		}
+		if req.Key == "" || req.Value == nil {
+			writeError(w, http.StatusBadRequest, "send a key and a value")
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		out, err := a.pluginSettingsOnBox(ctx, id, r.PathValue("box"), req.Key, req.Value)
+		if err != nil {
+			writeMarketError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, out)
 	})
 }

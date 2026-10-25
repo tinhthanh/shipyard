@@ -1,5 +1,5 @@
 import { RefreshCwIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { ErrorText } from "@/components/error-note";
 import { Tip } from "@/components/tip";
@@ -523,6 +523,8 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
   const [state, setState] = useState<PluginBoxes>();
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
+  // The box whose settings are open under its row.
+  const [settingsOf, setSettingsOf] = useState<string>();
   const load = useCallback(async () => {
     const client = useStore.getState().client;
     if (!client) return;
@@ -607,26 +609,34 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
       {state.boxes.map((row) => {
         const v = boxRowView(row);
         return (
-          <div key={row.box} className="flex items-center gap-2 text-meta" data-testid={`plugin-box-${row.box}`}>
-            <Switch
-              checked={v.on}
-              disabled={!v.canToggle || !!busy || (!state.enabled && !v.on)}
-              aria-label={`${p.name} on ${row.box}`}
-              onCheckedChange={(on) => void act(row, on ? "install" : "remove")}
-            />
-            <span className="font-medium">{row.box}</span>
-            <span className={cn("min-w-0 flex-1 truncate", v.tone === "success" ? "text-success-foreground" : v.tone === "warning" ? "text-warning-foreground" : v.tone === "error" ? "text-destructive-foreground" : "text-muted-foreground")}>{v.note}</span>
-            {v.action === "update" && (
-              <Button size="xs" variant="outline" loading={busy === `${row.box}:install`} disabled={!!busy || !state.enabled} onClick={() => void act(row, "install")}>
-                Update
-              </Button>
-            )}
-            {v.action === "setup" && (
-              <Button size="xs" variant="outline" loading={busy === `${row.box}:setup`} disabled={!!busy} onClick={() => void act(row, "setup")}>
-                Set up on box…
-              </Button>
-            )}
-          </div>
+          <Fragment key={row.box}>
+            <div className="flex items-center gap-2 text-meta" data-testid={`plugin-box-${row.box}`}>
+              <Switch
+                checked={v.on}
+                disabled={!v.canToggle || !!busy || (!state.enabled && !v.on)}
+                aria-label={`${p.name} on ${row.box}`}
+                onCheckedChange={(on) => void act(row, on ? "install" : "remove")}
+              />
+              <span className="font-medium">{row.box}</span>
+              <span className={cn("min-w-0 flex-1 truncate", v.tone === "success" ? "text-success-foreground" : v.tone === "warning" ? "text-warning-foreground" : v.tone === "error" ? "text-destructive-foreground" : "text-muted-foreground")}>{v.note}</span>
+              {v.action === "update" && (
+                <Button size="xs" variant="outline" loading={busy === `${row.box}:install`} disabled={!!busy || !state.enabled} onClick={() => void act(row, "install")}>
+                  Update
+                </Button>
+              )}
+              {v.action === "setup" && (
+                <Button size="xs" variant="outline" loading={busy === `${row.box}:setup`} disabled={!!busy} onClick={() => void act(row, "setup")}>
+                  Set up on box…
+                </Button>
+              )}
+              {v.on && p.settings && (
+                <Button size="xs" variant="ghost" aria-expanded={settingsOf === row.box} onClick={() => setSettingsOf(settingsOf === row.box ? undefined : row.box)} data-testid={`plugin-box-settings-toggle-${row.box}`}>
+                  Settings
+                </Button>
+              )}
+            </div>
+            {v.on && p.settings && settingsOf === row.box && <PluginSettingsRows plugin={p} box={row.box} />}
+          </Fragment>
         );
       })}
       {error && <ErrorText className="text-destructive-foreground text-meta" text={error} />}
@@ -634,10 +644,17 @@ function PluginBoxesRows({ plugin: p }: { plugin: PluginInfo }) {
   );
 }
 
+// oldBoxError says a box's Shipyard is too old to have a plugin's settings
+// there (it doesn't know the route), instead of a bare "not found".
+function oldBoxError(err: unknown, box: string | undefined): string | undefined {
+  if (box && err instanceof ApiError && err.status === 404) return `Update Shipyard on ${box} to change its settings here.`;
+  return undefined;
+}
+
 // PluginSettingsRows lists the switches a plugin offers for its tools, such
-// as which Chrome profiles agents may use. Turning on one that carries a
-// warning asks first.
-function PluginSettingsRows({ plugin: p, onChanged }: { plugin: PluginInfo; onChanged(): void }) {
+// as which Chrome profiles agents may use: this computer's, or with box set,
+// that box's own. Turning on one that carries a warning asks first.
+function PluginSettingsRows({ plugin: p, box, onChanged }: { plugin: PluginInfo; box?: string; onChanged?(): void }) {
   const [state, setState] = useState<PluginSettingsState>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
@@ -646,12 +663,12 @@ function PluginSettingsRows({ plugin: p, onChanged }: { plugin: PluginInfo; onCh
     const client = useStore.getState().client;
     if (!client) return;
     try {
-      setState(await laptopApi.pluginSettings(client, p.id));
+      setState(box ? await laptopApi.pluginSettingsOnBox(client, p.id, box) : await laptopApi.pluginSettings(client, p.id));
       setError(undefined);
     } catch (err) {
-      setError(plainError(err));
+      setError(oldBoxError(err, box) ?? plainError(err));
     }
-  }, [p.id]);
+  }, [p.id, box]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -660,23 +677,26 @@ function PluginSettingsRows({ plugin: p, onChanged }: { plugin: PluginInfo; onCh
     if (!client) return;
     setBusy(s.key);
     try {
-      setState(await laptopApi.setPluginSetting(client, p.id, s.key, value));
+      setState(box ? await laptopApi.setPluginSettingOnBox(client, p.id, box, s.key, value) : await laptopApi.setPluginSetting(client, p.id, s.key, value));
       setError(undefined);
       // Something just turned on may need its one-time step (the Chrome
       // plugin opens the steps in a profile that lacks its extension).
-      if (value && p.setup) await laptopApi.startPluginSetup(client, p.id);
-      onChanged();
+      if (value && p.setup && !box) await laptopApi.startPluginSetup(client, p.id);
+      onChanged?.();
     } catch (err) {
-      setError(plainError(err));
+      setError(oldBoxError(err, box) ?? plainError(err));
     } finally {
       setBusy(undefined);
     }
   };
   if (!state && !error) return null;
   return (
-    <div className="mt-2 rounded-md border">
+    <div className={cn("rounded-md border", box ? "mt-1 mb-1 ml-9" : "mt-2")} data-testid={box ? `plugin-box-settings-${box}` : undefined}>
       <div className="flex items-center gap-2 border-b px-3 py-1.5 text-muted-foreground text-meta">
-        <span className="flex-1">{state?.label || p.settings?.label || "Settings"}</span>
+        <span className="flex-1">
+          {state?.label || p.settings?.label || "Settings"}
+          {box && ` on ${box}`}
+        </span>
         <Button size="xs" variant="ghost" aria-label="Check again" onClick={() => void load()}>
           <RefreshCwIcon />
         </Button>
@@ -703,7 +723,7 @@ function PluginSettingsRows({ plugin: p, onChanged }: { plugin: PluginInfo; onCh
       <ConfirmDialog
         open={!!confirming}
         onOpenChange={(open) => !open && setConfirming(undefined)}
-        title={`Turn on ${confirming?.label ?? ""}?`}
+        title={`Turn on ${confirming?.label ?? ""}${box ? ` on ${box}` : ""}?`}
         description={confirming?.warning ?? ""}
         confirm="Turn on"
         destructive

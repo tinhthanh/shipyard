@@ -261,3 +261,30 @@ func TestAMacsMetadataInAnArchiveIsLeftOut(t *testing.T) {
 		t.Fatalf("unpacked %v", got)
 	}
 }
+
+// A plugin's settings on a box can be read there, but only a paired laptop
+// changes them: an agent on the box must not turn on a Chrome profile with
+// the person's sign-ins for itself.
+func TestOnlyAPairedLaptopChangesAPluginsSettingsOnABox(t *testing.T) {
+	p := testBoxPlugins(t)
+	bx := &Box{Name: "devbox", Locations: NewLocations(filepath.Join(t.TempDir(), "locations.json")), Events: &events.Bus{}, Plugins: p}
+	local := localBox(t, bx)
+	ctx := context.Background()
+	server := []byte("#!/bin/sh\necho '{\"settings\":[{\"key\":\"profile:work\",\"label\":\"Work\",\"value\":false}]}'\n")
+	tp := newTestPlugin("1.0.0", server)
+	tp.files[hooks.PluginManifest] = []byte(`{"name":"Acme tools","version":"1.0.0","mcp":{"acme":{"command":"bin/acme-mcp","args":["mcp"],"sha256":"` + sum(server) + `"}},"settings":{"server":"acme","list":["settings"],"label":"Profiles"}}`)
+	if _, err := p.install("acme", tp.hash(t), tp.archive(t)); err != nil {
+		t.Fatal(err)
+	}
+	s, err := local.BoxPluginSettings(ctx, "acme")
+	if err != nil || s.Label != "Profiles" || len(s.Settings) != 1 {
+		t.Fatalf("reading them on the box: %+v %v", s, err)
+	}
+	var he *HelperError
+	if _, err := local.SetBoxPluginSetting(ctx, "acme", "profile:work", true); !errors.As(err, &he) || he.Status != 403 {
+		t.Fatalf("a change from the box itself: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(p.Dir), "plugin-settings", "acme.json")); !os.IsNotExist(err) {
+		t.Fatalf("the refused change was written: %v", err)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,4 +256,50 @@ func TestABoxFoundHoldingThePluginIsNoted(t *testing.T) {
 		t.Fatalf("disable: %d %s", resp.StatusCode, body)
 	}
 	eventually(t, "acme off the box", func() bool { return !r.onBox() })
+}
+
+// A plugin's settings on a box are the box's own: the app reads and changes
+// them through the agent, and they are kept beside the box's plugins folder,
+// where the plugin's tools on that box read them.
+func TestAPluginsSettingsOnABoxAreTheBoxsOwn(t *testing.T) {
+	r := newPluginsRig(t)
+	bin := "#!/bin/sh\nv=false\ngrep -q '\"profile:work\": true' \"$BERTH_PLUGIN_SETTINGS\" 2>/dev/null && v=true\necho '{\"settings\":[{\"key\":\"profile:work\",\"label\":\"Work\",\"value\":'$v'}]}'\n"
+	dir := filepath.Join(r.agent.dir, "user", "plugins", "acme")
+	write(t, filepath.Join(dir, "bin", "acme"), bin)
+	os.Chmod(filepath.Join(dir, "bin", "acme"), 0o755)
+	write(t, filepath.Join(dir, hooks.PluginManifest), `{"name":"Acme","version":"1.0.0","mcp":{"acme":{"command":"bin/acme","args":["mcp"],"sha256":"`+sum(bin)+`"}},"settings":{"server":"acme","list":["settings"],"label":"Profiles"}}`)
+	allowPlugin(t, dir)
+
+	if resp, body := uiCall(t, r.agent, "GET", "/v1/plugins/acme/boxes/devbox/settings", r.token); resp.StatusCode != 409 {
+		t.Fatalf("settings of a plugin not on the box: %d %s", resp.StatusCode, body)
+	}
+	if resp, body := uiCall(t, r.agent, "POST", "/v1/plugins/acme/boxes/devbox", r.token); resp.StatusCode != 200 {
+		t.Fatalf("install: %d %s", resp.StatusCode, body)
+	}
+	settings := func(method, body string) box.BoxPluginSettings {
+		t.Helper()
+		resp, out := uiSend(t, r.agent, method, "/v1/plugins/acme/boxes/devbox/settings", r.token, body)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%s settings: %d %s", method, resp.StatusCode, out)
+		}
+		var s box.BoxPluginSettings
+		json.Unmarshal([]byte(out), &s)
+		return s
+	}
+	if s := settings("GET", ""); s.Label != "Profiles" || len(s.Settings) != 1 || s.Settings[0].Value {
+		t.Fatalf("before: %+v", s)
+	}
+	if s := settings("PUT", `{"key":"profile:work","value":true}`); len(s.Settings) != 1 || !s.Settings[0].Value {
+		t.Fatalf("after turning it on: %+v", s)
+	}
+	b, err := os.ReadFile(filepath.Join(filepath.Dir(r.boxDir), "plugin-settings", "acme.json"))
+	if err != nil || !strings.Contains(string(b), `"profile:work": true`) {
+		t.Fatalf("the box's settings file: %s %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(r.agent.dir, "user", "plugin-settings", "acme.json")); !os.IsNotExist(err) {
+		t.Fatalf("a box's setting must not change this computer's: %v", err)
+	}
+	if resp, body := uiSend(t, r.agent, "PUT", "/v1/plugins/acme/boxes/devbox/settings", r.token, `{"key":"profile:home","value":true}`); resp.StatusCode != 400 {
+		t.Fatalf("a setting the plugin doesn't list: %d %s", resp.StatusCode, body)
+	}
 }
