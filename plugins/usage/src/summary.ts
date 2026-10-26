@@ -12,7 +12,7 @@ export interface UsageSummary {
   cost: number;
   byAgent: { agent: Agent; tokens: number }[];
   limits: { label: string; used: number; resets: number }[];
-  // Logins that need signing in again, by name: "thanh-20x (thanh.huynh@acme.test)".
+  // Logins that need signing in again, by name: "ana-max (ana@acme.test)".
   signedOut: string[];
   failed: string[];
 }
@@ -51,7 +51,7 @@ interface OpenWindow {
   login: string;
   // What it goes by: its email, or the account name.
   email: string;
-  // The account folder it was read from ("default", "thanh-20x").
+  // The account folder it was read from ("default", "ana-max").
   account: string;
   // "Acme · Claude Team": whose organisation, on which plan.
   who: string;

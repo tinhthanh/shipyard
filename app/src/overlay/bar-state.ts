@@ -16,7 +16,7 @@ export interface BarAgent {
 export interface BarState {
   usage: boolean;
   logins: LoginLimits[];
-  // Logins Claude Code lost on a box: "thanh-20x (thanh.huynh@acme.test)".
+  // Logins Claude Code lost on a box: "ana-max (ana@acme.test)".
   signedOut: string[];
   waiting: BarAgent[];
   working: BarAgent[];

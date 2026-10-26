@@ -370,8 +370,8 @@ class ClaudeAccountTest(unittest.TestCase):
             d = pathlib.Path(tmp) / "max"
             d.mkdir()
             (d / ".claude.json").write_text(json.dumps({"oauthAccount": {
-                "emailAddress": "thanh@acme.test", "organizationUuid": "org-max",
-                "organizationName": "Thanh's Organization", "organizationRateLimitTier": "default_claude_max_20x"}}))
+                "emailAddress": "ana@acme.test", "organizationUuid": "org-max",
+                "organizationName": "Ana's Organization", "organizationRateLimitTier": "default_claude_max_20x"}}))
             a = usage.claude_account("max", d)
             self.assertEqual((a["email"], a["org"], a["org_id"], a["tier"]),
-                             ("thanh@acme.test", "Thanh's Organization", "org-max", "default_claude_max_20x"))
+                             ("ana@acme.test", "Ana's Organization", "org-max", "default_claude_max_20x"))

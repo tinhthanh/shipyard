@@ -57,7 +57,7 @@ struct Agent: Decodable, Equatable, Identifiable, Sendable {
 struct BarState: Decodable, Equatable, Sendable {
     var usage: Bool = false
     var logins: [Login] = []
-    // Logins Claude Code lost on a box, to sign in again: "thanh-20x (thanh.huynh@acme.test)".
+    // Logins Claude Code lost on a box, to sign in again: "ana-max (ana@acme.test)".
     var signedOut: [String] = []
     var waiting: [Agent] = []
     var working: [Agent] = []
