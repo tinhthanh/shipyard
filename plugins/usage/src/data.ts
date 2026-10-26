@@ -159,6 +159,11 @@ export function ago(iso: string | null): string {
 export function plan(a: Account | undefined): { label: string; subscription: boolean } | undefined {
   if (!a) return undefined;
   if (a.agent === "claude") {
+    // A team or enterprise seat records a Max-like tier of its own
+    // (default_claude_max_5x): its organization says what the plan is.
+    if (a.org_type === "claude_team" || a.org_type === "claude_enterprise") {
+      return { label: a.org_type === "claude_team" ? "Claude Team" : "Claude Enterprise", subscription: true };
+    }
     const t = (a.tier ?? "").toLowerCase();
     const max = /max_(\d+)x/.exec(t);
     const label = max ? `Claude Max ${max[1]}x` : t.includes("pro") ? "Claude Pro" : a.billing === "stripe_subscription" ? "Claude subscription" : a.billing ? a.billing.replace(/_/g, " ") : "Claude";

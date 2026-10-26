@@ -104,6 +104,9 @@ def claude_account(name, d):
         "email": o.get("emailAddress"), "name": o.get("displayName"),
         "org": o.get("organizationName"), "org_id": o.get("organizationUuid"),
         "billing": o.get("billingType"), "tier": tier or None,
+        # claude_team, claude_enterprise, claude_max, claude_pro: a team seat
+        # records a Max-like tier of its own, so the tier alone misnames it.
+        "org_type": o.get("organizationType"),
     }
 
 
