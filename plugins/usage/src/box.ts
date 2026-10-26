@@ -24,6 +24,16 @@ export interface Report {
   daily: [string, Agent, string, string, string, number, number, number, number][];
   sessions: UsageSession[];
   limits: Limits[];
+  // Logins whose profile is on the box but whose login Claude Code lost:
+  // they need signing in again (older boxes don't say).
+  signed_out?: SignedOut[];
+}
+
+export interface SignedOut {
+  agent: Agent;
+  account: string;
+  email: string | null;
+  org: string | null;
 }
 
 export type Agent = "claude" | "codex";
@@ -71,6 +81,8 @@ export interface Account {
   dir: string;
   exists: boolean;
   signed_in: boolean;
+  // Its profile is here but Claude Code lost the login: sign in again.
+  signed_out?: boolean;
   email?: string | null;
   name?: string | null;
   org?: string | null;

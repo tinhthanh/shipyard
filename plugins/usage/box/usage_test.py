@@ -147,6 +147,14 @@ def flag(n):
     return os.path.exists(os.path.join(home, n))
 if flag("fail"):
     sys.exit(1)
+if sys.argv[1:3] == ["auth", "status"]:
+    # signedout: the profile is kept but the login is gone; oldclaude: a
+    # Claude Code without the command, which says nothing readable.
+    if flag("oldclaude"):
+        print("error: unknown command 'auth'")
+        sys.exit(1)
+    print('{"loggedIn": %s, "authMethod": "claude.ai"}' % ("false" if flag("signedout") else "true"))
+    sys.exit(1 if flag("signedout") else 0)
 if flag("apikey"):
     print("Usage is only available for subscription plans.")
     sys.exit(0)
@@ -207,8 +215,8 @@ class ClaudeLimitsTest(unittest.TestCase):
                 os.environ[k] = v
         self.tmp.cleanup()
 
-    def runs(self):
-        return self.log.read_text().splitlines() if self.log.exists() else []
+    def runs(self, what="/usage"):
+        return [r for r in (self.log.read_text().splitlines() if self.log.exists() else []) if what in r]
 
     def by_account(self):
         return {l["account"]: l for l in usage.claude_limits()}
@@ -273,6 +281,39 @@ class ClaudeLimitsTest(unittest.TestCase):
             self.assertFalse(alive, f"{d.name}'s child {pid} is still running")
         if not started:
             self.skipTest("neither stand-in started its child in time on this machine")
+
+    def test_a_login_claude_code_lost_is_signed_out_and_its_limits_go(self):
+        import json
+        self.assertIn("work", self.by_account())
+        # Claude Code drops the credentials and keeps the profile.
+        (self.work / "signedout").touch()
+        usage.CLAUDE_LIMITS_TTL = 0
+        asked = len([r for r in self.runs() if r.startswith(str(self.work))])
+        self.assertEqual(sorted(self.by_account()), ["default"])
+        self.assertNotIn("work", json.loads(usage.CLAUDE_LIMITS_CACHE.read_text()))
+        self.assertEqual(len([r for r in self.runs() if r.startswith(str(self.work))]), asked, "a signed-out login's /usage is not asked")
+        self.assertEqual(usage.claude_signed_out(), ["work"])
+        rows = {a["id"]: a for a in usage.accounts()["accounts"] if a["agent"] == "claude"}
+        self.assertFalse(rows["work"]["signed_in"])
+        self.assertTrue(rows["work"]["signed_out"])
+        self.assertEqual(rows["work"]["email"], "b@acme.test")
+        self.assertTrue(rows["default"]["signed_in"])
+        # Signed in again: read again.
+        (self.work / "signedout").unlink()
+        self.assertEqual(sorted(self.by_account()), ["default", "work"])
+        self.assertEqual(usage.claude_signed_out(), [])
+
+    def test_a_claude_code_without_auth_status_is_still_read(self):
+        (self.work / "oldclaude").touch()
+        self.assertEqual(sorted(self.by_account()), ["default", "work"])
+        self.assertEqual(usage.claude_signed_out(), [])
+
+    def test_the_report_lists_the_signed_out_logins(self):
+        import json
+        (self.work / "signedout").touch()
+        out = json.loads(usage.report(1))
+        self.assertEqual(out["signed_out"], [{"agent": "claude", "account": "work", "email": "b@acme.test", "org": None}])
+        self.assertEqual([l["account"] for l in out["limits"]], ["default"])
 
     def test_no_claude_is_no_limits(self):
         os.environ["PATH"] = "/nonexistent"

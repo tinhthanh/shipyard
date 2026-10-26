@@ -201,3 +201,13 @@ test("one email in one organisation on two boxes is still one login", () => {
   assert.equal(rows[0].name, "ana");
   assert.equal(Math.round(rows[0].windows[0].used * 100), 4);
 });
+
+test("a login Claude Code lost is named once, whose it was, however many boxes say so", () => {
+  const out = { agent: "claude" as const, account: "thanh-20x", email: "thanh@acme.test", org: "o1" };
+  const a = { ...report([claude("default", at("2026-10-14T11:00:00Z"), 10, 20)]), signed_out: [out] };
+  const b = { ...report([]), signed_out: [out, { agent: "claude" as const, account: "old", email: null, org: null }] };
+  const s = summarizeUsage([{ box: "devl", report: a }, { box: "gpu", report: b }, { box: "older", report: report([]) }], [], NOW);
+  assert.deepEqual(s.signedOut, ["old", "thanh-20x (thanh@acme.test)"]);
+  // It reads no limits: only the signed-in login's windows show.
+  assert.deepEqual(s.limits.map((l) => l.label).sort(), ["Claude Code · 5h", "Claude Code · week"]);
+});

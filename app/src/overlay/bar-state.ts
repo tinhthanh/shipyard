@@ -16,6 +16,8 @@ export interface BarAgent {
 export interface BarState {
   usage: boolean;
   logins: LoginLimits[];
+  // Logins Claude Code lost on a box: "thanh-20x (thanh.huynh@acme.test)".
+  signedOut: string[];
   waiting: BarAgent[];
   working: BarAgent[];
 }
@@ -34,11 +36,11 @@ interface Row {
 // The bar lists five of each; a few more say how many there are.
 const MAX = 20;
 
-export function barState(usage: boolean, logins: LoginLimits[], rows: Row[]): BarState {
+export function barState(usage: boolean, logins: LoginLimits[], rows: Row[], signedOut: string[] = []): BarState {
   const pick = (state: string) =>
     rows
       .filter((r) => r.state === state)
       .slice(0, MAX)
       .map((r) => ({ key: r.key, box: r.box, session: r.session.name, agent: r.agent, title: r.title, where: r.where }));
-  return { usage, logins: usage ? logins : [], waiting: pick("waiting"), working: pick("running") };
+  return { usage, logins: usage ? logins : [], signedOut: usage ? signedOut : [], waiting: pick("waiting"), working: pick("running") };
 }

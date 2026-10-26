@@ -63,6 +63,8 @@ A box can have several logins per agent. Each login lives in its own folder:
 
 You finish signing in yourself; the plugin never reads or stores credentials. It shows only the email, plan and sign-in method the agent recorded.
 
+When Claude Code loses a login (a token the server refused), it drops the credentials but keeps the profile, so the folder still names an email and a plan. The plugin asks `claude auth status` for each login (locally, about a tenth of a second) and marks one Claude Code no longer holds **Signed out**, with **Sign in…**. Its old plan limits are dropped and its `/usage` isn't asked. The Agent usage widget and the floating bar say which logins need signing in again.
+
 **Use for new sessions** sets the variable in one of two places:
 
 - **Everywhere on a box:** in the box's `~/.berth/env.json` (`GET`/`PUT /v1/env`). Every worktree gets it, under the project's own env.

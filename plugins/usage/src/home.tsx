@@ -84,6 +84,11 @@ export function UsageWidget({ berth, size }: HomeWidgetProps) {
         </p>
       )}
       {data.failed.length > 0 && <p className="truncate text-[11px] text-muted-foreground">Couldn't read {data.failed.join(", ")}</p>}
+      {data.signedOut.length > 0 && (
+        <Tip label="Claude Code lost these logins: sign in again in Usage → Accounts">
+          <p className="truncate text-[11px] text-warning-foreground">Signed out: {data.signedOut.join(", ")}</p>
+        </Tip>
+      )}
     </div>
   );
 }
