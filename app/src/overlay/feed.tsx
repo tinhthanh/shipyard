@@ -12,9 +12,9 @@ import { useAgentRows } from "@/views/home/widgets/agents";
 // The main window renders it while the bar is on (overlay/control.tsx).
 export default function OverlayFeed() {
   const usage = usePrefs((p) => p.enabledPlugins.includes("usage") && !p.disabledPlugins.includes("usage"));
-  const logins = useLoginLimits(usage);
+  const { logins, signedOut } = useLoginLimits(usage);
   const rows = useAgentRows();
-  const state = useMemo(() => barState(usage, logins, rows), [usage, logins, rows]);
+  const state = useMemo(() => barState(usage, logins, rows, signedOut), [usage, logins, rows, signedOut]);
   const line = JSON.stringify(state);
   useEffect(() => {
     void invoke("overlay_state", { state: JSON.parse(line) }).catch((err) => console.warn("floating bar:", err));

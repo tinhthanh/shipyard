@@ -22,7 +22,13 @@ test("the bar gets the agents that need you and those working, and nothing else"
 });
 
 test("without the Usage plugin the bar gets no plan limits", () => {
-  assert.deepEqual(barState(false, [login], []).logins, []);
+  assert.deepEqual(barState(false, [login], [], ["work (ana@acme.test)"]).logins, []);
+  assert.deepEqual(barState(false, [login], [], ["work (ana@acme.test)"]).signedOut, []);
+});
+
+test("the bar says which logins need signing in again", () => {
+  assert.deepEqual(barState(true, [login], [], ["work (ana@acme.test)"]).signedOut, ["work (ana@acme.test)"]);
+  assert.deepEqual(barState(true, [login], []).signedOut, []);
 });
 
 test("a long list is cut short", () => {

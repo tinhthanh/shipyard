@@ -280,7 +280,18 @@ struct Card: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if state.logins.isEmpty {
+            if !state.signedOut.isEmpty {
+                Button { Outbox.open(nil) } label: {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "person.crop.circle.badge.exclamationmark").font(.system(size: 11))
+                        Text("Signed out: \(state.signedOut.joined(separator: ", ")). Sign in again in Shipyard's Usage → Accounts.")
+                            .font(.system(size: 11)).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(Color(red: 0.98, green: 0.75, blue: 0.14))
+                }
+                .buttonStyle(.plain)
+            }
+            if state.logins.isEmpty && state.signedOut.isEmpty {
                 Text(state.usage ? "No plan limits read yet." : "Turn on the Usage & accounts plugin in Shipyard to see plan limits here.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }

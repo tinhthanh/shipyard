@@ -15,7 +15,7 @@ Each session has **Open** if it is still running in Shipyard, or **Resume** (`cl
 
 **All boxes** is the default; the box picker remembers your last choice.
 
-- Every online box is read at once, and each shows its own state: transcripts read, still reading, or the error. A slow or failing box doesn't hold up the rest. Offline boxes are listed as "not counted (offline)".
+- Every online box is read at once, and each shows its own state: transcripts read, still reading, or the error. A box with no projects yet is read too, in its home folder (a box whose berthd is older than that needs a project). A slow or failing box doesn't hold up the rest. Offline boxes are listed as "not counted (offline)".
 - Agent cards add the boxes up and show each box's share. The daily chart stacks by agent or by box. The model and project tables have a Box column, and sessions from every box are merged newest first, each with its box.
 - A login used on several boxes counts once: plans and Codex limits are matched by the email the agent recorded, keeping the newest limits.
 - Each box keeps its own days, in its own time zone.
@@ -62,6 +62,8 @@ A box can have several logins per agent. Each login lives in its own folder:
 - `CODEX_HOME=<dir> codex login --device-auth`.
 
 You finish signing in yourself; the plugin never reads or stores credentials. It shows only the email, plan and sign-in method the agent recorded.
+
+When Claude Code loses a login (a token the server refused), it drops the credentials but keeps the profile, so the folder still names an email and a plan. The plugin asks `claude auth status` for each login (locally, about a tenth of a second) and marks one Claude Code no longer holds **Signed out**, with **Sign in…**. Its old plan limits are dropped and its `/usage` isn't asked. The Agent usage widget and the floating bar say which logins need signing in again.
 
 **Use for new sessions** sets the variable in one of two places:
 

@@ -104,6 +104,9 @@ def claude_account(name, d):
         "email": o.get("emailAddress"), "name": o.get("displayName"),
         "org": o.get("organizationName"), "org_id": o.get("organizationUuid"),
         "billing": o.get("billingType"), "tier": tier or None,
+        # claude_team, claude_enterprise, claude_max, claude_pro: a team seat
+        # records a Max-like tier of its own, so the tier alone misnames it.
+        "org_type": o.get("organizationType"),
     }
 
 
@@ -143,6 +146,11 @@ def session_accounts():
 
 def accounts():
     rows = [claude_account(n, d) for n, d in claude_dirs()] + [codex_account(n, d) for n, d in codex_dirs()]
+    gone = set(claude_signed_out())
+    for r in rows:
+        if r["agent"] == "claude" and r["id"] in gone:
+            # Kept: who it was, so the person knows which login to sign in.
+            r["signed_in"], r["signed_out"] = False, True
     return {"accounts": rows, "sessions": session_accounts(), "home": str(HOME)}
 
 
@@ -238,7 +246,8 @@ def claude_binary():
     return shutil.which("claude") or next((str(p) for p in [HOME / ".local" / "bin" / "claude", HOME / ".claude" / "local" / "claude"] if p.exists()), None)
 
 
-def claude_usage_text(name, d, binary):
+def run_claude(name, d, binary, args):
+    """Claude Code's output for args, run for the login in d."""
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CONFIG_DIR"}
     if name != "default":
         env["CLAUDE_CONFIG_DIR"] = str(d)
@@ -246,7 +255,7 @@ def claude_usage_text(name, d, binary):
     cwd.mkdir(parents=True, exist_ok=True, mode=0o700)
     # In a process group of its own, so a timeout ends whatever Claude Code
     # started too: a child left holding its stdout would keep this waiting.
-    proc = subprocess.Popen([binary, *CLAUDE_USAGE_ARGS], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+    proc = subprocess.Popen([binary, *args], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
     try:
         out, _ = proc.communicate(timeout=CLAUDE_USAGE_TIMEOUT)
@@ -258,6 +267,56 @@ def claude_usage_text(name, d, binary):
             pass
         proc.communicate()
         raise
+
+
+def claude_usage_text(name, d, binary):
+    return run_claude(name, d, binary, CLAUDE_USAGE_ARGS)
+
+
+# The profile in a login's .claude.json outlives the login itself: when
+# Claude Code loses it (a token the server refused), it drops the
+# credentials and keeps the profile, so the account still looks signed in
+# with its plan. `claude auth status` says what Claude Code holds, locally
+# and in about a tenth of a second: {"loggedIn": false} and status 1 when
+# signed out.
+CLAUDE_AUTH_ARGS = ["auth", "status"]
+TIMED_OUT = "timed out"
+
+
+def claude_logged_in(name, d, binary):
+    """True or False, what Claude Code says; None when it says nothing it
+    can read (an older Claude Code), TIMED_OUT when it hung."""
+    try:
+        out = run_claude(name, d, binary, CLAUDE_AUTH_ARGS)
+    except subprocess.TimeoutExpired:
+        return TIMED_OUT
+    except (OSError, subprocess.SubprocessError):
+        return None
+    try:
+        state = json.loads(out or "").get("loggedIn")
+    except (ValueError, AttributeError):
+        return None
+    return state if isinstance(state, bool) else None
+
+
+def claude_auth(logins, binary):
+    """claude_logged_in for each login, all at once: a hang costs one
+    timeout, not one per login."""
+    if not logins or not binary:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=len(logins)) as pool:
+        return dict(zip([n for n, _ in logins], pool.map(lambda nd: claude_logged_in(*nd, binary), logins)))
+
+
+def claude_signed_out():
+    """The Claude logins whose profile is here but whose login Claude Code
+    has lost: they need signing in again."""
+    if os.environ.get("BERTH_USAGE_CLAUDE_LIMITS") == "0":
+        return []
+    logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
+    auth = claude_auth(logins, claude_binary())
+    return [name for name, _ in logins if auth.get(name) is False]
 
 
 def read_claude_limits(name, d, binary):
@@ -279,12 +338,21 @@ def claude_limits():
     from concurrent.futures import ThreadPoolExecutor
     cache = read_json(CLAUDE_LIMITS_CACHE) or {}
     logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
-    due = [(name, d) for name, d in logins if time.time() - (cache.get(name) or {}).get("read", 0) > CLAUDE_LIMITS_TTL]
-    if due:
-        # Each read ends by its own timeout, so waiting for all of them is
-        # bounded by one: a pool left running would hold the script open.
-        with ThreadPoolExecutor(max_workers=len(due)) as pool:
-            read = dict(zip([n for n, _ in due], pool.map(lambda nd: read_claude_limits(*nd, binary), due)))
+    auth = claude_auth(logins, binary)
+    # Signed out: its last limits are of a login that is gone. Hung: it would
+    # hang /usage too; the last good read stays.
+    gone = [name for name, _ in logins if auth.get(name) is False and name in cache]
+    logins = [(name, d) for name, d in logins if auth.get(name) is not False]
+    due = [(name, d) for name, d in logins if auth.get(name) != TIMED_OUT and time.time() - (cache.get(name) or {}).get("read", 0) > CLAUDE_LIMITS_TTL]
+    for name in gone:
+        del cache[name]
+    if due or gone:
+        read = {}
+        if due:
+            # Each read ends by its own timeout, so waiting for all of them is
+            # bounded by one: a pool left running would hold the script open.
+            with ThreadPoolExecutor(max_workers=len(due)) as pool:
+                read = dict(zip([n for n, _ in due], pool.map(lambda nd: read_claude_limits(*nd, binary), due)))
         now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         for name, _ in due:
             hit = cache.get(name) or {}
@@ -483,6 +551,13 @@ def report(days):
         a = who.get(k) or {}
         l["email"] = a.get("email")
         l["org"] = a.get("org_id")
+    signed_out = []
+    try:
+        for name in claude_signed_out():
+            a = who.get(("claude", name)) or {}
+            signed_out.append({"agent": "claude", "account": name, "email": a.get("email"), "org": a.get("org_id")})
+    except Exception:
+        pass
 
     out = {
         "generated": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -492,6 +567,7 @@ def report(days):
         "daily": [[*k, *v] for k, v in sorted(daily.items())],
         "sessions": sorted(sessions.values(), key=lambda r: r["last"] or "", reverse=True),
         "limits": list(limits.values()),
+        "signed_out": signed_out,
     }
     # Fit exec's output: drop the oldest sessions until it does.
     text = json.dumps(out, separators=(",", ":"))

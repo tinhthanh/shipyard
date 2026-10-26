@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { NoProjects, type Report, runScript, where } from "../../../plugins/usage/src/box.ts";
-import { type LoginLimits, limitsByLogin } from "../../../plugins/usage/src/summary.ts";
+import { type LoginLimits, limitsByLogin, signedOutLogins } from "../../../plugins/usage/src/summary.ts";
 import { useStore } from "@/lib/store";
 import { useWidgetDataIn } from "@/lib/widget-data";
 import { makeContext, pluginStorage } from "@/plugins/context";
@@ -12,17 +12,18 @@ const RETRY_FAILED = 30_000;
 
 // useLoginLimits reads each online box's agent records with the Usage
 // plugin's own script, every 5 minutes, and gives each login's open plan
-// windows. A box that can't be read is left out, and tried again soon.
-export function useLoginLimits(on: boolean): LoginLimits[] {
+// windows, and the logins that need signing in again. A box that can't be
+// read is left out, and tried again soon.
+export function useLoginLimits(on: boolean): { logins: LoginLimits[]; signedOut: string[] } {
   const client = useStore((s) => s.client);
   const online = useStore((s) => (s.status?.boxes ?? []).filter((b) => b.state === "online").map((b) => b.name).join(","));
   const key = on && client && online ? `limits:${online}` : "limits:off";
-  const { data, refresh } = useWidgetDataIn<{ logins: LoginLimits[]; failed: number }>(
+  const { data, refresh } = useWidgetDataIn<{ logins: LoginLimits[]; signedOut?: string[]; failed: number }>(
     pluginStorage("usage"),
     "usage",
     key,
     async () => {
-      if (key === "limits:off" || !client) return { logins: [], failed: 0 };
+      if (key === "limits:off" || !client) return { logins: [], signedOut: [], failed: 0 };
       const ctx = makeContext("usage", client);
       const got = await Promise.all(
         online.split(",").map(async (box) => {
@@ -34,7 +35,8 @@ export function useLoginLimits(on: boolean): LoginLimits[] {
           }
         }),
       );
-      return { logins: limitsByLogin(got.filter((r): r is { report: Report } => !!r)), failed: got.filter((r) => r === undefined).length };
+      const read = got.filter((r): r is { report: Report } => !!r);
+      return { logins: limitsByLogin(read), signedOut: signedOutLogins(read), failed: got.filter((r) => r === undefined).length };
     },
     { every: 5 * 60_000 },
   );
@@ -46,5 +48,5 @@ export function useLoginLimits(on: boolean): LoginLimits[] {
     // refresh is a new function each render; the read it starts is what matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [failed, data]);
-  return data?.logins ?? [];
+  return { logins: data?.logins ?? [], signedOut: data?.signedOut ?? [] };
 }

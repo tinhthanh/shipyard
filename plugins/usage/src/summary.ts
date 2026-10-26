@@ -12,7 +12,19 @@ export interface UsageSummary {
   cost: number;
   byAgent: { agent: Agent; tokens: number }[];
   limits: { label: string; used: number; resets: number }[];
+  // Logins that need signing in again, by name: "thanh-20x (thanh.huynh@acme.test)".
+  signedOut: string[];
   failed: string[];
+}
+
+// signedOutLogins names the logins the boxes say Claude Code lost: their
+// account folder, and whose it was. Each once, however many boxes say so.
+export function signedOutLogins(reports: { report: Report }[]): string[] {
+  const out = new Set<string>();
+  for (const { report } of reports) {
+    for (const s of report.signed_out ?? []) out.add(s.email ? `${s.account} (${s.email})` : s.account);
+  }
+  return [...out].sort();
 }
 
 // A window's short name: "5h", "week", or "week (Fable)" for one scoped to
@@ -160,6 +172,7 @@ export function summarizeUsage(reports: { box: string; report: Report }[], faile
         return { label: name ? `${w.label} · ${name}` : w.label, used: w.used, resets: w.resets };
       })
       .sort((a, b) => b.used - a.used),
+    signedOut: signedOutLogins(reports),
     failed,
   };
 }

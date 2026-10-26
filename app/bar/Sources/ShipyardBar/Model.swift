@@ -55,6 +55,8 @@ struct Agent: Decodable, Equatable, Identifiable, Sendable {
 struct BarState: Decodable, Equatable, Sendable {
     var usage: Bool = false
     var logins: [Login] = []
+    // Logins Claude Code lost on a box, to sign in again: "thanh-20x (thanh.huynh@acme.test)".
+    var signedOut: [String] = []
     var waiting: [Agent] = []
     var working: [Agent] = []
 }
@@ -64,6 +66,7 @@ struct Message: Decodable, Sendable {
     var place: Place?
     var usage: Bool?
     var logins: [Login]?
+    var signedOut: [String]?
     var waiting: [Agent]?
     var working: [Agent]?
 }
@@ -89,7 +92,7 @@ final class BarModel: ObservableObject {
         case "place":
             if let p = m.place, p != place { place = p }
         case "state":
-            let next = BarState(usage: m.usage ?? false, logins: m.logins ?? [], waiting: m.waiting ?? [], working: m.working ?? [])
+            let next = BarState(usage: m.usage ?? false, logins: m.logins ?? [], signedOut: m.signedOut ?? [], waiting: m.waiting ?? [], working: m.working ?? [])
             if next != state { state = next }
         default:
             break
