@@ -69,6 +69,14 @@ export interface Limits {
   // Its organisation's id: one email can sign in to two plans (a team seat
   // and a personal Max).
   org?: string | null;
+  // Who the login is with, for a line under it (older boxes don't say):
+  // the organisation's name and type, Claude Code's tier and billing, and
+  // Codex's ChatGPT plan.
+  org_name?: string | null;
+  org_type?: string | null;
+  tier?: string | null;
+  billing?: string | null;
+  plan?: string | null;
   at: string;
   // Codex reports a 5-hour and a weekly window in its transcripts; Claude Code
   // reports its session, its week and a week per scoped model in `/usage`.

@@ -315,6 +315,16 @@ class ClaudeLimitsTest(unittest.TestCase):
         self.assertEqual(out["signed_out"], [{"agent": "claude", "account": "work", "email": "b@acme.test", "org": None}])
         self.assertEqual([l["account"] for l in out["limits"]], ["default"])
 
+    def test_the_report_says_whose_organisation_and_plan_each_login_is(self):
+        import json
+        (self.work / ".claude.json").write_text(json.dumps({"oauthAccount": {
+            "emailAddress": "b@acme.test", "organizationUuid": "o1", "organizationName": "Acme",
+            "organizationType": "claude_team", "userRateLimitTier": "default_claude_max_5x", "billingType": "stripe_subscription"}}))
+        out = {l["account"]: l for l in json.loads(usage.report(1))["limits"]}
+        w = out["work"]
+        self.assertEqual((w["org"], w["org_name"], w["org_type"], w["tier"], w["billing"]), ("o1", "Acme", "claude_team", "default_claude_max_5x", "stripe_subscription"))
+        self.assertIsNone(out["default"]["org_name"])
+
     def test_no_claude_is_no_limits(self):
         os.environ["PATH"] = "/nonexistent"
         saved = usage.claude_binary

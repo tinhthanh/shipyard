@@ -20,7 +20,7 @@ struct PlanWindow: Decodable, Equatable, Hashable, Sendable {
     var name: String
     var minutes: Double
     var used: Double
-    // When it resets, in milliseconds since 1970.
+    // When it resets, in milliseconds since 1970; 0 for a window no request has started yet.
     var resets: Double
 }
 
@@ -28,6 +28,8 @@ struct Login: Decodable, Equatable, Identifiable, Sendable {
     var agent: String
     var login: String
     var name: String
+    // Whose organisation, which plan, on which boxes: "Acme · Claude Team · devl".
+    var detail: String?
     var windows: [PlanWindow]
     var id: String { "\(agent):\(login)" }
 

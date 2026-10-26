@@ -28,14 +28,14 @@ export function useLoginLimits(on: boolean): { logins: LoginLimits[]; signedOut:
       const got = await Promise.all(
         online.split(",").map(async (box) => {
           try {
-            return { report: await runScript<Report>(ctx, box, await where(ctx, box), ["report", "7"], "2m") };
+            return { box, report: await runScript<Report>(ctx, box, await where(ctx, box), ["report", "7"], "2m") };
           } catch (err) {
             // A box with no projects has nothing to read: not a failure.
             return err instanceof NoProjects ? null : undefined;
           }
         }),
       );
-      const read = got.filter((r): r is { report: Report } => !!r);
+      const read = got.filter((r): r is { box: string; report: Report } => !!r);
       return { logins: limitsByLogin(read), signedOut: signedOutLogins(read), failed: got.filter((r) => r === undefined).length };
     },
     { every: 5 * 60_000 },

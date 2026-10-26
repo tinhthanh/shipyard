@@ -1,5 +1,5 @@
-import type { Agent, Report, Window } from "./box";
-import { AGENT_NAME, days } from "./data.ts";
+import type { Account, Agent, Limits, Report, Window } from "./box";
+import { AGENT_NAME, days, plan } from "./data.ts";
 
 // What the Usage widget on Home shows, added up from the boxes' reports.
 // Kept apart from the widget so it can be tested without a renderer.
@@ -39,6 +39,10 @@ export const windowName = (w: Window) => {
 // Two reads of one window whose resets are this close are the same window.
 const SAME_RESET_MS = 2 * 60_000;
 
+// The reset time of a window no request has started yet: it has none. The
+// floating bar says "not started" for it.
+export const NOT_STARTED = 0;
+
 // One plan window of one login, as most recently read.
 interface OpenWindow {
   agent: Agent;
@@ -49,6 +53,10 @@ interface OpenWindow {
   email: string;
   // The account folder it was read from ("default", "thanh-20x").
   account: string;
+  // "Acme · Claude Team": whose organisation, on which plan.
+  who: string;
+  // The boxes it was read on.
+  boxes: string[];
   // "Claude Code · 5h"
   label: string;
   // "5h", "week (Fable)"
@@ -66,26 +74,46 @@ interface OpenWindow {
 // is kept once, as most recently read. A login is its email and its
 // organisation (one email can sign in to a team seat and a personal plan);
 // every box has a "default".
-function openWindows(reports: { report: Report }[], from: string, now: number): OpenWindow[] {
+function openWindows(reports: { box?: string; report: Report }[], from: string, now: number): OpenWindow[] {
   const windows: OpenWindow[] = [];
-  for (const { report } of reports) {
+  // Every box a login was read on, whichever read is kept.
+  const seenOn = new Map<string, Set<string>>();
+  for (const { box, report } of reports) {
     for (const l of report.limits) {
       if (l.at.slice(0, 10) < from) continue;
       const email = l.email || l.account;
       const login = l.email && l.org ? `${l.email}#${l.org}` : email;
       for (const w of [l.limits.primary, l.limits.secondary, ...(l.limits.extra ?? [])]) {
-        if (!w?.resets_at) continue;
+        if (!w) continue;
+        // A window no request has started yet has no reset time: it is
+        // shown, unused, so a login that hasn't worked lately still shows.
+        const unstarted = !w.resets_at && w.used_percent === 0;
+        if (!w.resets_at && !unstarted) continue;
         const name = windowName(w);
         const label = `${AGENT_NAME[l.agent]} · ${name}`;
-        const resets = w.resets_at * 1000;
-        const i = windows.findIndex((x) => x.label === label && x.login === login && Math.abs(x.resets - resets) <= SAME_RESET_MS);
-        const read = { agent: l.agent, login, email, account: l.account, label, name, minutes: w.window_minutes, used: w.used_percent / 100, resets, at: l.at };
+        const resets = w.resets_at ? w.resets_at * 1000 : NOT_STARTED;
+        const i = windows.findIndex((x) => x.label === label && x.login === login && (x.resets === NOT_STARTED || resets === NOT_STARTED || Math.abs(x.resets - resets) <= SAME_RESET_MS));
+        const key = `${l.agent}:${login}`;
+        if (box) seenOn.set(key, (seenOn.get(key) ?? new Set()).add(box));
+        const read = { agent: l.agent, login, email, account: l.account, who: loginWho(l), boxes: [], label, name, minutes: w.window_minutes, used: w.used_percent / 100, resets, at: l.at };
         if (i < 0) windows.push(read);
         else if (windows[i].at < l.at) windows[i] = read;
       }
     }
   }
-  return windows.filter((w) => w.resets > now);
+  for (const w of windows) w.boxes = [...(seenOn.get(`${w.agent}:${w.login}`) ?? [])].sort();
+  return windows.filter((w) => w.resets === NOT_STARTED || w.resets > now);
+}
+
+// loginWho says whose organisation a login is with and on which plan:
+// "Acme · Claude Team", "personal · Claude Max 5x", "ChatGPT Pro". A
+// personal plan's organisation is named after its email ("a@b's
+// Organization"): it says "personal" instead.
+export function loginWho(l: Limits): string {
+  if (l.agent === "codex") return l.plan ? (plan({ agent: "codex", plan: l.plan } as Account)?.label ?? "") : "";
+  const p = plan({ agent: "claude", tier: l.tier, org_type: l.org_type, billing: l.billing } as Account);
+  const org = !l.org_name ? "" : /'s Organization$/.test(l.org_name) ? "personal" : l.org_name;
+  return [org, l.tier || l.org_type ? p?.label : ""].filter(Boolean).join(" · ");
 }
 
 // loginNames is what each login goes by: the email's name, or the whole
@@ -122,18 +150,21 @@ export interface LoginLimits {
   login: string;
   // "ana", or the whole email when another login shares that name.
   name: string;
+  // A line under it: whose organisation, which plan, on which boxes
+  // ("Acme · Claude Team · devl, gpu"). Empty when nothing is known.
+  detail: string;
   // Shortest window first: the session, then the week, then a model's week.
   windows: { name: string; minutes: number; used: number; resets: number }[];
 }
 
 // limitsByLogin groups the open windows by login, for a ring each.
-export function limitsByLogin(reports: { report: Report }[], now = Date.now()): LoginLimits[] {
+export function limitsByLogin(reports: { box?: string; report: Report }[], now = Date.now()): LoginLimits[] {
   const live = openWindows(reports, weekFrom(reports), now);
   const who = loginNames(live);
   const out = new Map<string, LoginLimits>();
   for (const w of live) {
     const key = `${w.agent}:${w.login}`;
-    const row = out.get(key) ?? { agent: w.agent, login: w.login, name: who.get(key) ?? w.login, windows: [] };
+    const row = out.get(key) ?? { agent: w.agent, login: w.login, name: who.get(key) ?? w.login, detail: [w.who, w.boxes.join(", ")].filter(Boolean).join(" · "), windows: [] };
     row.windows.push({ name: w.name, minutes: w.minutes, used: w.used, resets: w.resets });
     out.set(key, row);
   }

@@ -46,8 +46,8 @@ enum Demo {
         let now = Date().timeIntervalSince1970 * 1000
         let json = """
         {"type":"state","usage":true,
-         "logins":[{"agent":"claude","login":"ana@acme.test","name":"ana","windows":[{"name":"5h","minutes":300,"used":0.34,"resets":\(now + 2.2 * 3_600_000)},{"name":"week (Fable)","minutes":10080,"used":0.72,"resets":\(now + 3 * 86_400_000)}]},
-                   {"agent":"codex","login":"default","name":"default","windows":[{"name":"5h","minutes":300,"used":0.12,"resets":\(now + 4 * 3_600_000)},{"name":"week","minutes":10080,"used":0.41,"resets":\(now + 5 * 86_400_000)}]}],
+         "logins":[{"agent":"claude","login":"ana@acme.test","name":"ana","detail":"Acme · Claude Team · devl, gpu","windows":[{"name":"5h","minutes":300,"used":0.34,"resets":\(now + 2.2 * 3_600_000)},{"name":"week (Fable)","minutes":10080,"used":0.72,"resets":\(now + 3 * 86_400_000)}]},
+                   {"agent":"codex","login":"default","name":"default","detail":"ChatGPT Pro · gpu","windows":[{"name":"5h","minutes":300,"used":0.12,"resets":\(now + 4 * 3_600_000)},{"name":"week","minutes":10080,"used":0.41,"resets":\(now + 5 * 86_400_000)}]}],
          "signedOut":["work (ana@acme.test)"],
          "waiting":[{"key":"devl/shop-claude","box":"devl","session":"shop-claude","agent":"claude","title":"Fix checkout webhook retries","where":"shop · devl"}],
          "working":[{"key":"gpu/judge","box":"gpu","session":"judge","agent":"codex","title":"Tune the judge prompt","where":"evals · gpu"}]}

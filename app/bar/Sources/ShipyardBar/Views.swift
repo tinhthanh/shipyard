@@ -172,7 +172,7 @@ struct Rings: View {
             ForEach(Array(logins.enumerated()), id: \.element.id) { i, l in
                 Button { Outbox.open(nil) } label: { Ring(login: l, size: size) }
                     .buttonStyle(.plain)
-                    .help("\(l.name): " + l.windows.map { "\($0.name) \(Int(($0.used * 100).rounded()))%" }.joined(separator: ", "))
+                    .help("\(l.name)" + (l.detail.map { " (\($0))" } ?? "") + ": " + l.windows.map { "\($0.name) \(Int(($0.used * 100).rounded()))%" }.joined(separator: ", "))
                     .scaleEffect(open ? 1 : 0.6)
                     .opacity(open ? 1 : 0)
                     .animation(Motion.stagger(i), value: open)
@@ -301,13 +301,17 @@ struct Card: View {
                         AgentGlyph(agent: l.agent).font(.system(size: 10, weight: .bold))
                         Text(l.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
                     }
+                    if let d = l.detail, !d.isEmpty {
+                        Text(d).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                    }
                     ForEach(l.windows, id: \.self) { w in
                         VStack(spacing: 3) {
                             HStack(spacing: 6) {
                                 Text(w.name).font(.system(size: 11)).lineLimit(1)
                                 Spacer(minLength: 4)
                                 TimelineView(.periodic(from: .now, by: 30)) { t in
-                                    Text("resets \(resetsIn(w.resets, now: t.date))").font(.system(size: 10)).foregroundStyle(.secondary)
+                                    // 0: a window no request has started yet.
+                                    Text(w.resets > 0 ? "resets \(resetsIn(w.resets, now: t.date))" : "not started").font(.system(size: 10)).foregroundStyle(.secondary)
                                 }
                                 Text("\(Int((w.used * 100).rounded()))%").font(.system(size: 11).monospacedDigit()).frame(width: 34, alignment: .trailing)
                             }
