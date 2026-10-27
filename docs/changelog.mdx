@@ -17,7 +17,6 @@ again.
   "personal · Claude Max 5x · gpu". Two logins that share a
   name, or one person's team seat and personal plan, are told apart at a
   glance; hovering a ring says the same.
-
 - **A Claude login that signed itself out says so.** When Claude Code
   loses an account's login, it keeps the account's profile, so Usage →
   Accounts went on showing the email and plan as if nothing had happened,
@@ -31,7 +30,10 @@ again.
 - **A Claude team seat says Claude Team.** Usage → Accounts named a
   team or enterprise seat after the Max-like tier it records ("Claude Max
   5x"); it now says Claude Team (or Claude Enterprise).
-
+- **Switching projects no longer opens a new task.** Clicking a project on
+  the rail (or in the projects column) with no agent at work in it now takes
+  you to the worktree of it you were in last, or its main checkout, instead
+  of popping up New task.
 - **The app has a new icon:** a box in its tray with the amber lamp lit on
   top. A dev build wears the same box on orange.
 - **A box's plugin settings, from this computer.** Under Settings →
@@ -47,6 +49,12 @@ again.
   also reads a handoff as done: an agent that started a worker it won't
   follow and told you that you can close the session no longer shows as
   working.
+- **Plugins can give an agent a file.** `berth.api.attach` uploads a
+  pasted or dropped file into a session's worktree, or a worktree an agent
+  is about to start in, the way the composer does, and resolves with its
+  path on the box to put in a prompt. A pasted screenshot shrinks first, and
+  a path to a file on this computer (`berth.api.localPaths` finds them in
+  pasted text) goes up through Shipyard. Files up to 20 MB.
 - **A chat whose turn ended no longer looks busy.** When an agent's turn
   ends while its work runs on (turn check read a build, a deploy or a
   delegated task as still going), its chat now ends on an hourglass,
@@ -135,6 +143,13 @@ again.
   look like one shown twice. A box with no projects yet is left out instead
   of listed as one it couldn't read, and in the Medium size that line now
   takes the week's place rather than being cut off.
+- **Cards for agents in chat say what the agent is doing.** On the Agent
+  Dashboard, an agent that runs in chat showed the frames of the host
+  that runs it ("out stream_event") and "stdio" as its prompt. Its card
+  now shows what it asks while it waits (the command and why, or the
+  question) with its answers, otherwise the last lines of its reply, and
+  the prompt it started with. Cards for agents in a terminal are as
+  before.
 
 ## v0.3.30
 
