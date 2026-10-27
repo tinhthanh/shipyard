@@ -11,6 +11,13 @@ again.
 
 ## Unreleased
 
+- **The floating bar says whose each login is.** Under each login on the
+  floating bar's card, a line says whose organisation it is with, on which
+  plan, and which boxes it was read on: "Acme · Claude Team · devl",
+  "personal · Claude Max 5x · gpu". Two logins that share a
+  name, or one person's team seat and personal plan, are told apart at a
+  glance; hovering a ring says the same.
+
 - **A Claude login that signed itself out says so.** When Claude Code
   loses an account's login, it keeps the account's profile, so Usage →
   Accounts went on showing the email and plan as if nothing had happened,
@@ -89,7 +96,7 @@ again.
   showed as one login in the floating bar and the Agent usage widget, with
   one plan's numbers and the other's gone. Logins are now told apart by
   their organisation too, and two that share an email are named by their
-  account ("thanh · thanh-20x").
+  account ("ana · ana-max").
 - **About says how this fork's app updates.** The fork's releases carry
   `berth` and `berthd` only, so the app's update check found nothing to read
   and showed "Couldn't check for updates". It now says the app updates by

@@ -18,6 +18,7 @@ Each session has **Open** if it is still running in Shipyard, or **Resume** (`cl
 - Every online box is read at once, and each shows its own state: transcripts read, still reading, or the error. A box with no projects yet is read too, in its home folder (a box whose berthd is older than that needs a project). A slow or failing box doesn't hold up the rest. Offline boxes are listed as "not counted (offline)".
 - Agent cards add the boxes up and show each box's share. The daily chart stacks by agent or by box. The model and project tables have a Box column, and sessions from every box are merged newest first, each with its box.
 - A login used on several boxes counts once: plans and Codex limits are matched by the email the agent recorded, keeping the newest limits.
+- The floating bar names each login with whose organisation it is with (a personal plan says "personal"), its plan, and the boxes it was read on.
 - Each box keeps its own days, in its own time zone.
 
 The numbers come from the files each agent writes on the box. Nothing is estimated or made up.

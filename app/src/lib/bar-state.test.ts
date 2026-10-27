@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { barState } from "../overlay/bar-state.ts";
 
 const row = (state: string, name: string) => ({ key: `devl/${name}`, box: "devl", session: { name }, agent: "claude", title: `Task ${name}`, where: "shop · devl", state });
-const login = { agent: "claude" as const, login: "ana@acme.test", name: "ana", windows: [{ name: "5h", minutes: 300, used: 0.3, resets: 1 }] };
+const login = { agent: "claude" as const, login: "ana@acme.test", name: "ana", detail: "Acme · Claude Team · devl", windows: [{ name: "5h", minutes: 300, used: 0.3, resets: 1 }] };
 
 test("the bar gets the agents that need you and those working, and nothing else", () => {
   const s = barState(true, [login], [row("waiting", "a"), row("running", "b"), row("finished", "c"), row("running", "d")]);

@@ -551,6 +551,14 @@ def report(days):
         a = who.get(k) or {}
         l["email"] = a.get("email")
         l["org"] = a.get("org_id")
+        # What the floating bar and the widget say under a login: whose
+        # organisation, on which plan.
+        l["org_name"] = a.get("org")
+        l["org_type"] = a.get("org_type")
+        l["tier"] = a.get("tier")
+        l["billing"] = a.get("billing")
+        if k[0] == "codex":
+            l["plan"] = a.get("plan")
     signed_out = []
     try:
         for name in claude_signed_out():
