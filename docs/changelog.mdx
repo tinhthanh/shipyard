@@ -30,59 +30,12 @@ again.
 - **A Claude team seat says Claude Team.** Usage → Accounts named a
   team or enterprise seat after the Max-like tier it records ("Claude Max
   5x"); it now says Claude Team (or Claude Enterprise).
-- **Switching projects no longer opens a new task.** Clicking a project on
-  the rail (or in the projects column) with no agent at work in it now takes
-  you to the worktree of it you were in last, or its main checkout, instead
-  of popping up New task.
-- **The app has a new icon:** a box in its tray with the amber lamp lit on
-  top. A dev build wears the same box on orange.
 - **A box's plugin settings, from this computer.** Under Settings →
   Plugins → On boxes, a box's row has **Settings**: the plugin's switches
   on that box, such as which of the box's Chrome profiles its agents may
   use. Before, the app had no way to change them, so an agent asking you
   to turn a profile on sent you to switches that changed this computer's
   instead. An agent on the box still can't change them.
-- **An agent waiting on its own work no longer looks like a live turn.**
-  When turn check reads a finished turn as work still running (a build, a
-  deploy, a task it waits on), the sidebar and its tab show an hourglass
-  that says so, instead of the spinner of a turn still going. Turn check
-  also reads a handoff as done: an agent that started a worker it won't
-  follow and told you that you can close the session no longer shows as
-  working.
-- **Plugins can give an agent a file.** `berth.api.attach` uploads a
-  pasted or dropped file into a session's worktree, or a worktree an agent
-  is about to start in, the way the composer does, and resolves with its
-  path on the box to put in a prompt. A pasted screenshot shrinks first, and
-  a path to a file on this computer (`berth.api.localPaths` finds them in
-  pasted text) goes up through Shipyard. Files up to 20 MB.
-- **A chat whose turn ended no longer looks busy.** When an agent's turn
-  ends while its work runs on (turn check read a build, a deploy or a
-  delegated task as still going), its chat now ends on an hourglass,
-  **Waiting on its work**, instead of a spinner and a ticking timer, and
-  the reply box shows **Send** rather than Stop: what you type starts a
-  new turn.
-- **Turn check reads a status report on another session as done.** A
-  reply that says how another session or worker is getting on and offers
-  to follow it up ("I can nudge it, or tell you when its turn ends") no
-  longer keeps the session showing as working. Waiting on another session
-  still counts as working when the agent says it will act once that
-  session reports back.
-- **A helper working in the background no longer restarts a finished
-  turn.** Tool use by a Claude Code subagent left running after the
-  agent's turn ended used to put the session back to running until your
-  next prompt.
-- **Stopping several agents can archive their worktrees too.** The Agent
-  Dashboard's Stop and Clean up dialogs have a box, **Archive their
-  worktrees where it's safe**. Ticked, each stopped agent's worktree is
-  archived once its agents are stopped: the archive script runs and the
-  branch is kept. A worktree with uncommitted changes, or with another
-  agent still running in it, is kept as it is, and its row says why. The
-  dialog remembers whether you ticked it.
-- **Archiving never tears down uncommitted work.** A box now refuses to
-  archive or remove a worktree with uncommitted or untracked files before
-  it stops anything or runs the archive script, instead of running the
-  script first and only then finding that git won't remove it. Remove
-  anyway still forces it.
 - **A plugin packed on a Mac installs.** A Mac's `tar` adds hidden `._`
   files for extended attributes; a release archive with them was refused
   ("no plugin folder") and, inside an app, would have broken its signature.
@@ -143,6 +96,75 @@ again.
   look like one shown twice. A box with no projects yet is left out instead
   of listed as one it couldn't read, and in the Medium size that line now
   takes the week's place rather than being cut off.
+
+## v0.3.31
+
+- **Worktrees with submodules can be removed.** git refuses to remove any
+  worktree with a submodule checked out, even a clean one, so removing or
+  archiving one failed. Shipyard now checks the worktree and its submodules
+  itself and removes it when nothing would be lost. If a submodule has
+  changes, stashes, or commits that aren't pushed anywhere (a commit only a
+  local tag points at counts), the worktree is kept and you can still choose
+  **Remove anyway**.
+
+- **Pin worktrees to the top of the sidebar.** Right-click a worktree, or
+  open its ⋯ menu, and choose **Pin to top**. Pinned worktrees sit in their
+  own list above your projects, in the order you pinned them, whether or not
+  anything runs in them. **Unpin** puts one back under its project. Pins
+  are kept on this computer, and a worktree's pin goes when you archive or
+  remove it.
+
+- **Switching projects no longer opens a new task.** Clicking a project on
+  the rail (or in the projects column) with no agent at work in it now takes
+  you to the worktree of it you were in last, or its main checkout, instead
+  of popping up New task.
+- **The app has a new icon:** a box in its tray with the amber lamp lit on
+  top. A dev build wears the same box on orange.
+- **A chat no longer goes blank at the top mid-turn.** When the agent's
+  long reply folded into **Working** and the chat got short enough to fit,
+  the Mac app could leave your prompt and the first steps undrawn, with
+  empty space where they belonged. They now stay drawn.
+- **An agent waiting on its own work no longer looks like a live turn.**
+  When turn check reads a finished turn as work still running (a build, a
+  deploy, a task it waits on), the sidebar and its tab show an hourglass
+  that says so, instead of the spinner of a turn still going. Turn check
+  also reads a handoff as done: an agent that started a worker it won't
+  follow and told you that you can close the session no longer shows as
+  working.
+- **Plugins can give an agent a file.** `berth.api.attach` uploads a
+  pasted or dropped file into a session's worktree, or a worktree an agent
+  is about to start in, the way the composer does, and resolves with its
+  path on the box to put in a prompt. A pasted screenshot shrinks first, and
+  a path to a file on this computer (`berth.api.localPaths` finds them in
+  pasted text) goes up through Shipyard. Files up to 20 MB.
+- **A chat whose turn ended no longer looks busy.** When an agent's turn
+  ends while its work runs on (turn check read a build, a deploy or a
+  delegated task as still going), its chat now ends on an hourglass,
+  **Waiting on its work**, instead of a spinner and a ticking timer, and
+  the reply box shows **Send** rather than Stop: what you type starts a
+  new turn.
+- **Turn check reads a status report on another session as done.** A
+  reply that says how another session or worker is getting on and offers
+  to follow it up ("I can nudge it, or tell you when its turn ends") no
+  longer keeps the session showing as working. Waiting on another session
+  still counts as working when the agent says it will act once that
+  session reports back.
+- **A helper working in the background no longer restarts a finished
+  turn.** Tool use by a Claude Code subagent left running after the
+  agent's turn ended used to put the session back to running until your
+  next prompt.
+- **Stopping several agents can archive their worktrees too.** The Agent
+  Dashboard's Stop and Clean up dialogs have a box, **Archive their
+  worktrees where it's safe**. Ticked, each stopped agent's worktree is
+  archived once its agents are stopped: the archive script runs and the
+  branch is kept. A worktree with uncommitted changes, or with another
+  agent still running in it, is kept as it is, and its row says why. The
+  dialog remembers whether you ticked it.
+- **Archiving never tears down uncommitted work.** A box now refuses to
+  archive or remove a worktree with uncommitted or untracked files before
+  it stops anything or runs the archive script, instead of running the
+  script first and only then finding that git won't remove it. Remove
+  anyway still forces it.
 - **Cards for agents in chat say what the agent is doing.** On the Agent
   Dashboard, an agent that runs in chat showed the frames of the host
   that runs it ("out stream_event") and "stdio" as its prompt. Its card

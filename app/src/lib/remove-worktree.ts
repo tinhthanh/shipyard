@@ -2,6 +2,8 @@ import { toastError } from "@/components/error-note";
 import { toastManager } from "@/components/ui/toast";
 import type { Client } from "@/lib/api";
 import { errorMessage } from "@/lib/format";
+import { keptReason } from "@/lib/kept-reason";
+import { unpinWorktree } from "@/lib/pinned-worktrees";
 import { clearRemoving, markRemoving, markScript, pruneRemovals, type RemovalKind, removalOf, removeResult, useRemovals } from "@/lib/removing";
 import { scheduleRefresh, useStore } from "@/lib/store";
 import { forgetWorktree } from "@/lib/workspaces";
@@ -34,6 +36,7 @@ export async function removeWorktreeOnBox(
   else {
     clearRemoving(box, wt.path);
     forgetWorktree(box, wt.path);
+    unpinWorktree(box, wt.path);
   }
   scheduleRefresh(box, ["locations", "sessions", "services"]);
   return res;
@@ -69,12 +72,12 @@ async function drain(box: string) {
       await removeWorktreeOnBox(client, box, location, wt, "remove", { force });
     } catch (err) {
       clearRemoving(box, wt.path);
-      // git's own words for work it would lose.
-      if (!force && /modified|untracked|uncommitted|contains/i.test(errorMessage(err))) {
+      const why = force ? null : keptReason(errorMessage(err));
+      if (why) {
         toastManager.add({
           type: "warning",
           title: `Kept ${wt.name}`,
-          description: "It has uncommitted changes, so git left it as it is.",
+          description: why,
           actionProps: { children: "Remove anyway", onClick: () => queueRemoval(box, location, wt, { force: true }) },
         });
       } else toastError(err, { title: `Couldn't remove ${wt.name}`, box });
@@ -85,10 +88,12 @@ async function drain(box: string) {
 }
 
 // worktreeGone is the box saying a worktree went: its workspace (tabs,
-// panes) goes too, and an archive the app was waiting on says it is done.
+// panes) and its pin go too, and an archive the app was waiting on says it
+// is done. A failed archive keeps both (archiveFailed).
 export function worktreeGone(box: string, path: string) {
   const was = clearRemoving(box, path);
   forgetWorktree(box, path);
+  unpinWorktree(box, path);
   if (was?.script) toastManager.add({ type: "success", title: `${was.kind === "archive" ? "Archived" : "Removed"} ${was.name ?? "the worktree"}`, description: box });
 }
 
