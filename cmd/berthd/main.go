@@ -129,6 +129,12 @@ func run(args []string) error {
 		fmt.Println(version.Line("berthd"))
 		return nil
 	}
+	// --home DIR is BERTH_HOME, for where no environment can be given: a
+	// Windows service is only a command line (install.go).
+	if args[0] == "--home" && len(args) > 2 {
+		os.Setenv("BERTH_HOME", args[1])
+		args = args[2:]
+	}
 	home, err := statefile.Home()
 	if err != nil {
 		return err
@@ -268,8 +274,18 @@ func utf8Locale() {
 func serve(b boxHome, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", "", "address to listen on (default: this box's tailnet address only)")
+	logPath := fs.String("log", "", "append the log to this file rather than standard error (a Windows service has none)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *logPath != "" {
+		f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		os.Stderr = f
 	}
 	if runtime.GOOS == "darwin" {
 		// A plist from an older install gives launchd's bare PATH, without

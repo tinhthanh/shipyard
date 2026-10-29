@@ -46,6 +46,16 @@ var (
 	command = func(name string, args ...string) ([]byte, error) {
 		return exec.Command(name, args...).CombinedOutput()
 	}
+	// spawn starts a program and leaves it running, as a service manager
+	// would (on Windows, startRun).
+	spawn = func(name string, args ...string) error {
+		cmd := exec.Command(name, args...)
+		cmd.SysProcAttr = ownSession()
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		return cmd.Process.Release()
+	}
 	lookPath   = exec.LookPath
 	runUserDir = "/run/user"
 	sleep      = time.Sleep
