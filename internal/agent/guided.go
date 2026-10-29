@@ -179,6 +179,10 @@ func (a *Agent) addSSHTerminal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer master.Close()
+	// The window closing ends the command: on Windows the program in a
+	// pseudo console isn't tied to ctx, so close the console as well.
+	stopClosing := context.AfterFunc(ctx, func() { master.Close() })
+	defer stopClosing()
 	// What the person types goes to the terminal, and nowhere else.
 	go func() {
 		defer cancel()

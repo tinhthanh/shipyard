@@ -11,6 +11,11 @@ again.
 
 ## Unreleased
 
+- **The Windows app adds a box over SSH.** Add a box → SSH runs in a real
+  terminal on Windows now (a pseudo console), and boxes reached over SSH
+  connect from there too. Windows' ssh can't share one login between steps,
+  so each step logs in on its own: a key or the Windows SSH agent answers
+  that without asking, a password would be asked at each step.
 - **On Windows, the agent starts when you sign in, with no console window.**
   `berth agent install` adds it to your account's startup programs, and it
   runs as a windowless program, so no terminal opens and nothing runs as a
