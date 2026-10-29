@@ -14,6 +14,10 @@
       "nsis": {
         "installMode": "currentUser"
       }
+    },
+    "resources": {
+      "binaries/berthd-linux-amd64": "berthd-linux-amd64",
+      "binaries/berthd-linux-arm64": "berthd-linux-arm64"
     }
   },
   "plugins": {
