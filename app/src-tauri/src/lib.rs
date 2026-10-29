@@ -25,7 +25,8 @@ struct Endpoint {
 
 // The agent's state directory: $BERTH_HOME/client when set, otherwise the
 // OS config directory's berth/client (~/Library/Application Support on macOS),
-// matching statefile.Home in the Go code.
+// matching statefile.Home in the Go code. On Windows that is the local
+// AppData, unless the state hasn't moved there from the roaming one yet.
 fn token_path() -> Result<PathBuf, String> {
     if let Ok(home) = std::env::var("BERTH_HOME") {
         if !home.is_empty() {
@@ -33,7 +34,15 @@ fn token_path() -> Result<PathBuf, String> {
         }
     }
     let base = dirs::config_dir().ok_or("no config directory on this system")?;
-    Ok(base.join("berth").join("client").join("ui-token"))
+    let token = base.join("berth").join("client").join("ui-token");
+    #[cfg(windows)]
+    if let Some(local) = dirs::data_local_dir() {
+        let moved = local.join("berth").join("client").join("ui-token");
+        if moved.exists() || !token.exists() {
+            return Ok(moved);
+        }
+    }
+    Ok(token)
 }
 
 #[tauri::command]
