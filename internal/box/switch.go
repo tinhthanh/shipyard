@@ -286,7 +286,7 @@ func (b *Box) respawnAgent(ctx context.Context, sess Session, command string, en
 		return err
 	}
 	shell := sessionShell()
-	argv := []string{shell, "-lc", withPATH(shell, launchPATH(command, agent), sourceCommand(shell, file))}
+	argv := shellRun(shell, withPATH(shell, launchPATH(command, agent), sourceCommand(shell, file)))
 	target := "=" + sess.Name + ":"
 	args := []string{"respawn-pane", "-k", "-t", target, "-c", sess.Dir}
 	for _, kv := range append(append(withAgentBrowserIdle(extra), "BERTH_SESSION="+sess.Name, "BERTH_AGENT="+agent), env...) {

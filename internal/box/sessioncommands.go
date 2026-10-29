@@ -67,6 +67,11 @@ func (s *Sessions) removeCommand(name string) {
 
 // sourceCommand is what the login shell runs to run the command in file.
 func sourceCommand(shell, file string) string {
+	if isPowerShell(shell) {
+		// Read and run, rather than dot-source: the file is no .ps1, and
+		// this way the execution policy doesn't refuse it.
+		return "Invoke-Expression ([IO.File]::ReadAllText(" + psQuote(file) + "))"
+	}
 	if filepath.Base(shell) == "fish" {
 		return "source " + shellQuote(file)
 	}
@@ -159,4 +164,36 @@ func (s *Sessions) sweepCommands(ctx context.Context, minAge time.Duration) {
 		os.Remove(path)
 		commandCache.Delete(path)
 	}
+}
+
+// isPowerShell is whether a session's shell is PowerShell, as on a Windows
+// box (sessionShell), where commands and PATH are written its way.
+func isPowerShell(shell string) bool {
+	name := shell[strings.LastIndexAny(shell, `\/`)+1:]
+	switch strings.ToLower(strings.TrimSuffix(name, ".exe")) {
+	case "pwsh", "powershell":
+		return true
+	}
+	return false
+}
+
+// psQuote is s as a PowerShell literal string.
+func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+// shellRun is the argv that runs script in shell: a login shell's -lc, or
+// PowerShell's -Command.
+func shellRun(shell, script string) []string {
+	if isPowerShell(shell) {
+		return []string{shell, "-NoLogo", "-Command", script}
+	}
+	return []string{shell, "-lc", script}
+}
+
+// shellLogin is the argv of the shell on its own, for a session with no
+// command.
+func shellLogin(shell string) []string {
+	if isPowerShell(shell) {
+		return []string{shell, "-NoLogo"}
+	}
+	return []string{shell, "-l"}
 }

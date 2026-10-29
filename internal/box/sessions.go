@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -368,7 +369,7 @@ func (s *Sessions) create(ctx context.Context, name, location, dir, command, age
 		return Session{}, ErrSessionExists
 	}
 	shell := sessionShell()
-	argv := []string{shell, "-l"}
+	argv := shellLogin(shell)
 	file := ""
 	if command != "" {
 		var err error
@@ -378,7 +379,7 @@ func (s *Sessions) create(ctx context.Context, name, location, dir, command, age
 		// An agent starts with the PATH its CLI was found with: an npm
 		// install under nvm is on an interactive shell's PATH, which a
 		// login shell alone (-l) never reads.
-		argv = []string{shell, "-lc", withPATH(shell, launchPATH(command, agent), sourceCommand(shell, file))}
+		argv = shellRun(shell, withPATH(shell, launchPATH(command, agent), sourceCommand(shell, file)))
 	}
 	if s.Prepare != nil {
 		s.Prepare(env)
@@ -454,8 +455,15 @@ func (s *Sessions) create(ctx context.Context, name, location, dir, command, age
 	return sess, nil
 }
 
-// sessionShell is the shell a session runs in.
+// sessionShell is the shell a session runs in: on Windows, PowerShell
+// (pwsh, else Windows PowerShell), which has no SHELL to name it.
 func sessionShell() string {
+	if runtime.GOOS == "windows" {
+		if p, err := exec.LookPath("pwsh.exe"); err == nil {
+			return p
+		}
+		return "powershell.exe"
+	}
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
 	}
