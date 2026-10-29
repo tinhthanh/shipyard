@@ -25,7 +25,13 @@ try {
   pnpm.cmd install --frozen-lockfile
   if ($LASTEXITCODE) { throw "pnpm install failed" }
   $extra = @()
-  if ($Version) { $extra = @("--config", "{`"version`":`"$Version`"}") }
+  if ($Version) {
+    # A file, not inline JSON: Windows PowerShell drops the quotes of an
+    # argument it passes to a program.
+    $conf = Join-Path $env:TEMP "berth-version.conf.json"
+    Set-Content -Path $conf -Value ('{"version":"' + $Version + '"}') -Encoding ascii
+    $extra = @("--config", $conf)
+  }
   pnpm.cmd tauri build @extra
   if ($LASTEXITCODE) { throw "tauri build failed" }
 } finally { Pop-Location }
