@@ -27,6 +27,10 @@ export interface LocalBoxStatus {
   box?: string;
   // What setting up will call it: this computer's hostname.
   name: string;
+  // On Windows the box runs in WSL, in the distribution wsl names;
+  // needs_wsl: WSL isn't installed yet (installWSL asks Windows to).
+  needs_wsl?: boolean;
+  wsl?: string;
 }
 
 // follow runs a streamed set up or removal and returns the box it paired.
@@ -59,6 +63,9 @@ export const localBoxApi = {
   // setUp installs berthd here and pairs with it; run again, it reconnects.
   // It resolves with the box's name.
   setUp: (c: Client, onLine: (line: string) => void, signal?: AbortSignal) => follow(c, "/v1/boxes/local", undefined, onLine, signal),
+  // installWSL asks Windows to install WSL, as an administrator; it
+  // resolves once the person accepted Windows' prompt.
+  installWSL: (c: Client) => c.laptop<{ started: boolean }>("POST", "/v1/boxes/local/wsl"),
   // remove forgets the box, stops berthd and removes its service; with
   // removeData its state (keys, project list, session records) goes too.
   remove: (c: Client, removeData: boolean, onLine: (line: string) => void, signal?: AbortSignal) =>
@@ -104,6 +111,7 @@ export function useLocalBox(): { ready: boolean; status?: LocalBoxStatus } {
   return { ready: settled, status };
 }
 
-// offerLocalBox is whether Add a box offers Use this Mac: it can be one,
-// and isn't paired as one already.
-export const offerLocalBox = (s?: LocalBoxStatus) => !!s && s.supported && s.available && !s.box;
+// offerLocalBox is whether Add a box offers Use this Mac: it can be one
+// (on Windows, once WSL is installed, which it offers to do), and isn't
+// paired as one already.
+export const offerLocalBox = (s?: LocalBoxStatus) => !!s && s.supported && (s.available || !!s.needs_wsl) && !s.box;

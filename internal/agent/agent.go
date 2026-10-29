@@ -377,6 +377,7 @@ func Run(ctx context.Context, cfg Config) error {
 	go a.healthLoop(ctx)
 	go a.routeLoop(ctx)
 	go a.keepLocalBoxCurrent(ctx)
+	a.keepWSLBoxRunning(ctx)
 	go a.watchTeamUpdates(ctx)
 	go a.watchTeamSuggestions(ctx)
 	go a.keepHelpersTidy(ctx)

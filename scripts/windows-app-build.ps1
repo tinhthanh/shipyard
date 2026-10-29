@@ -1,6 +1,7 @@
-# Builds the Windows app (an alpha): berth.exe as the app's sidecar, then
-# the Tauri app and its NSIS installer. Run from the repository root on
-# Windows with Go, Node + pnpm, Rust (MSVC) and the VS C++ build tools:
+# Builds the Windows app (an alpha): berth.exe as the app's sidecar, the
+# Linux berthd it carries, then the Tauri app and its NSIS installer. Run
+# from the repository root on Windows with Go, Node + pnpm, Rust (MSVC) and
+# the VS C++ build tools:
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\windows-app-build.ps1 [-Version 0.3.31] [-Brand vetgo]
 #
@@ -24,7 +25,19 @@ try {
   # the agent (berth agent install), so no console window opens.
   go build -trimpath -ldflags "$ld -H windowsgui" -o (Join-Path $bin "berth-agent-$triple.exe") ./cmd/berth
   if ($LASTEXITCODE) { throw "go build (agent) failed" }
-} finally { Pop-Location }
+  # The Linux berthd, for this computer's box in WSL and for boxes added over
+  # SSH (beside berth.exe once installed, where both look for it).
+  $env:CGO_ENABLED = "0"
+  $env:GOOS = "linux"
+  foreach ($arch in "amd64", "arm64") {
+    $env:GOARCH = $arch
+    go build -trimpath -ldflags $ld -o (Join-Path $bin "berthd-linux-$arch") ./cmd/berthd
+    if ($LASTEXITCODE) { throw "go build (berthd linux/$arch) failed" }
+  }
+} finally {
+  Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
+  Pop-Location
+}
 
 Push-Location (Join-Path $root "app")
 try {
