@@ -38,6 +38,7 @@ import { fill as fillTemplate, templateVariables } from "@/lib/templates";
 import { type InstalledKitOn, kitsApi } from "@/lib/kits";
 import { cn } from "@/lib/utils";
 import { openAddBox } from "@/views/onboarding/add-box-dialog";
+import { thisComputer } from "@/lib/platform";
 
 export type { AgentPick } from "@/lib/composer";
 
@@ -1043,7 +1044,7 @@ function NoProjects({ className, tabs }: { className?: string; tabs?: React.Reac
   const online = boxes.some((b) => b.state === "online");
   const state = boxes.length === 0 ? "no-boxes" : !online ? "offline" : "no-projects";
   const copy = {
-    "no-boxes": { scene: "dock", title: "No boxes yet", text: "Work happens in a project on a box: this Mac, a VPS or a dev machine. Add a box, then a project on it." },
+    "no-boxes": { scene: "dock", title: "No boxes yet", text: thisComputer("Work happens in a project on a box: this Mac, a VPS or a dev machine. Add a box, then a project on it.") },
     offline: { scene: "offline", title: "No box is online", text: "Work starts on a box that is online. Check on your boxes in Settings." },
     "no-projects": { scene: "dock", title: "No projects yet", text: "Work happens in a project: a git repository on one of your boxes. Add one first." },
   }[state] as { scene: "dock" | "offline"; title: string; text: string };

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { Client } from "@/lib/api";
 
-import { attachApi, localPaths, MAX_ATTACHMENT } from "./attachments.ts";
+import { attachApi, baseName, localPaths, MAX_ATTACHMENT } from "./attachments.ts";
 
 // A client that records what it was asked to upload and answers as the box,
 // and as the laptop agent for a file on this computer.
@@ -95,4 +95,18 @@ test("pasted only shrinks what the app shrinks: a text file goes as it is", asyn
 test("localPaths finds the laptop paths a paste is made of, and nothing in other text", () => {
   assert.deepEqual(localPaths("/Users/me/Desktop/Shot\\ 1.png\nfile:///var/folders/xy/T/a%20b.pdf"), ["/Users/me/Desktop/Shot 1.png", "/var/folders/xy/T/a b.pdf"]);
   assert.deepEqual(localPaths("see /Users/me/Desktop/shot.png"), []);
+});
+
+test("localPaths takes Windows paths as they are pasted there", () => {
+  assert.deepEqual(localPaths('"C:\\Users\\ana\\Pictures\\Screenshots\\Shot 1.png"'), ["C:\\Users\\ana\\Pictures\\Screenshots\\Shot 1.png"]);
+  assert.deepEqual(localPaths("file:///C:/Users/ana/Desktop/a%20b.pdf"), ["C:/Users/ana/Desktop/a b.pdf"]);
+  assert.deepEqual(localPaths("\\\\nas\\shots\\x.jpg"), ["\\\\nas\\shots\\x.jpg"]);
+  assert.deepEqual(localPaths("C:\\Users\\ana\\notes.docx"), []);
+  assert.deepEqual(localPaths("see C:\\Users\\ana\\shot.png"), []);
+});
+
+test("baseName takes a file's name from a Mac or a Windows path", () => {
+  assert.equal(baseName("/Users/me/Desktop/shot.png"), "shot.png");
+  assert.equal(baseName("C:\\Users\\ana\\shot.png"), "shot.png");
+  assert.equal(baseName("C:/Users/ana/a b.pdf"), "a b.pdf");
 });

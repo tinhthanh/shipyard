@@ -14,6 +14,7 @@ import { useAgentRows } from "./agents";
 import { fitRows, useHomeWidget } from "./env";
 import { Bar, More, shortAgo, WidgetEmpty, WidgetRow, WidgetSkeleton } from "./parts";
 import { placeLabel } from "@/lib/worktree-names";
+import { thisComputer } from "@/lib/platform";
 
 // Boxes and what runs on them: both from what the app already polls (each
 // box's stats every 30s, its services), so they cost nothing extra.
@@ -23,7 +24,7 @@ export function BoxesWidget() {
   const list = useStore((s) => s.status?.boxes ?? (NONE as BoxStatus[]));
   const loaded = useStore((s) => !!s.status);
   if (!loaded) return <WidgetSkeleton rows={3} />;
-  if (!list.length) return <WidgetEmpty scene="arriving" title="No boxes yet" hint="A box is a computer your agents work on: this Mac, a server, a VM." action="Add a box" onAction={openAddBox} />;
+  if (!list.length) return <WidgetEmpty scene="arriving" title="No boxes yet" hint={thisComputer("A box is a computer your agents work on: this Mac, a server, a VM.")} action="Add a box" onAction={openAddBox} />;
   // Online first, then by name; offline boxes take one line.
   const sorted = [...list].sort((a, b) => Number(b.state === "online") - Number(a.state === "online") || a.name.localeCompare(b.name));
   const shown = sorted.slice(0, Math.max(1, fitRows(height, 44)));

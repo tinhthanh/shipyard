@@ -31,7 +31,7 @@ export function RemoveLocalBoxDialog({ box, open, onOpenChange }: { box: string;
       await useStore.getState().refreshStatus();
       onOpenChange(false);
       setLines(undefined);
-      toastManager.add({ title: "This Mac is no longer a box", description: removeData ? "berthd and its data are gone." : "berthd is stopped; its data is kept.", type: "success" });
+      toastManager.add({ title: thisComputer("This Mac is no longer a box"), description: removeData ? "berthd and its data are gone." : "berthd is stopped; its data is kept.", type: "success" });
     } catch (err) {
       setError(plainError(err));
     }

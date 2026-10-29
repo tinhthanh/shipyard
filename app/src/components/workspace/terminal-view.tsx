@@ -7,7 +7,7 @@ import { BoxOffline, SessionEnded } from "@/components/workspace/pane-state";
 import { ServiceStopped } from "@/components/workspace/service-terminal";
 import { useActiveTheme } from "@/hooks/use-theme";
 import { ApiError, type TerminalConnection } from "@/lib/api";
-import { attachable, localPaths, named, onThisComputer, pastedFiles, shrinkImage, uploadAttachment, uploadLocalFile } from "@/lib/attachments";
+import { attachable, baseName, localPaths, named, onThisComputer, pastedFiles, shrinkImage, uploadAttachment, uploadLocalFile } from "@/lib/attachments";
 import { copyText } from "@/lib/clipboard";
 import { IS_LINUX, IS_MAC, platformKeys } from "@/lib/platform";
 import { usePrefs } from "@/lib/prefs";
@@ -232,7 +232,7 @@ export function TerminalView({ box, session, agent, command, wsKey, tab, pane, v
     const take = async (given: (File | string)[], text?: string, pasted = false) => {
       const files = given.map((f) => (typeof f === "string" ? f : named(f)));
       let shown: string | undefined;
-      const first = typeof files[0] === "string" ? (files[0].split("/").pop() ?? files[0]) : files[0].name;
+      const first = typeof files[0] === "string" ? baseName(files[0]) : files[0].name;
       const slow = window.setTimeout(() => {
         shown = toastManager.add({ type: "loading", title: files.length === 1 ? `Uploading ${first} to ${box}…` : `Uploading ${files.length} files to ${box}…`, timeout: 0 });
       }, 400);

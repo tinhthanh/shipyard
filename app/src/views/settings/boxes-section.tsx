@@ -119,7 +119,7 @@ function BoxRow({ box }: { box: BoxStatus }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 text-desc">
             <span className="text-heading">{box.name}</span>
-            {box.local && <span className="rounded border px-1 text-tag text-muted-foreground uppercase tracking-wide">This Mac</span>}
+            {box.local && <span className="rounded border px-1 text-tag text-muted-foreground uppercase tracking-wide">{thisComputer("This Mac")}</span>}
             <span className={cn("text-desc", state === "online" ? "text-muted-foreground" : state === "outdated" ? "text-info-foreground" : state === "unreachable" ? "text-destructive-foreground" : "text-muted-foreground")}>
               {state === "online" && box.latency_ms != null ? latencyText(box.latency_ms, box.link) : BOX_WORDS[state].word}
             </span>

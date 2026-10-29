@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 
 import type { Theme } from "@/lib/api";
+import { IS_WINDOWS } from "@/lib/platform";
 import { usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
 import { useRegistry } from "@/plugins/registry";
@@ -52,5 +53,14 @@ export function useActiveTheme(): Theme {
 // useApplyTheme keeps the document's colors in step with the chosen theme.
 export function useApplyTheme() {
   const theme = useActiveTheme();
+  const id = useStore((s) => s.themeId);
   useEffect(() => applyTheme(theme), [theme]);
+  // Windows draws the title bar itself, light or dark by the window's theme.
+  // Following the system leaves it unset, so the page keeps reading the
+  // system's appearance and not the one set here.
+  useEffect(() => {
+    if (!IS_WINDOWS) return;
+    const want = id === SYSTEM_THEME ? null : theme.appearance;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => getCurrentWindow().setTheme(want)).catch(() => {});
+  }, [id, theme.appearance]);
 }
