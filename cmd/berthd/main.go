@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -320,6 +321,8 @@ func serve(b boxHome, args []string) error {
 		ln.Close()
 		return err
 	}
+	// install on Windows stops the berthd it replaces by this (install.go).
+	statefile.Write(filepath.Join(b.dir, "berthd.pid"), []byte(strconv.Itoa(os.Getpid())))
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	s := &wire.Server{
 		Identity: id,

@@ -34,9 +34,45 @@ try {
     go build -trimpath -ldflags $ld -o (Join-Path $bin "berthd-linux-$arch") ./cmd/berthd
     if ($LASTEXITCODE) { throw "go build (berthd linux/$arch) failed" }
   }
+  Remove-Item Env:GOOS, Env:GOARCH -ErrorAction SilentlyContinue
+  # berthd for Windows itself, for this computer's box run natively (Labs):
+  # berthd-bg.exe is the same program without a console, which Windows
+  # starts at sign-in (berthd install).
+  go build -trimpath -ldflags $ld -o (Join-Path $bin "berthd.exe") ./cmd/berthd
+  if ($LASTEXITCODE) { throw "go build (berthd) failed" }
+  go build -trimpath -ldflags "$ld -H windowsgui" -o (Join-Path $bin "berthd-bg.exe") ./cmd/berthd
+  if ($LASTEXITCODE) { throw "go build (berthd-bg) failed" }
 } finally {
   Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED -ErrorAction SilentlyContinue
   Pop-Location
+}
+
+# Its tmux: psmux (MIT, github.com/psmux/psmux), built from the source of a
+# pinned release whose archive must match this hash, never a prebuilt
+# binary. Built once per version; it takes a few minutes.
+$psmuxTag = "v3.4.0"
+$psmuxSha256 = "f4a93929cd3462d9e744f5076824f3ad57b9d6d5ba0df098389f51fa296fdc15"
+$tmuxExe = Join-Path $bin "tmux.exe"
+$tmuxStamp = Join-Path $bin "tmux.version"
+if (-not ((Test-Path $tmuxExe) -and (Test-Path $tmuxStamp) -and ((Get-Content $tmuxStamp) -eq $psmuxTag))) {
+  $work = Join-Path $root "app\src-tauri\target\psmux"
+  New-Item -ItemType Directory -Force -Path $work | Out-Null
+  $zip = Join-Path $work "psmux-$psmuxTag.zip"
+  Invoke-WebRequest -UseBasicParsing "https://github.com/psmux/psmux/archive/refs/tags/$psmuxTag.zip" -OutFile $zip
+  if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne $psmuxSha256) { throw "psmux $psmuxTag's source archive is not the one that was reviewed" }
+  $src = Join-Path $work "src"
+  Remove-Item $src -Recurse -Force -ErrorAction SilentlyContinue
+  Expand-Archive $zip $src
+  $dir = (Get-ChildItem $src -Directory | Select-Object -First 1).FullName
+  Push-Location $dir
+  try {
+    $env:PSMUX_GIT_SHA = $psmuxTag
+    cargo build --release --bin psmux
+    if ($LASTEXITCODE) { throw "building psmux failed" }
+  } finally { Remove-Item Env:PSMUX_GIT_SHA -ErrorAction SilentlyContinue; Pop-Location }
+  Copy-Item (Join-Path $dir "target\release\psmux.exe") $tmuxExe -Force
+  Copy-Item (Join-Path $dir "LICENSE") (Join-Path $bin "psmux-LICENSE.txt") -Force
+  Set-Content -Path $tmuxStamp -Value $psmuxTag -Encoding ascii
 }
 
 Push-Location (Join-Path $root "app")

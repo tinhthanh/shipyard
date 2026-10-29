@@ -109,6 +109,10 @@ func install(b boxHome, args []string) error {
 	// Shipyard's tmux and the agent CLIs: the unit carries the user's own PATH,
 	// as their login shell sets it now, with those folders.
 	spec.Env["PATH"] = service.ServicePATH()
+	// Windows has no service manager to restart it: the berthd serving now
+	// stops first, or the new one could not listen, nor its program be
+	// replaced while it runs.
+	stopServing(b, spec.Program)
 	started := time.Now()
 	path, err := service.Install(spec)
 	if err != nil {
