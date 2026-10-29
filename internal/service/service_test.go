@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -422,41 +423,26 @@ func TestLaunchdReloadGivesUpWithTheError(t *testing.T) {
 	}
 }
 
-// On Windows the service is a Task Scheduler task: its XML runs the program
-// through conhost --headless at logon and every five minutes, and Install
-// registers and runs it with schtasks.
-func TestAWindowsServiceIsAScheduledTask(t *testing.T) {
+// On Windows the service is a value under the user's Run key: Install sets
+// it to the program's command line and runs the program once; Uninstall
+// deletes it. No scheduled task, nothing hidden, no proxy program.
+func TestAWindowsServiceIsARunValue(t *testing.T) {
 	home := t.TempDir()
-	saved := []any{goos, homeDir, command, currentUser}
+	saved := []any{goos, homeDir, command}
 	defer func() {
-		goos, homeDir, command, currentUser = saved[0].(string), saved[1].(func() (string, error)), saved[2].(func(string, ...string) ([]byte, error)), saved[3].(func() (string, error))
+		goos, homeDir, command = saved[0].(string), saved[1].(func() (string, error)), saved[2].(func(string, ...string) ([]byte, error))
 	}()
 	goos = "windows"
 	homeDir = func() (string, error) { return home, nil }
-	currentUser = func() (string, error) { return `PC\ana`, nil }
 	var ran [][]string
 	command = func(name string, args ...string) ([]byte, error) {
 		ran = append(ran, append([]string{name}, args...))
 		return nil, nil
 	}
-	s := Spec{Name: "berth-agent", Description: "berth agent", Program: "/opt/Vetgo App/berth-cli.exe", Args: []string{"agent", "start"}}
+	s := Spec{Name: "berth-agent", Description: "berth agent", Program: "/opt/Vetgo App/berth-agent.exe", Args: []string{"agent", "start"}}
 	data, err := Render(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if data[0] != 0xFF || data[1] != 0xFE {
-		t.Fatal("the task XML must be UTF-16 with a byte order mark")
-	}
-	var x strings.Builder
-	for i := 2; i+1 < len(data); i += 2 {
-		x.WriteRune(rune(data[i]) | rune(data[i+1])<<8)
-	}
-	xml := x.String()
-	for _, want := range []string{"<LogonTrigger>", `<UserId>PC\ana</UserId>`, "<Interval>PT5M</Interval>", "<Command>conhost.exe</Command>",
-		`<Arguments>--headless &#34;/opt/Vetgo App/berth-cli.exe&#34; agent start</Arguments>`, "<LogonType>InteractiveToken</LogonType>"} {
-		if !strings.Contains(xml, want) {
-			t.Fatalf("task XML lacks %q:\n%s", want, xml)
-		}
+	if err != nil || string(data) != "\"/opt/Vetgo App/berth-agent.exe\" agent start\n" {
+		t.Fatalf("command line %q, %v", data, err)
 	}
 	path, err := Install(s)
 	if err != nil {
@@ -465,14 +451,25 @@ func TestAWindowsServiceIsAScheduledTask(t *testing.T) {
 	if filepath.Dir(path) != filepath.Join(home, "AppData", "Local", "berth", "services") || !Installed(s) {
 		t.Fatalf("installed at %s, Installed=%v", path, Installed(s))
 	}
-	if len(ran) != 2 || ran[0][1] != "/create" || ran[0][3] != `\berth\berth-agent` || ran[1][1] != "/run" {
-		t.Fatalf("schtasks calls: %v", ran)
+	want := [][]string{
+		{"reg", "add", runKey, "/v", "berth-agent", "/t", "REG_SZ", "/d", "\"/opt/Vetgo App/berth-agent.exe\" agent start", "/f"},
+		{"/opt/Vetgo App/berth-agent.exe", "agent", "start"},
+	}
+	if fmt.Sprint(ran) != fmt.Sprint(want) {
+		t.Fatalf("ran %q, want %q", ran, want)
+	}
+	for _, c := range ran {
+		for _, a := range c {
+			if strings.Contains(strings.ToLower(a), "schtasks") || strings.Contains(strings.ToLower(a), "conhost") {
+				t.Fatalf("a Windows service must not go through %q", a)
+			}
+		}
 	}
 	ran = nil
 	if _, err := Uninstall(s); err != nil {
 		t.Fatal(err)
 	}
-	if len(ran) != 2 || ran[1][1] != "/delete" {
-		t.Fatalf("uninstall calls: %v", ran)
+	if len(ran) != 1 || ran[0][1] != "delete" {
+		t.Fatalf("uninstall ran %q", ran)
 	}
 }
