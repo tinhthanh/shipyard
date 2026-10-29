@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cosscom/shipyard/internal/box"
@@ -414,11 +413,11 @@ func lockAgent(dir string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := tryLock(f); err != nil {
 		f.Close()
 		return nil, ErrAlreadyRunning
 	}
-	return func() { syscall.Flock(int(f.Fd()), syscall.LOCK_UN); f.Close() }, nil
+	return func() { unlock(f); f.Close() }, nil
 }
 
 func (a *Agent) publish(e Event) {

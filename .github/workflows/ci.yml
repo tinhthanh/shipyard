@@ -59,6 +59,9 @@ jobs:
       # omarchy's image has it; apt's mirrors are slow from there.
       - run: command -v tmux >/dev/null || { sudo apt-get update && sudo apt-get install -y tmux; }
       - run: go vet ./...
+      # The laptop agent and the daemon build for Windows too (fork); their
+      # tests are Unix-only for now.
+      - run: GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/berth ./cmd/berthd
       - run: go test -race ./...
         # GitHub's Ubuntu runners stop Chromium's sandbox (user namespaces),
         # which changes what the agent browser's status says.

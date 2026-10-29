@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cosscom/shipyard/internal/statefile"
@@ -387,15 +386,15 @@ func (s *Sessions) freezeSession(ctx context.Context, name string, freeze bool) 
 		tree := processTree(pid)
 		if !freeze {
 			for _, p := range tree {
-				syscall.Kill(p, syscall.SIGCONT)
+				signalPID(p, sigCont)
 			}
 			continue
 		}
 		// Children first, so none is left running by a parent that stopped.
 		for i := len(tree) - 1; i > 0; i-- {
-			syscall.Kill(tree[i], syscall.SIGSTOP)
+			signalPID(tree[i], sigStop)
 		}
-		syscall.Kill(pid, syscall.SIGTTIN)
+		signalPID(pid, sigTTIN)
 	}
 	return nil
 }

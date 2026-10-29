@@ -278,8 +278,8 @@ func runLoginScript(ctx context.Context, script, dir string, env []string, email
 	}
 	cmd.Env = append(append(append(base, quietEnv...), env...), "BERTH_LOGIN_EMAIL="+email)
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.SysProcAttr = ownGroup()
+	cmd.Cancel = func() error { return signalGroup(cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = time.Second
 	var stdout capped
 	stdout.max = maxLoginOutput
