@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,7 +28,20 @@ func (a *Agent) cliPath() (string, error) {
 	if a.cfg.CLI != "" {
 		return a.cfg.CLI, nil
 	}
-	return os.Executable()
+	exe, err := os.Executable()
+	if err != nil || runtime.GOOS != "windows" {
+		return exe, err
+	}
+	// The Windows app starts the agent from berth-agent.exe, built without
+	// a console so none opens at sign-in. A command it runs in a pseudo
+	// console (berth add ssh) needs one: the same CLI beside it has it.
+	if strings.EqualFold(filepath.Base(exe), "berth-agent.exe") {
+		cli := filepath.Join(filepath.Dir(exe), "berth-cli.exe")
+		if _, err := os.Stat(cli); err == nil {
+			return cli, nil
+		}
+	}
+	return exe, nil
 }
 
 func (a *Agent) cli(ctx context.Context, args ...string) *exec.Cmd {

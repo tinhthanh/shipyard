@@ -12,9 +12,14 @@ import (
 	"unsafe"
 )
 
+// PTY is the master side of a pseudo-terminal: what the program writes is
+// read from it, what is written to it is the program's input. On Windows it
+// is a pseudo console (pty_windows.go).
+type PTY = *os.File
+
 // Start runs cmd with a new pseudo-terminal as its controlling terminal and
 // returns the master side. Closing the master hangs the program up.
-func Start(cmd *exec.Cmd, cols, rows int) (*os.File, error) {
+func Start(cmd *exec.Cmd, cols, rows int) (PTY, error) {
 	master, slave, err := openPTY()
 	if err != nil {
 		return nil, err
@@ -36,7 +41,7 @@ func Start(cmd *exec.Cmd, cols, rows int) (*os.File, error) {
 type winsize struct{ rows, cols, x, y uint16 }
 
 // Resize tells the program on the pseudo-terminal its window size changed.
-func Resize(f *os.File, cols, rows int) error {
+func Resize(f PTY, cols, rows int) error {
 	if cols <= 0 || rows <= 0 || cols > 10000 || rows > 10000 {
 		return nil
 	}

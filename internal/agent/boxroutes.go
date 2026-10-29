@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -240,8 +241,14 @@ func (a *Agent) routesFor(p trust.Peer, settings []RouteSetting) (routes []wire.
 }
 
 // sshControlDir holds the SSH routes' shared connections. Under a state
-// directory too long for a socket path, each connection logs in itself.
-func (a *Agent) sshControlDir() string { return filepath.Join(a.cfg.Dir, "ssh") }
+// directory too long for a socket path, each connection logs in itself, as
+// on Windows, whose ssh can't share one (no ControlMaster).
+func (a *Agent) sshControlDir() string {
+	if runtime.GOOS == "windows" {
+		return ""
+	}
+	return filepath.Join(a.cfg.Dir, "ssh")
+}
 
 // applyRoutesLocked gives a box's client the routes its settings call for,
 // when they changed. a.mu is held.

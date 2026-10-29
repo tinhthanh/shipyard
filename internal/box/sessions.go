@@ -533,7 +533,7 @@ func (s *Sessions) Kill(ctx context.Context, name string) error {
 
 // Attach runs a tmux client for the session under a new pseudo-terminal. The
 // caller relays the returned master to the laptop; closing it detaches.
-func (s *Sessions) Attach(ctx context.Context, name string, cols, rows int) (*os.File, *exec.Cmd, error) {
+func (s *Sessions) Attach(ctx context.Context, name string, cols, rows int) (terminal.PTY, *exec.Cmd, error) {
 	if _, err := s.Get(ctx, name); err != nil {
 		return nil, nil, err
 	}

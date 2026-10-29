@@ -179,12 +179,20 @@ func addSSHSteps(l laptop, args []string) error {
 
 	// The steps share one connection, so a password or host key question is
 	// asked once. /tmp keeps the socket path under macOS's 104-byte limit.
-	control, err := os.MkdirTemp("/tmp", "cpssh")
+	// Windows' ssh can't share one (no ControlMaster): there each step logs
+	// in itself, which a key or an SSH agent answers without asking.
+	tmp := "/tmp"
+	if !sharedSSH {
+		tmp = os.TempDir()
+	}
+	control, err := os.MkdirTemp(tmp, "cpssh")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(control)
-	sshArgs = append([]string{"-o", "ControlPath=" + filepath.Join(control, "%C")}, sshArgs...)
+	if sharedSSH {
+		sshArgs = append([]string{"-o", "ControlPath=" + filepath.Join(control, "%C")}, sshArgs...)
+	}
 	fail := func(stderr string, agent *sshsetup.Agent) *sshsetup.Failure {
 		f := sshsetup.Classify(stderr, host, cfg.Port, agent, plan.IdentityFiles)
 		if f.Kind == "host-key-unknown" && f.Fingerprint == "" {
@@ -227,7 +235,9 @@ func addSSHSteps(l laptop, args []string) error {
 			return connectFailed(sshsetup.AuthFailure(host, cfg.Port, offered, first.Detail))
 		}
 	}
-	defer exec.Command("ssh", append(append([]string{}, sshArgs...), "-O", "exit", target)...).Run()
+	if sharedSSH {
+		defer exec.Command("ssh", append(append([]string{}, sshArgs...), "-O", "exit", target)...).Run()
+	}
 	ssh := func(stdin []byte, remote string) ([]byte, error) {
 		cmd := exec.Command("ssh", append(append([]string{}, sshArgs...), target, remote)...)
 		cmd.Env = env
@@ -589,18 +599,27 @@ func proxyCommand(exe, network string) string {
 	return fmt.Sprintf("ProxyCommand=%s network proxy %s %%h %%p", shellQuote(exe), shellQuote(network))
 }
 
+// sharedSSH says whether ssh here can share one connection between the
+// steps (ControlMaster). Windows' ssh can't.
+const sharedSSH = runtime.GOOS != "windows"
+
 // openMaster authenticates once and leaves a shared connection in the
 // background, returning ssh's stderr when it fails. That goes to a file, not
 // a pipe: the backgrounded ssh keeps it open, and waiting on a pipe would
 // wait for that process to exit. -v adds the keys ssh offered, which an
-// "every key was refused" failure names.
+// "every key was refused" failure names. Without a shared connection it
+// only logs in once and out again, to check that it can.
 func openMaster(sshArgs []string, target string, env []string, dir string, approve func(url string)) (string, error) {
 	errFile, err := os.Create(filepath.Join(dir, "stderr"))
 	if err != nil {
 		return "", err
 	}
 	defer errFile.Close()
-	cmd := exec.Command("ssh", append(append([]string{"-v", "-o", "ControlMaster=yes", "-o", "ControlPersist=120", "-f", "-N"}, sshArgs...), target)...)
+	args := append(append([]string{"-v", "-o", "ControlMaster=yes", "-o", "ControlPersist=120", "-f", "-N"}, sshArgs...), target)
+	if !sharedSSH {
+		args = append(append([]string{"-v"}, sshArgs...), target, "exit")
+	}
+	cmd := exec.Command("ssh", args...)
 	cmd.Env = env
 	cmd.Stderr = errFile
 	if err := cmd.Start(); err != nil {
