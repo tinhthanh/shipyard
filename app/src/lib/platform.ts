@@ -15,8 +15,16 @@ const forced = (() => {
 const tauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const nav = typeof navigator === "undefined" ? "" : `${navigator.platform} ${navigator.userAgent}`;
 
-export const IS_LINUX = forced ? forced === "linux" : tauri && /Linux/.test(nav);
+export const IS_WINDOWS = forced ? forced === "windows" : tauri && /Windows|Win32|Win64/.test(nav);
+// The Windows app (a fork's alpha) takes the Linux app's way wherever that
+// is the way of a desktop that isn't a Mac: Ctrl for ⌘, no menu bar, no
+// floating bar, "this computer". So IS_LINUX is true there too.
+export const IS_LINUX = forced ? forced === "linux" || forced === "windows" : tauri && (/Linux/.test(nav) || IS_WINDOWS);
 export const IS_MAC = !IS_LINUX;
+
+// The app's name: Shipyard, or a fork's brand when the build carries one
+// (branding/, scripts/brand.mjs sets VITE_BRAND_NAME).
+export const APP_NAME: string = (import.meta.env?.VITE_BRAND_NAME as string | undefined) || "Shipyard";
 
 // The Linux app is an alpha: it says so beside its name.
 export const LINUX_ALPHA = IS_LINUX;

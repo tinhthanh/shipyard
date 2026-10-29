@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["nsis"],
+    "externalBin": ["binaries/berth-cli"],
+    "shortDescription": "Agents on your boxes",
+    "longDescription": "Run coding agents on your own boxes and watch them from here. This is the Windows app's alpha.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

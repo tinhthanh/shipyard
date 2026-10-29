@@ -9,7 +9,7 @@ import { copyDiagnostics } from "@/lib/diagnostics";
 import { ago, bytes } from "@/lib/format";
 import { openDocs, openUrl } from "@/lib/open-url";
 import { useOutdatedBoxes } from "@/lib/outdated";
-import { LINUX_ALPHA, LINUX_BUGS } from "@/lib/platform";
+import { APP_NAME, LINUX_ALPHA, LINUX_BUGS } from "@/lib/platform";
 import { NONE, useStore } from "@/lib/store";
 import { NO_APP_RELEASE_LINE, noAppRelease } from "@/lib/fork-updates";
 import { checkForUpdate, restartToUpdate, updatesSupported, useUpdater } from "@/lib/updater";
@@ -23,7 +23,7 @@ const RELEASES = "https://github.com/tinhthanh/shipyard/releases";
 export function AboutSection() {
   const version = useAppVersion();
   return (
-    <SettingsPage badge={LINUX_ALPHA && <AlphaBadge />} title="About Shipyard" description="Agents on your own boxes, watched from here.">
+    <SettingsPage badge={LINUX_ALPHA && <AlphaBadge />} title={`About ${APP_NAME}`} description="Agents on your own boxes, watched from here.">
       <Hero version={version} />
       <RunningGroup />
       <HelpGroup />

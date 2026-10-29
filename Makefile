@@ -132,8 +132,14 @@ endif
 app-dev: all
 	cd app && pnpm tauri dev
 
+# BRAND=NAME (fork) builds the app under branding/NAME's name and icon
+# instead of Shipyard's, leaving app/src-tauri/icons as they are
+# (branding/README.md).
+BRAND ?=
 app-build: app-binaries
-	cd app && pnpm tauri build --config src-tauri/tauri.bundle.conf.json \
+	$(if $(BRAND),node scripts/brand.mjs $(BRAND) >/dev/null)
+	cd app && $(if $(BRAND),VITE_BRAND_NAME="$$(sed -n 's/^VITE_BRAND_NAME=//p' src-tauri/target/brand/$(BRAND)/env)") pnpm tauri build --config src-tauri/tauri.bundle.conf.json \
+		$(if $(BRAND),--config src-tauri/target/brand/$(BRAND)/brand.conf.json) \
 		$(if $(findstring apple-darwin,$(APP_TARGET)),--config src-tauri/tauri.bar.conf.json) \
 		$(if $(APP_VERSION),--config '{"version":"$(APP_VERSION)"}') \
 		$(if $(filter $(TRIPLE),$(APP_TARGET)),,--target $(APP_TARGET)) \

@@ -6,6 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { JoinTeamCard } from "@/views/team/team-entry";
 import { thisComputer } from "@/lib/platform";
+import { APP_NAME } from "@/lib/platform";
 
 // WelcomeStep says what Shipyard is in a line and offers the quickest way in:
 // this Mac as the box, a sample project on it and a first task, in about a
@@ -18,7 +19,7 @@ export function WelcomeStep({ local, onThisMac, onRemote, onJoin }: { local?: bo
     <div>
       {/* The title starts where every step's does; the scene (dawn) is the
           page's, above the progress. */}
-      <h1 className="text-title">Welcome to Shipyard</h1>
+      <h1 className="text-title">Welcome to {APP_NAME}</h1>
       <p className="mt-2 text-muted-foreground text-subtitle">
         Shipyard runs coding agents on your own machines, each in a worktree of its own, and shows you which need you, which are working and what they built.
       </p>

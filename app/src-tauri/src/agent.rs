@@ -56,7 +56,7 @@ pub fn find_berth() -> Option<(PathBuf, &'static str)> {
     #[cfg(debug_assertions)]
     {
         // app/src-tauri is two levels below the repository; make puts berth in bin/.
-        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../bin/berth");
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../bin/berth{}", std::env::consts::EXE_SUFFIX));
         if is_executable(&p) {
             return Some((p.canonicalize().unwrap_or(p), "repository"));
         }
@@ -94,7 +94,7 @@ fn bundled_beside_app() -> Option<PathBuf> {
     if !dir.ends_with("Contents/MacOS") {
         return None;
     }
-    let p = dir.join(SIDECAR);
+    let p = dir.join(format!("{SIDECAR}{}", std::env::consts::EXE_SUFFIX));
     if !is_executable(&p) {
         return None;
     }
@@ -148,9 +148,17 @@ fn parse_team(described: &str) -> Option<String> {
 // The agent it starts writes to its own log, not to these pipes, so this
 // returns as soon as berth does.
 pub fn run(bin: &Path, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(bin)
-        .args(args)
-        .stdin(Stdio::null())
+    let mut cmd = Command::new(bin);
+    cmd.args(args).stdin(Stdio::null());
+    // berth is a console program: on Windows it would open a console window
+    // each time the app runs it.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = cmd
         .output()
         .map_err(|e| format!("could not run {}: {e}", bin.display()))?;
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();

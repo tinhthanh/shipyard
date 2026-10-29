@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { isTauri } from "@/lib/api";
-import { LINUX_ALPHA } from "@/lib/platform";
+import { APP_NAME, LINUX_ALPHA } from "@/lib/platform";
 import { useStore } from "@/lib/store";
 import { homeBox, useWorkspaces } from "@/lib/workspaces";
 import { placeLabel } from "@/lib/worktree-names";
@@ -14,7 +14,7 @@ export function useWindowTitle() {
   const inWorkspace = useStore((s) => s.view.kind === "workspace");
   const label = useStore((s) => (ref?.path ? placeLabel(ref, s.boxes) : undefined));
   useEffect(() => {
-    let title = inWorkspace && label ? `${label} — Shipyard` : "Shipyard";
+    let title = inWorkspace && label ? `${label} — ${APP_NAME}` : APP_NAME;
     // The Linux app is an alpha, and its title bar says so.
     if (LINUX_ALPHA) title += " (alpha)";
     if (document.title !== title) document.title = title;
