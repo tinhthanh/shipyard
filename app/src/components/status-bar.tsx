@@ -17,6 +17,7 @@ import { useRegistry } from "@/plugins/registry";
 import { openRenameWorktree } from "@/components/sidebar/rename-worktree";
 import { homeBox, useWorkspaces } from "@/lib/workspaces";
 import { findWorktree } from "@/lib/worktree-names";
+import { APP_NAME } from "@/lib/platform";
 
 // StatusBar is the strip along the bottom: what agents are doing on the
 // left, updates and forwards on the right. Every item goes somewhere when
@@ -49,7 +50,7 @@ export function StatusBar() {
       {connection.state === "offline" && restarting ? (
         <span className="flex items-center gap-1.5">
           <Spinner className="size-3" />
-          Restarting the Shipyard agent…
+          Restarting the {APP_NAME} agent…
         </span>
       ) : connection.state === "offline" ? (
         <Tip label={connection.error}>
