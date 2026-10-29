@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -75,6 +74,11 @@ const pathMark = "__BERTH_PATH__"
 // would start it, for its PATH. It runs in a session of its own, so an
 // interactive shell never takes a terminal over.
 func LoginShellPATH(timeout time.Duration) (string, error) {
+	if runtime.GOOS == "windows" {
+		// No login shell to ask: the PATH Windows gave this process is the
+		// one a new terminal would get.
+		return os.Getenv("PATH"), nil
+	}
 	shell := UserShell()
 	script := `printf '` + pathMark + `%s` + pathMark + `' "$PATH"`
 	if filepath.Base(shell) == "fish" {
@@ -83,7 +87,7 @@ func LoginShellPATH(timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, shell, "-lic", script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.SysProcAttr = ownSession()
 	cmd.WaitDelay = time.Second
 	out, err := cmd.Output()
 	if p, ok := markedPATH(out); ok {

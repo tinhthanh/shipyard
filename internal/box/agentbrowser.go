@@ -175,8 +175,7 @@ func tmuxServerRuns(tmux string) bool {
 	if err != nil || pid <= 0 {
 		return false
 	}
-	err = syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return processExists(pid)
 }
 
 func (a *AgentBrowsers) procs() ([]proc, error) {
@@ -356,7 +355,7 @@ func (a *AgentBrowsers) kill(pid int, sig syscall.Signal) {
 		a.signal(pid, sig)
 		return
 	}
-	syscall.Kill(pid, sig)
+	signalPID(pid, sig)
 }
 
 // remaining is which of s's processes still run, looked up again by their

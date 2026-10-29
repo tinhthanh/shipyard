@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -42,15 +41,4 @@ func descendants(pid int) []int {
 		}
 	}
 	return all
-}
-
-// signalTree sends sig to the process tree under pid (its descendants as
-// they are now, then its group, then pid itself).
-func signalTree(pid int, sig syscall.Signal) {
-	kids := descendants(pid)
-	for i := len(kids) - 1; i >= 0; i-- {
-		syscall.Kill(kids[i], sig)
-	}
-	syscall.Kill(-pid, sig)
-	syscall.Kill(pid, sig)
 }

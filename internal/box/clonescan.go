@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -134,8 +133,8 @@ func (s *cloneScan) inside(p string) bool {
 
 // owned reports whether info belongs to the user the scan runs as.
 func (s *cloneScan) owned(info os.FileInfo) bool {
-	st, ok := info.Sys().(*syscall.Stat_t)
-	return !ok || int(st.Uid) == s.uid
+	uid, ok := fileOwner(info)
+	return !ok || uid == s.uid
 }
 
 // visit looks at dir, depth levels below where it started, and into it

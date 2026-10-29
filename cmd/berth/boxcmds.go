@@ -8,11 +8,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/boxcmd"
@@ -131,9 +129,8 @@ func attach(l laptop, args []string) error {
 		}
 		defer restore()
 	}
-	winch := make(chan os.Signal, 1)
-	signal.Notify(winch, syscall.SIGWINCH)
-	defer signal.Stop(winch)
+	winch, stopWinch := resizes(stdout)
+	defer stopWinch()
 	go func() {
 		for range winch {
 			if c, r, err := terminal.Size(stdout); err == nil {

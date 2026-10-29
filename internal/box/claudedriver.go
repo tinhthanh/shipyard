@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/cosscom/shipyard/internal/agenthost"
@@ -137,8 +136,8 @@ func (b *Box) launchClaudeIn(p AgentPreset, model, effort, mode, resume, dir, so
 
 // ownedByMe says the box user owns a file.
 func ownedByMe(st os.FileInfo) bool {
-	sys, ok := st.Sys().(*syscall.Stat_t)
-	return ok && int(sys.Uid) == os.Getuid()
+	uid, ok := fileOwner(st)
+	return ok && uid == os.Getuid()
 }
 
 // agentHostCommand is the command that runs `berthd agent-host`.
