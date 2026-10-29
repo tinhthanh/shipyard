@@ -10,6 +10,7 @@ import { loadNotifications } from "@/lib/notifications";
 import { loadProjects } from "@/lib/project-groups";
 import { reloadKits } from "@/views/kits/kits-store";
 import { loadPlugins } from "@/plugins/host";
+import { APP_NAME } from "@/lib/platform";
 
 // The live demo (pnpm build:demo) is always mock mode.
 export const isMock = () => __BERTH_DEMO__ || new URLSearchParams(location.search).has("mock");
@@ -33,7 +34,7 @@ export function useBerthConnection() {
       while (!abort.signal.aborted) {
         try {
           // ?mock=offline is the "not running" screen until its agent starts.
-          if (mockAgentDown()) throw new Error("the Shipyard agent has not started yet (mock)");
+          if (mockAgentDown()) throw new Error(`the ${APP_NAME} agent has not started yet (mock)`);
           // The fixtures load only in mock mode: they stay out of the app's
           // startup.
           if (isMock()) return (await import("@/lib/mock")).mockClient();

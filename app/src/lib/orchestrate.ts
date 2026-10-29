@@ -5,6 +5,7 @@ import { structuredLaunch } from "@/lib/structured";
 import { boxHasRuns, refreshRuns, runs as runsApi } from "@/lib/runs";
 import * as core from "@/lib/orchestrate-core";
 import { scheduleRefresh, useStore } from "@/lib/store";
+import { APP_NAME } from "@/lib/platform";
 
 export { handoffPrompt, reviewPrompt } from "@/lib/orchestrate-core";
 
@@ -14,7 +15,7 @@ export { handoffPrompt, reviewPrompt } from "@/lib/orchestrate-core";
 
 const call: core.BoxCaller = (box, method, path, body) => {
   const c = useStore.getState().client;
-  if (!c) return Promise.reject(new Error("not connected to the Shipyard agent"));
+  if (!c) return Promise.reject(new Error(`not connected to the ${APP_NAME} agent`));
   return c.box(box, method, path, body);
 };
 

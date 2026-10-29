@@ -5,6 +5,7 @@ import { type BoxCaller, runsApi, terminal } from "@/lib/orchestrate-core";
 import { poll } from "@/lib/poll";
 import { load, save } from "@/lib/storage";
 import { useStore } from "@/lib/store";
+import { APP_NAME } from "@/lib/platform";
 
 // Runs are orchestrations the box executes and journals: loops, reviews,
 // hand-offs, broadcasts, attempts and flows. The app only reads and steers
@@ -14,7 +15,7 @@ import { useStore } from "@/lib/store";
 
 export const call: BoxCaller = (box, method, path, body) => {
   const c = useStore.getState().client;
-  if (!c) return Promise.reject(new Error("not connected to the Shipyard agent"));
+  if (!c) return Promise.reject(new Error(`not connected to the ${APP_NAME} agent`));
   return c.box(box, method, path, body);
 };
 

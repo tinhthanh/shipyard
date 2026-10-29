@@ -23,6 +23,7 @@ import { builtinPlugins, loadPlugins } from "@/plugins/host";
 import { useRegistry } from "@/plugins/registry";
 import { ConfirmDialog } from "@/views/settings/confirm";
 import { Code, SettingsGroup, SettingsPage } from "@/views/settings/rows";
+import { APP_NAME } from "@/lib/platform";
 
 export function PluginsSection() {
   const client = useStore((s) => s.client);
@@ -139,7 +140,7 @@ export function PluginsSection() {
         }
       >
         {market.old ? (
-          <p className="py-3.5 text-muted-foreground text-body">The Shipyard agent on this computer is older than this app, so it can't read the listing yet.</p>
+          <p className="py-3.5 text-muted-foreground text-body">The {APP_NAME} agent on this computer is older than this app, so it can't read the listing yet.</p>
         ) : market.error ? (
           <div className="flex items-center gap-4 py-3.5" data-testid="market-error">
             <ErrorText className="min-w-0 flex-1 text-destructive-foreground text-body" text={market.error} />
