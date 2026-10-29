@@ -94,11 +94,11 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     linux::prefer_compatible_rendering();
     let builder = tauri::Builder::default();
-    // On Linux a berth:// link starts the app again with the link as its
-    // argument: one already running takes it instead (and comes to the
-    // front), and the deep-link plugin hands it to the webview. Registered
-    // first, as the plugin asks.
-    #[cfg(target_os = "linux")]
+    // On Linux and Windows a berth:// link starts the app again with the
+    // link as its argument: one already running takes it instead (and comes
+    // to the front), and the deep-link plugin hands it to the webview.
+    // Registered first, as the plugin asks.
+    #[cfg(any(target_os = "linux", windows))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.unminimize();
@@ -130,6 +130,18 @@ pub fn run() {
             }
             #[cfg(target_os = "linux")]
             linux::setup(app.handle());
+            // On Windows the installer registers berth://; a build run from
+            // the repository registers it itself. Windows has no menu either:
+            // the webview handles the keys, as on Linux.
+            #[cfg(windows)]
+            {
+                #[cfg(debug_assertions)]
+                {
+                    use tauri_plugin_deep_link::DeepLinkExt;
+                    let _ = app.deep_link().register_all();
+                }
+                let _ = app;
+            }
             Ok(())
         })
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))
