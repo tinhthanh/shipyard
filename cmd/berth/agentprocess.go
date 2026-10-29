@@ -33,11 +33,23 @@ func agentService(l laptop) (service.Spec, error) {
 	if runtime.GOOS == "darwin" {
 		name = "dev.berth.agent"
 	}
+	args := []string{"agent"}
+	if runtime.GOOS == "windows" {
+		// Windows runs the service at logon only (service, runkey.go):
+		// `agent start` starts the agent, detached, with its log, and does
+		// nothing while one runs. berth-agent.exe, beside this one in the
+		// app, is the same program built without a console, so no console
+		// window opens at logon.
+		args = []string{"agent", "start"}
+		if gui := filepath.Join(filepath.Dir(exe), "berth-agent.exe"); fileExists(gui) {
+			exe = gui
+		}
+	}
 	return service.Spec{
 		Name:        name,
 		Description: "berth agent",
 		Program:     exe,
-		Args:        []string{"agent"},
+		Args:        args,
 		Env:         map[string]string{"BERTH_HOME": home},
 		LogPath:     filepath.Join(l.dir, "agent.log"),
 	}, nil
@@ -54,7 +66,9 @@ func ensureAgent(l laptop) (*agent.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if service.Installed(spec) {
+	// Windows has no supervisor to ask: its service only runs `agent start`
+	// at logon, which is this.
+	if service.Installed(spec) && runtime.GOOS != "windows" {
 		if err := service.Start(spec); err != nil {
 			return nil, err
 		}
@@ -277,3 +291,8 @@ func restartAgent(l laptop, spec service.Spec, ifStale bool) (RestartResult, err
 // How long a restart waits for the agent to finish its work under way and
 // stop: its own limit, and a little more.
 const agentDrainWait = 2*time.Minute + 30*time.Second
+
+func fileExists(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && !fi.IsDir()
+}

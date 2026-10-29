@@ -20,6 +20,10 @@ Push-Location $root
 try {
   go build -trimpath -ldflags $ld -o (Join-Path $bin "berth-cli-$triple.exe") ./cmd/berth
   if ($LASTEXITCODE) { throw "go build failed" }
+  # The same program without a console: what Windows runs at logon to start
+  # the agent (berth agent install), so no console window opens.
+  go build -trimpath -ldflags "$ld -H windowsgui" -o (Join-Path $bin "berth-agent-$triple.exe") ./cmd/berth
+  if ($LASTEXITCODE) { throw "go build (agent) failed" }
 } finally { Pop-Location }
 
 Push-Location (Join-Path $root "app")
