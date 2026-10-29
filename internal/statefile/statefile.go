@@ -54,7 +54,7 @@ func Write(path string, data []byte) error {
 	}
 	tmp := f.Name()
 	defer os.Remove(tmp)
-	if err = f.Chmod(0o600); err == nil {
+	if err = private(f); err == nil {
 		_, err = f.Write(data)
 	}
 	if err == nil {
@@ -67,6 +67,18 @@ func Write(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+// MakePrivate makes a file that exists private to its owner, as Write
+// makes the files it writes: for one written before (a token an older
+// release left readable on Windows).
+func MakePrivate(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return private(f)
 }
 
 // WriteWithBackup keeps the previous contents at path+".bak" whenever they

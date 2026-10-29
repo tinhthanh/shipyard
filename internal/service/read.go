@@ -56,6 +56,11 @@ func Read(name string) (u Unit, ok bool, err error) {
 	if err != nil {
 		return Unit{}, false, err
 	}
+	if goos == "windows" {
+		// A task's XML is not read back: callers fall back to what they
+		// do without a service (start the program themselves).
+		return Unit{}, false, nil
+	}
 	if goos == "darwin" {
 		u, err = parsePlist(data)
 	} else {

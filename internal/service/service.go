@@ -1,5 +1,6 @@
 // Package service installs a berth process as a per-user OS service: a
-// launchd agent on macOS or a systemd user unit on Linux. The service starts
+// launchd agent on macOS, a systemd user unit on Linux, or a Task Scheduler
+// task on Windows (tasks.go). The service starts
 // at login, restarts after a crash, and stays stopped after a clean exit, so a
 // deliberate stop is never fought by the supervisor.
 package service
@@ -88,8 +89,10 @@ func Preflight() error {
 				"Log in at the Mac once (screen sharing counts) and try again", lastLine(out, err))
 		}
 		return nil
+	case "windows":
+		return nil
 	}
-	return fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
+	return fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
 }
 
 // findRuntimeDir points systemctl at the user's manager when the login did
@@ -135,8 +138,10 @@ func unitPath(s Spec) (string, error) {
 			base = filepath.Join(home, ".config")
 		}
 		return filepath.Join(base, "systemd", "user", s.Name+".service"), nil
+	case "windows":
+		return filepath.Join(home, "AppData", "Local", "berth", "services", s.Name+".xml"), nil
 	}
-	return "", fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
+	return "", fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
 }
 
 // Render produces the unit file for the current platform.
@@ -198,8 +203,10 @@ func Render(s Spec) ([]byte, error) {
 		}
 		b.WriteString("\n[Install]\nWantedBy=default.target\n")
 		return b.Bytes(), nil
+	case "windows":
+		return renderTask(s)
 	}
-	return nil, fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
+	return nil, fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
 }
 
 func esc(s string) string { return html.EscapeString(s) }
@@ -368,6 +375,9 @@ func Uninstall(s Spec) (string, error) {
 // and telling those apart is the difference between "it is configured" and
 // "it is working".
 func Running(s Spec) bool {
+	if goos == "windows" {
+		return taskRegistered(s)
+	}
 	if goos == "darwin" {
 		out, err := command("launchctl", "print", launchdTarget(s))
 		return err == nil && strings.Contains(string(out), "state = running")
@@ -379,7 +389,9 @@ func Running(s Spec) bool {
 func Start(s Spec) error {
 	var out []byte
 	var err error
-	if goos == "darwin" {
+	if goos == "windows" {
+		out, err = command("schtasks", "/run", "/tn", taskName(s))
+	} else if goos == "darwin" {
 		out, err = command("launchctl", "kickstart", launchdTarget(s))
 	} else {
 		out, err = command("systemctl", "--user", "start", s.Name+".service")
@@ -393,6 +405,9 @@ func Start(s Spec) error {
 func launchdTarget(s Spec) string { return fmt.Sprintf("gui/%d/%s", os.Getuid(), s.Name) }
 
 func load(s Spec, path string) error {
+	if goos == "windows" {
+		return loadTask(s, path)
+	}
 	if goos == "darwin" {
 		command("launchctl", "bootout", launchdTarget(s))
 		waitLaunchdGone(s)
@@ -432,6 +447,10 @@ func waitLaunchdGone(s Spec) {
 }
 
 func unload(s Spec) {
+	if goos == "windows" {
+		unloadTask(s)
+		return
+	}
 	if goos == "darwin" {
 		command("launchctl", "bootout", launchdTarget(s))
 		return

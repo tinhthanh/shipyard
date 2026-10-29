@@ -172,12 +172,12 @@ func TestInstallRefusesTemporaryAndRelativeBinaries(t *testing.T) {
 }
 
 func TestUnsupportedPlatform(t *testing.T) {
-	stub(t, "windows")
+	stub(t, "freebsd")
 	if _, err := Render(spec); err == nil {
-		t.Fatal("rendered a unit for windows")
+		t.Fatal("rendered a unit for freebsd")
 	}
 	if Installed(spec) {
-		t.Fatal("reported installed on windows")
+		t.Fatal("reported installed on freebsd")
 	}
 }
 
@@ -419,5 +419,60 @@ func TestLaunchdReloadGivesUpWithTheError(t *testing.T) {
 	}
 	if err := load(spec, "/tmp/x.plist"); err == nil || !strings.Contains(err.Error(), "Input/output error") {
 		t.Fatalf("expected the bootstrap error, got %v", err)
+	}
+}
+
+// On Windows the service is a Task Scheduler task: its XML runs the program
+// through conhost --headless at logon and every five minutes, and Install
+// registers and runs it with schtasks.
+func TestAWindowsServiceIsAScheduledTask(t *testing.T) {
+	home := t.TempDir()
+	saved := []any{goos, homeDir, command, currentUser}
+	defer func() {
+		goos, homeDir, command, currentUser = saved[0].(string), saved[1].(func() (string, error)), saved[2].(func(string, ...string) ([]byte, error)), saved[3].(func() (string, error))
+	}()
+	goos = "windows"
+	homeDir = func() (string, error) { return home, nil }
+	currentUser = func() (string, error) { return `PC\ana`, nil }
+	var ran [][]string
+	command = func(name string, args ...string) ([]byte, error) {
+		ran = append(ran, append([]string{name}, args...))
+		return nil, nil
+	}
+	s := Spec{Name: "berth-agent", Description: "berth agent", Program: "/opt/Vetgo App/berth-cli.exe", Args: []string{"agent", "start"}}
+	data, err := Render(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data[0] != 0xFF || data[1] != 0xFE {
+		t.Fatal("the task XML must be UTF-16 with a byte order mark")
+	}
+	var x strings.Builder
+	for i := 2; i+1 < len(data); i += 2 {
+		x.WriteRune(rune(data[i]) | rune(data[i+1])<<8)
+	}
+	xml := x.String()
+	for _, want := range []string{"<LogonTrigger>", `<UserId>PC\ana</UserId>`, "<Interval>PT5M</Interval>", "<Command>conhost.exe</Command>",
+		`<Arguments>--headless &#34;/opt/Vetgo App/berth-cli.exe&#34; agent start</Arguments>`, "<LogonType>InteractiveToken</LogonType>"} {
+		if !strings.Contains(xml, want) {
+			t.Fatalf("task XML lacks %q:\n%s", want, xml)
+		}
+	}
+	path, err := Install(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(path) != filepath.Join(home, "AppData", "Local", "berth", "services") || !Installed(s) {
+		t.Fatalf("installed at %s, Installed=%v", path, Installed(s))
+	}
+	if len(ran) != 2 || ran[0][1] != "/create" || ran[0][3] != `\berth\berth-agent` || ran[1][1] != "/run" {
+		t.Fatalf("schtasks calls: %v", ran)
+	}
+	ran = nil
+	if _, err := Uninstall(s); err != nil {
+		t.Fatal(err)
+	}
+	if len(ran) != 2 || ran[1][1] != "/delete" {
+		t.Fatalf("uninstall calls: %v", ran)
 	}
 }

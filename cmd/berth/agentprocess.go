@@ -33,11 +33,18 @@ func agentService(l laptop) (service.Spec, error) {
 	if runtime.GOOS == "darwin" {
 		name = "dev.berth.agent"
 	}
+	args := []string{"agent"}
+	if runtime.GOOS == "windows" {
+		// The Windows task runs at logon and every few minutes (service,
+		// tasks.go): `agent start` starts the agent, detached, with its log,
+		// and does nothing while one runs.
+		args = []string{"agent", "start"}
+	}
 	return service.Spec{
 		Name:        name,
 		Description: "berth agent",
 		Program:     exe,
-		Args:        []string{"agent"},
+		Args:        args,
 		Env:         map[string]string{"BERTH_HOME": home},
 		LogPath:     filepath.Join(l.dir, "agent.log"),
 	}, nil

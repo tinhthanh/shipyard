@@ -54,6 +54,7 @@ var devOrigin = regexp.MustCompile(`^http://localhost:14[23][0-9]$`)
 func UIToken(dir string) (string, error) {
 	p := filepath.Join(dir, UITokenFile)
 	if b, err := os.ReadFile(p); err == nil && len(strings.TrimSpace(string(b))) >= 32 {
+		statefile.MakePrivate(p)
 		return strings.TrimSpace(string(b)), nil
 	}
 	buf := make([]byte, 32)
