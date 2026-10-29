@@ -14,6 +14,10 @@ import { GuidedInstall, type TeamAfterInstall, useAgentChoice, useInstallTarget 
 import { InlineAgents, QuickInstall } from "@/views/onboarding/quick-install";
 import { useSshPlan } from "@/views/onboarding/ssh-setup";
 import { discoverNetwork, type SystemTailnet, sortMachines, type TailnetSource } from "@/views/onboarding/tailnet";
+import { IS_MAC, thisComputer } from "@/lib/platform";
+
+// Where Tailscale's own controls are: the menu bar on a Mac, the tray elsewhere.
+const TRAY_ICON = IS_MAC ? "its menu bar icon" : "its tray icon";
 
 const TAILSCALE_DOWNLOAD = "https://tailscale.com/download";
 
@@ -436,16 +440,16 @@ export function UseTailscale({ system, onRefresh, onSignIn }: { system?: SystemT
     state === "missing"
       ? undefined
       : state === "logged-out"
-        ? "Tailscale is on this Mac, but signed out. Sign in from its menu bar icon and your machines show up here."
+        ? thisComputer(`Tailscale is on this Mac, but signed out. Sign in from ${TRAY_ICON} and your machines show up here.`)
         : state === "stopped"
-          ? "Tailscale is on this Mac, but not connected. Connect from its menu bar icon and your machines show up here."
+          ? thisComputer(`Tailscale is on this Mac, but not connected. Connect from ${TRAY_ICON} and your machines show up here.`)
           : state === "running"
             ? `Nothing on ${system?.name || "your tailnet"} can be a box yet: berthd runs on Linux and macOS.`
-            : "Shipyard couldn't ask Tailscale on this Mac for its machines.";
+            : thisComputer("Shipyard couldn't ask Tailscale on this Mac for its machines.");
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-meta">
-        Tailscale puts your machines on one private network. With it on this Mac, they're listed here and Shipyard sets one up in a click: no ports to open, and berthd listens on the tailnet only.
+        {thisComputer("Tailscale puts your machines on one private network. With it on this Mac, they're listed here and Shipyard sets one up in a click: no ports to open, and berthd listens on the tailnet only.")}
       </p>
       {said && <p className="text-body">{said}</p>}
       <div className="flex flex-wrap items-center gap-2">

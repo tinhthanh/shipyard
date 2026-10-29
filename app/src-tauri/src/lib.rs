@@ -65,7 +65,7 @@ fn restart_app(app: tauri::AppHandle) {
     app.request_restart();
 }
 
-// open_terminal brings up Terminal on this Mac, for a card that copied a
+// open_terminal brings up Terminal on this Mac (a terminal elsewhere), for a card that copied a
 // command to paste there (installing tmux for this Mac's box, whose own
 // terminals need tmux). It never types or runs anything: the person pastes
 // the command, reads it and presses Enter.
@@ -83,9 +83,21 @@ fn open_terminal() -> Result<(), String> {
     {
         linux::open_terminal()
     }
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(windows)]
     {
-        Err("opening a terminal is only for macOS and Linux".into())
+        // Windows Terminal where it is installed (Windows 11 has it), else a
+        // console of its own.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        std::process::Command::new("wt.exe")
+            .spawn()
+            .or_else(|_| std::process::Command::new("cmd.exe").creation_flags(CREATE_NEW_CONSOLE).spawn())
+            .map(|_| ())
+            .map_err(|e| format!("couldn't open a terminal: {e}"))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+    {
+        Err("opening a terminal is only for macOS, Linux and Windows".into())
     }
 }
 

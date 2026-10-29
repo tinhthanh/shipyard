@@ -153,20 +153,28 @@ export function withAttachments(text: string, paths: string[]): string {
 
 
 // A path pasted as text that names a file on this computer: a screenshot's
-// /var/folders/…/Screenshot.png, "Copy as Pathname" in Finder, a file:// URL.
+// /var/folders/…/Screenshot.png, "Copy as Pathname" in Finder, a file:// URL,
+// and on Windows C:\Users\…\shot.png, \\server\share\… or file:///C:/….
 // An agent on a remote box can't read it, so it is uploaded like a pasted
 // file, by the laptop agent (POST /v1/boxes/{box}/attach-local).
-const LOCAL_PATH = /^(?:file:\/\/)?(?:~\/|\/(?:Users|var\/folders|private\/var|private\/tmp|tmp|Volumes)\/).+\.(?:png|jpe?g|gif|webp|pdf)$/i;
+const LOCAL_PATH = /^(?:(?:file:\/\/)?(?:~\/|\/(?:Users|var\/folders|private\/var|private\/tmp|tmp|Volumes)\/)|(?:file:\/\/\/)?[a-z]:[\\/]|\\\\[^\\]+\\).+\.(?:png|jpe?g|gif|webp|pdf)$/i;
+const WINDOWS_PATH = /^(?:file:\/\/\/)?(?:[a-z]:[\\/]|\\\\)/i;
+
+// baseName is a laptop path's file name, with / or \ between folders.
+export const baseName = (path: string): string => path.split(/[\\/]/).pop() || path;
 
 // localPaths is the laptop paths a paste is made of, or none when it is
 // anything else (text that only mentions a path stays text).
 export function localPaths(text: string): string[] {
   const lines = text
     .split(/\r?\n/)
-    .map((l) => l.trim().replace(/^(['"])(.*)\1$/, "$2").replaceAll("\\ ", " "))
+    .map((l) => l.trim().replace(/^(['"])(.*)\1$/, "$2"))
+    // A shell's "\ " is a space; in a Windows path \ is only a separator.
+    .map((l) => (WINDOWS_PATH.test(l) ? l : l.replaceAll("\\ ", " ")))
     .filter(Boolean);
   if (!lines.length || lines.length > 10 || !lines.every((l) => LOCAL_PATH.test(l))) return [];
-  return lines.map((l) => (l.startsWith("file://") ? decodeURIComponent(l.slice(7)) : l));
+  // file:///C:/a.png is C:/a.png, not /C:/a.png.
+  return lines.map((l) => (l.startsWith("file://") ? decodeURIComponent(l.slice(7)).replace(/^\/([a-z]:)/i, "$1") : l));
 }
 
 // onThisComputer is true for a box that runs here (a loopback address), where
@@ -194,6 +202,6 @@ export const attachApi =
     const to = { ...target, box };
     if (typeof f !== "string") return uploadAttachment(client, to, o.pasted ? await shrinkImage(f) : f, o);
     if (!onThisComputer(address(box))) return uploadLocalFile(client, to, f, o.signal);
-    const name = f.split("/").pop() ?? f;
+    const name = baseName(f);
     return { path: f, name, type: LOCAL_TYPES[name.split(".").pop()?.toLowerCase() ?? ""] ?? "", size: 0 };
   };

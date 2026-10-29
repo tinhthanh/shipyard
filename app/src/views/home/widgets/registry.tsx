@@ -13,6 +13,7 @@ import { useHomeWidget } from "./env";
 import { BoxesWidget, ServicesWidget } from "./fleet";
 import { GitWidget } from "./git";
 import { HarbourWidget } from "./harbour";
+import { thisComputer } from "@/lib/platform";
 
 // Home's widgets: Shipyard's own, and every one a plugin adds with
 // berth.addHomeWidget, in one list so the grid and the picker never tell
@@ -87,7 +88,7 @@ export const BUILTIN_WIDGETS: WidgetDef[] = [
     icon: lucide(GitBranchIcon),
     category: "Agents",
     sizes: ["m", "s", "t", "l"],
-    source: "Worktrees you opened, and sessions by worktree (on this Mac)",
+    source: thisComputer("Worktrees you opened, and sessions by worktree (on this Mac)"),
     Component: AreasWidget,
   },
   {

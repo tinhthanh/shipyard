@@ -8,6 +8,7 @@ import { showingTabRescues } from "@/components/workspace/pane-guard";
 import "@/components/error-note";
 import { isTauri } from "@/lib/api";
 import { openUrl } from "@/lib/open-url";
+import { IS_WINDOWS } from "@/lib/platform";
 // Says once when terminals fall back to xterm.js, and why.
 import "@/lib/terminal-health";
 import { installGlobals } from "@/plugins/host";
@@ -24,6 +25,18 @@ if (isTauri()) {
     if (url) void openUrl(String(url));
     return null;
   };
+}
+
+// WebView2 reloads the page on F5 and Ctrl+R, which drops the window's state
+// (open tabs, drafts) for nothing. A dev build keeps them, to reload code.
+if (IS_WINDOWS && !import.meta.env.DEV) {
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "F5" || (e.ctrlKey && !e.altKey && e.key.toLowerCase() === "r")) e.preventDefault();
+    },
+    true,
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

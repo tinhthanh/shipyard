@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { type Client, type Discovery, laptopApi, type Machine, type NetworkInfo } from "@/lib/api";
 import { errorMessage } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { thisComputer } from "@/lib/platform";
 
 // The tailnets Add a box lists machines from: this computer's own, through
 // the Tailscale app, and the ones Shipyard signed in to itself (networks). Both
@@ -114,7 +115,7 @@ export interface TailnetSource {
 
 export function sourcesOf(system: SystemTailnet | undefined, networks: NetworkInfo[]): TailnetSource[] {
   const out: TailnetSource[] = [];
-  if (system?.state === "running") out.push({ key: "system", label: system.name || "This Mac's tailnet" });
+  if (system?.state === "running") out.push({ key: "system", label: system.name || thisComputer("This Mac's tailnet") });
   for (const n of networks) out.push({ key: `network:${n.name}`, label: n.name, network: n.name });
   return out;
 }

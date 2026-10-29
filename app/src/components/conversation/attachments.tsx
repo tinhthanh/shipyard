@@ -5,7 +5,7 @@ import { Tip } from "@/components/tip";
 import { Spinner } from "@/components/ui/spinner";
 import { toastManager } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api";
-import { type AttachTarget, attachable, isImage, localPaths, MAX_ATTACHMENT, named, onThisComputer, pastedFiles, shrinkImage, uploadAttachment, uploadLocalFile } from "@/lib/attachments";
+import { type AttachTarget, attachable, baseName, isImage, localPaths, MAX_ATTACHMENT, named, onThisComputer, pastedFiles, shrinkImage, uploadAttachment, uploadLocalFile } from "@/lib/attachments";
 import { errorMessage } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -187,7 +187,7 @@ export function useAttachments(target: AttachTarget | undefined, { without, wait
     let missed = 0;
     for (const path of paths) {
       const id = `att${++seq}`;
-      const name = path.split("/").pop() ?? path;
+      const name = baseName(path);
       const type = /\.pdf$/i.test(name) ? "application/pdf" : `image/${(name.split(".").pop() ?? "png").toLowerCase().replace("jpg", "jpeg")}`;
       setItems((l) => [...l, { id, name, type, size: 0, state: "uploading" }]);
       sendLocal(id, path, (oldAgent) => {

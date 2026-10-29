@@ -114,7 +114,7 @@ export function UseThisMac({
       {state !== "ready" && <CommandLog className="mt-3" lines={lines} done={state === "done"} error={error} />}
       {state === "done" && paired && (
         <p className="mt-2 text-muted-foreground text-meta">
-          This Mac is <span className="text-foreground">{paired}</span> in Shipyard.
+          {thisComputer("This Mac")} is <span className="text-foreground">{paired}</span> in Shipyard.
         </p>
       )}
     </section>

@@ -16,6 +16,7 @@ import { PasteLink } from "@/views/onboarding/paste-link";
 import { SshSetup } from "@/views/onboarding/ssh-setup";
 import { boxable, sourcesOf, useTailnets } from "@/views/onboarding/tailnet";
 import { TailnetMachines, UseTailscale } from "@/views/onboarding/tailnet-machines";
+import { thisComputer } from "@/lib/platform";
 
 // What the flow is doing, for onboarding's scene: arriving while it waits,
 // the lighthouse while a box is being set up or paired, the signal lamp
@@ -99,7 +100,7 @@ export function AddBoxFlow({
   const head = signingIn
     ? {
         title: "Sign in to another tailnet",
-        description: "For a box on a tailnet this computer isn't on: a personal one while this Mac is on work's, say. Shipyard joins it as its own device, so nothing changes for the rest of this Mac.",
+        description: thisComputer("For a box on a tailnet this computer isn't on: a personal one while this Mac is on work's, say. Shipyard joins it as its own device, so nothing changes for the rest of this Mac."),
       }
     : intro;
   const onBack = signingIn ? () => setSigningIn(undefined) : onExit;
