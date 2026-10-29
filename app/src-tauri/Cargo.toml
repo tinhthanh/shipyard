@@ -33,6 +33,12 @@ tauri-plugin-updater = "2"
 # A berth:// link opens in the running app, not a second one (lib.rs).
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 
+[target.'cfg(windows)'.dependencies]
+# A browser pane hears the app's shortcuts before the page (browser.rs,
+# shortcuts_windows): WebView2's own controller event. The versions wry uses.
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Browser panes are laid over the app's webview by hand (browser.rs, stage):
 # Tauri packs a child webview into the window's GtkBox, under the app's.

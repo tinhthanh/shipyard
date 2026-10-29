@@ -303,6 +303,8 @@ pub async fn browser_open(app: AppHandle, id: String, url: String, x: f64, y: f6
     inspector_in_own_window(&_wv);
     #[cfg(target_os = "linux")]
     place_linux(&app, &_wv, x, y, w, h)?;
+    #[cfg(windows)]
+    shortcuts_windows::forward(app.clone(), &_wv)?;
     watch_console(app.clone(), id, label);
     Ok(())
 }
@@ -393,5 +395,56 @@ mod tests {
         assert_eq!(split_drain("about:blank\n"), (None, ""));
         assert_eq!(split_drain("\n"), (None, ""));
         assert_eq!(split_drain(""), (None, ""));
+    }
+}
+
+// On Windows a browser pane is a WebView2 of its own, and nothing like the
+// Mac's menu bar sees a key before it: the app's shortcuts went to the page.
+// The pane's controller hears each key pressed with a modifier before the
+// page does (AcceleratorKeyPressed). One of the app's shortcuts goes to the
+// app as its menu item would (menu.rs), and the page never sees it. A page
+// can't send one: only a key really pressed reaches the controller.
+#[cfg(windows)]
+mod shortcuts_windows {
+    use tauri::{AppHandle, Runtime, Webview};
+    use webview2_com::AcceleratorKeyPressedEventHandler;
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        COREWEBVIEW2_KEY_EVENT_KIND, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN,
+    };
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT};
+
+    use crate::menu::{self, Keys};
+
+    fn held(key: VIRTUAL_KEY) -> bool {
+        unsafe { GetKeyState(key.0 as i32) < 0 }
+    }
+
+    pub fn forward<R: Runtime>(app: AppHandle<R>, wv: &Webview<R>) -> Result<(), String> {
+        let shortcuts = menu::accelerators();
+        wv.with_webview(move |pv| {
+            let handler = AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+                let Some(args) = args else { return Ok(()) };
+                let mut kind = COREWEBVIEW2_KEY_EVENT_KIND::default();
+                let mut vk = 0u32;
+                unsafe {
+                    args.KeyEventKind(&mut kind)?;
+                    args.VirtualKey(&mut vk)?;
+                }
+                if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN {
+                    return Ok(());
+                }
+                let keys = Keys { ctrl: held(VK_CONTROL), shift: held(VK_SHIFT), alt: held(VK_MENU), vk };
+                if let Some((_, id)) = shortcuts.iter().find(|(k, _)| *k == keys) {
+                    unsafe { args.SetHandled(true)? };
+                    menu::on_event(&app, id);
+                }
+                Ok(())
+            }));
+            let mut token = 0i64;
+            if let Err(e) = unsafe { pv.controller().add_AcceleratorKeyPressed(&handler, &mut token) } {
+                eprintln!("berth: a browser pane's shortcuts stay the page's: {e}");
+            }
+        })
+        .map_err(|e| e.to_string())
     }
 }
