@@ -58,7 +58,10 @@ if (-not ((Test-Path $tmuxExe) -and (Test-Path $tmuxStamp) -and ((Get-Content $t
   $work = Join-Path $root "app\src-tauri\target\psmux"
   New-Item -ItemType Directory -Force -Path $work | Out-Null
   $zip = Join-Path $work "psmux-$psmuxTag.zip"
-  Invoke-WebRequest -UseBasicParsing "https://github.com/psmux/psmux/archive/refs/tags/$psmuxTag.zip" -OutFile $zip
+  # curl.exe, which Windows 10 and 11 carry: Windows PowerShell's
+  # Invoke-WebRequest can stall for minutes drawing its progress.
+  curl.exe -fsSL -o $zip "https://github.com/psmux/psmux/archive/refs/tags/$psmuxTag.zip"
+  if ($LASTEXITCODE) { throw "downloading psmux $psmuxTag failed" }
   if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne $psmuxSha256) { throw "psmux $psmuxTag's source archive is not the one that was reviewed" }
   $src = Join-Path $work "src"
   Remove-Item $src -Recurse -Force -ErrorAction SilentlyContinue
