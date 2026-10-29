@@ -15,7 +15,9 @@ again.
   computer's identity key, the app's token, paired boxes) moves from the
   roaming `%APPDATA%\berth` to `%LOCALAPPDATA%\berth`, which a roaming
   profile doesn't copy to a server or another machine. It moves by itself
-  the first time the agent starts after the update.
+  the first time the agent starts after the update, and the folder is then
+  open only to your account: files from an older version, such as the
+  identity key, were readable by the computer's administrators too.
 - **The Windows app adds a box over SSH.** Add a box → SSH runs in a real
   terminal on Windows now (a pseudo console), and boxes reached over SSH
   connect from there too. Windows' ssh can't share one login between steps,

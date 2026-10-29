@@ -2,7 +2,9 @@ package statefile
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -66,5 +68,34 @@ func TestAStateHeldOpenStaysWhereItIs(t *testing.T) {
 	}
 	if got != old {
 		t.Fatalf("Home() = %s while the old state is in use, want %s", got, old)
+	}
+}
+
+func TestFilesWrittenBeforeTheStateWasPrivateBecomeOwnerOnly(t *testing.T) {
+	local, roaming := t.TempDir(), t.TempDir()
+	t.Setenv("BERTH_HOME", "")
+	t.Setenv("LOCALAPPDATA", local)
+	t.Setenv("APPDATA", roaming)
+	old := filepath.Join(roaming, "berth", "client")
+	os.MkdirAll(old, 0o700)
+	// An identity key from an older berth: its folder's access list, no own.
+	if err := os.WriteFile(filepath.Join(old, "identity.pem"), []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home, err := Home()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("icacls", filepath.Join(home, "client", "identity.pem")).CombinedOutput()
+	if err != nil {
+		t.Fatalf("icacls: %v %s", err, out)
+	}
+	// Only the access entries: the path itself has "Users" in it.
+	got := strings.ReplaceAll(string(out), filepath.Join(home, "client", "identity.pem"), "")
+	if strings.Contains(got, "Administrators") || strings.Contains(got, `BUILTIN\Users`) || strings.Contains(got, "Everyone") {
+		t.Fatalf("the key is open to more than its owner:\n%s", got)
+	}
+	if !strings.Contains(got, "SYSTEM") {
+		t.Fatalf("unexpected access list:\n%s", got)
 	}
 }

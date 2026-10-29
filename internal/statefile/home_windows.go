@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/sys/windows"
 )
 
 // defaultHome is %LOCALAPPDATA%\berth. The state holds this computer's
@@ -23,7 +25,37 @@ func defaultHome() (string, error) {
 	if err != nil {
 		return home, nil
 	}
-	return moveHome(filepath.Join(roaming, "berth"), home), nil
+	home = moveHome(filepath.Join(roaming, "berth"), home)
+	privateDir(home)
+	return home, nil
+}
+
+// privateDir lets only the current user (and SYSTEM) into dir, and into
+// what it holds, now and later: its files take its list unless they have
+// their own (Write gives each its own). Files written before there was one
+// (an identity key from an older berth) took their folder's, which can
+// include every administrator, and change with it here. Once done, the
+// folder's list is protected, and later calls leave it be.
+func privateDir(dir string) error {
+	if sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION); err == nil {
+		if ctl, _, err := sd.Control(); err == nil && ctl&windows.SE_DACL_PROTECTED != 0 {
+			return nil
+		}
+	}
+	u, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		return err
+	}
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;" + u.User.Sid.String() + ")")
+	if err != nil {
+		return err
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		return err
+	}
+	return windows.SetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
 }
 
 // moveHome moves what old holds into home, entry by entry, and answers the
