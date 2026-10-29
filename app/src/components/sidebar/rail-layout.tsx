@@ -28,6 +28,7 @@ import { openComposer } from "@/lib/composer";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { TeamSidebarCard } from "@/views/team/team-entry";
+import { platformKeys } from "@/lib/platform";
 
 // The rail sidebar, the default layout: a narrow rail of the places and
 // every project's avatar, and beside it, on its own sheet, the picked
@@ -144,7 +145,7 @@ function ProjectRail({ projects, picked, folded }: { projects: Project[]; picked
       <div className="flex flex-col items-center gap-1">
         {folded && (
           <>
-            <Tip label="Search (⌘K)" side="right">
+            <Tip label={`Search (${platformKeys("⌘K")})`} side="right">
               <button type="button" aria-label="Search" onClick={() => useStore.getState().setPaletteOpen(true)} className={cn(railButton, ink.row)}>
                 <SearchIcon />
               </button>
@@ -420,7 +421,7 @@ function ProjectSheet({ project: p, prefs, update }: { project: Project; prefs: 
         >
           <SearchIcon className={cn("size-3.5 shrink-0", ink.glyph)} strokeWidth={2} />
           <span className={cn("flex-1 text-desc", ink.faint)}>Search</span>
-          <kbd className={cn("font-sans text-tag", ink.faint)}>⌘K</kbd>
+          <kbd className={cn("font-sans text-tag", ink.faint)}>{platformKeys("⌘K")}</kbd>
         </button>
       </div>
       <div className={cn("flex h-7 shrink-0 items-center pt-3", lanes.content)}>

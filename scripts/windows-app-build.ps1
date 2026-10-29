@@ -2,10 +2,12 @@
 # the Tauri app and its NSIS installer. Run from the repository root on
 # Windows with Go, Node + pnpm, Rust (MSVC) and the VS C++ build tools:
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\windows-app-build.ps1 [-Version 0.3.31]
+#   powershell -ExecutionPolicy Bypass -File scripts\windows-app-build.ps1 [-Version 0.3.31] [-Brand vetgo]
+#
+# -Brand NAME builds it under branding\NAME's name and icon (branding\README.md).
 #
 # The installer lands in app\src-tauri\target\release\bundle\nsis\.
-param([string]$Version = "")
+param([string]$Version = "", [string]$Brand = "")
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $triple = "x86_64-pc-windows-msvc"
@@ -25,12 +27,18 @@ try {
   pnpm.cmd install --frozen-lockfile
   if ($LASTEXITCODE) { throw "pnpm install failed" }
   $extra = @()
+  if ($Brand) {
+    $brandConf = (node (Join-Path $root "scripts\brand.mjs") $Brand | Select-Object -Last 1)
+    if ($LASTEXITCODE) { throw "brand $Brand failed" }
+    $env:VITE_BRAND_NAME = ((Get-Content (Join-Path (Split-Path $brandConf) "env")) -replace "^VITE_BRAND_NAME=", "")
+    $extra += @("--config", $brandConf)
+  }
   if ($Version) {
     # A file, not inline JSON: Windows PowerShell drops the quotes of an
     # argument it passes to a program.
     $conf = Join-Path $env:TEMP "berth-version.conf.json"
     Set-Content -Path $conf -Value ('{"version":"' + $Version + '"}') -Encoding ascii
-    $extra = @("--config", $conf)
+    $extra += @("--config", $conf)
   }
   pnpm.cmd tauri build @extra
   if ($LASTEXITCODE) { throw "tauri build failed" }
