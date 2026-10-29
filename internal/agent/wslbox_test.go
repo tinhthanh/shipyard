@@ -241,3 +241,72 @@ func TestLinuxName(t *testing.T) {
 		}
 	}
 }
+
+func TestOnWindowsThisComputerCanBeABoxOnWindowsItself(t *testing.T) {
+	e := newWSLEnv(t)
+	for _, name := range []string{"berthd.exe", "berthd-bg.exe", "tmux.exe"} {
+		writeFile(t, filepath.Join(e.dir, name), fakeBerthd("win-new"), 0o755)
+	}
+	wslServing = func(string) bool { return isFile(filepath.Join(e.root, "box", "serving")) }
+	a := startAgent(t, e.dir)
+	tok := uiToken(t, a)
+
+	_, body := uiSend(t, a, "GET", "/v1/boxes/local", tok, "")
+	var st LocalBoxStatus
+	json.Unmarshal([]byte(body), &st)
+	if !st.NativeAvailable || st.Native {
+		t.Fatalf("before: %s", body)
+	}
+
+	_, body = uiSend(t, a, "POST", "/v1/boxes/local", tok, `{"native":true}`)
+	lines, last := streamed(t, body)
+	all := strings.Join(lines, "\n")
+	if last.Error != "" || last.Box != localName() {
+		t.Fatalf("set up: %s", body)
+	}
+	bin := filepath.Join(e.root, "bin")
+	for _, want := range []string{"Copied berthd.exe to " + bin, "Copied tmux.exe to " + bin, "Installing berthd on Windows, listening on 127.0.0.1:", "Paired as " + localName() + "."} {
+		if !strings.Contains(all, want) {
+			t.Errorf("set up did not say %q:\n%s", want, all)
+		}
+	}
+	if strings.Contains(e.log(e.wsl), "--install") {
+		t.Fatal("a native box went through WSL")
+	}
+	rec := e.record()
+	if rec == nil || !rec.Native || rec.WSL != "" || rec.Program != filepath.Join(bin, "berthd.exe") || !loopback(rec.Listen) {
+		t.Fatalf("record = %+v", rec)
+	}
+	if want := e.root + "|install --listen " + rec.Listen + " --no-tools"; !strings.Contains(e.log(e.berthd), want+"\n") {
+		t.Errorf("berthd did not run %q:\n%s", want, e.log(e.berthd))
+	}
+	if err := trust.NewStore(filepath.Join(e.dir, "boxes.json")).Add(trust.Peer{Name: localName(), Address: rec.Listen, Fingerprint: e.fp, PairedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the box marked local", func() bool {
+		s, err := a.client.Status(context.Background())
+		return err == nil && len(s.Boxes) == 1 && s.Boxes[0].Local
+	})
+
+	// Again, even asked for WSL: it stays the box it is and reconnects.
+	_, body = uiSend(t, a, "POST", "/v1/boxes/local", tok, "")
+	lines, last = streamed(t, body)
+	all = strings.Join(lines, "\n")
+	if last.Error != "" || strings.Contains(all, "Copied") || !strings.Contains(all, "berthd is installed and running.") || strings.Contains(e.log(e.wsl), "--install") {
+		t.Fatalf("set up again: %s", body)
+	}
+	_, body = uiSend(t, a, "GET", "/v1/boxes/local", tok, "")
+	st = LocalBoxStatus{}
+	json.Unmarshal([]byte(body), &st)
+	if !st.Native || !st.Installed || !st.Running || st.Box != localName() || st.WSL != "" {
+		t.Fatalf("after: %s", body)
+	}
+
+	_, body = uiSend(t, a, "POST", "/v1/boxes/local/uninstall", tok, "")
+	if _, last := streamed(t, body); last.Error != "" {
+		t.Fatalf("remove: %s", body)
+	}
+	if !strings.Contains(e.log(e.berthd), e.root+"|uninstall\n") || isFile(filepath.Join(bin, "berthd.exe")) || e.record() != nil {
+		t.Fatalf("remove left things behind:\n%s", e.log(e.berthd))
+	}
+}

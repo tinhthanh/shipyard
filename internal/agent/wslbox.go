@@ -337,6 +337,18 @@ func (a *Agent) wslBoxStatus(ctx context.Context) LocalBoxStatus {
 	} else {
 		st.Available = true
 	}
+	st.NativeAvailable = a.nativeBundle() == nil
+	if rec := a.localRecord(); rec != nil && rec.Native {
+		st.Native, st.WSL = true, ""
+		st.Installed, st.Owned = true, true
+		st.Program, st.Listen = rec.Program, rec.Listen
+		st.Running = wslServing(rec.Listen)
+		if fp, err := identity.ParseFingerprint(rec.Fingerprint); err == nil {
+			if peer, ok, _ := a.boxes.Trusted(fp); ok {
+				st.Box = peer.Name
+			}
+		}
+	}
 	if rec := a.localRecord(); rec != nil && rec.WSL != "" {
 		st.Installed, st.Owned = true, true
 		st.Program, st.Listen = rec.Program, rec.Listen
@@ -355,6 +367,9 @@ func (a *Agent) wslBoxStatus(ctx context.Context) LocalBoxStatus {
 // repositories cloned there.
 func (a *Agent) removeWSLBox(ctx context.Context, removeData bool, say sayFunc) error {
 	rec := a.localRecord()
+	if rec != nil && rec.Native {
+		return a.removeNativeBox(ctx, rec, removeData, say)
+	}
 	if rec == nil || rec.WSL == "" {
 		return errors.New("this computer is not set up as a box")
 	}

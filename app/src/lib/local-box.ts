@@ -31,6 +31,10 @@ export interface LocalBoxStatus {
   // needs_wsl: WSL isn't installed yet (installWSL asks Windows to).
   needs_wsl?: boolean;
   wsl?: string;
+  // Or berthd on Windows itself, agents in PowerShell (Labs): whether the
+  // app carries it, and whether this computer's box is one.
+  native_available?: boolean;
+  native?: boolean;
 }
 
 // follow runs a streamed set up or removal and returns the box it paired.
@@ -62,7 +66,8 @@ export const localBoxApi = {
   status: (c: Client) => c.laptop<LocalBoxStatus>("GET", "/v1/boxes/local"),
   // setUp installs berthd here and pairs with it; run again, it reconnects.
   // It resolves with the box's name.
-  setUp: (c: Client, onLine: (line: string) => void, signal?: AbortSignal) => follow(c, "/v1/boxes/local", undefined, onLine, signal),
+  setUp: (c: Client, onLine: (line: string) => void, signal?: AbortSignal, native?: boolean) =>
+    follow(c, "/v1/boxes/local", native ? { native: true } : undefined, onLine, signal),
   // installWSL asks Windows to install WSL, as an administrator; it
   // resolves once the person accepted Windows' prompt.
   installWSL: (c: Client) => c.laptop<{ started: boolean }>("POST", "/v1/boxes/local/wsl"),

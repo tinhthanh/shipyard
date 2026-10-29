@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { CommandLog } from "@/views/settings/command-log";
 import { thisComputer } from "@/lib/platform";
+import { usePrefs } from "@/lib/prefs";
 
 type State = "ready" | "running" | "done" | "failed";
 
@@ -68,15 +69,19 @@ export function UseThisMac({
     }
   };
 
-  const run = async () => {
+  // On Windows, Labs offers berthd on Windows itself instead of in WSL.
+  const labs = usePrefs((p) => p.labs);
+  const [native, setNative] = useState(!!status.native);
+  const run = async (asNative = native) => {
     const client = useStore.getState().client;
     if (!client) return;
+    setNative(asNative);
     setState("running");
     setLines([]);
     setError(undefined);
     onRunning(true);
     try {
-      const box = await localBoxApi.setUp(client, (l) => setLines((p) => [...p, l]));
+      const box = await localBoxApi.setUp(client, (l) => setLines((p) => [...p, l]), undefined, asNative);
       const name = box || status.name;
       useLocalBoxName.setState({ name });
       await useStore.getState().refreshStatus();
@@ -114,7 +119,9 @@ export function UseThisMac({
           <p className="mt-0.5 text-muted-foreground text-meta" aria-live="polite">
             {autoStart
               ? state === "running"
-                ? status.wsl
+                ? native
+                  ? "Installing berthd on Windows and pairing with it. This takes a few seconds."
+                  : status.wsl
                   ? "Setting up Ubuntu in WSL, berthd in it, and pairing with it. The first time takes a few minutes."
                   : "Installing berthd and pairing with it. This takes a few seconds."
                 : state === "failed"
@@ -148,12 +155,21 @@ export function UseThisMac({
       )}
       {state === "ready" && !needsWSL && !compact && (
         <p className="mt-2 ps-11 text-muted-foreground text-meta">
-          {status.wsl
+          {status.native
+            ? "berthd runs on Windows itself, and agents in PowerShell. "
+            : status.wsl
             ? `Shipyard sets up Ubuntu in WSL (${status.wsl}) with berthd, tmux and git: a one-time download of a few hundred MB, no password needed. `
             : reuse
               ? "Uses the berthd already installed here. "
               : "Shipyard installs berthd for your user, no password needed. "}
           {thisComputer("It listens on this Mac only, so nothing opens to your network.")}
+        </p>
+      )}
+      {state === "ready" && labs && status.native_available && !status.installed && (
+        <p className="mt-1 ps-11 text-meta">
+          <Button variant="link" size="sm" className="h-auto p-0 text-meta" onClick={() => void run(true)}>
+            Or run agents on Windows itself, without WSL (Labs)
+          </Button>
         </p>
       )}
       {state === "ready" && error && (

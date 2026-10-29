@@ -80,6 +80,8 @@ type localBoxRecord struct {
 	// Listen where it listens; Program is then its path in there.
 	WSL    string `json:"wsl,omitempty"`
 	Listen string `json:"listen,omitempty"`
+	// Native: on Windows, berthd runs on Windows itself (nativebox.go).
+	Native bool `json:"native,omitempty"`
 }
 
 type localBox struct {
@@ -124,6 +126,11 @@ type LocalBoxStatus struct {
 	NeedsWSL bool `json:"needs_wsl,omitempty"`
 	// WSL is the distribution the box runs in, on Windows.
 	WSL string `json:"wsl,omitempty"`
+	// On Windows, the box can instead run berthd on Windows itself (Labs):
+	// NativeAvailable says the app carries what that needs, and Native that
+	// this computer's box is one.
+	NativeAvailable bool `json:"native_available,omitempty"`
+	Native          bool `json:"native,omitempty"`
 }
 
 type sayFunc func(format string, args ...any)
@@ -331,7 +338,20 @@ func (a *Agent) localBoxStatus() LocalBoxStatus {
 // does as it goes. Run again, it reconnects: each step is skipped when it is
 // already done.
 func (a *Agent) setUpLocalBox(ctx context.Context, say sayFunc) (string, error) {
+	return a.setUpLocalBoxAs(ctx, false, say)
+}
+
+// setUpLocalBoxAs is setUpLocalBox; on Windows, native asks for berthd on
+// Windows itself rather than in WSL. A box set up already stays the kind it
+// is: switching means removing it first.
+func (a *Agent) setUpLocalBoxAs(ctx context.Context, native bool, say sayFunc) (string, error) {
 	if localGOOS == "windows" {
+		if rec := a.localRecord(); rec != nil {
+			native = rec.Native
+		}
+		if native {
+			return a.setUpNativeBox(ctx, say)
+		}
 		return a.setUpWSLBox(ctx, say)
 	}
 	if localGOOS != "darwin" && localGOOS != "linux" {
@@ -788,6 +808,10 @@ func (a *Agent) refreshLocalBox(ctx context.Context) {
 		a.refreshWSLBox(ctx, rec)
 		return
 	}
+	if rec.Native {
+		a.refreshNativeBox(ctx, rec)
+		return
+	}
 	src, err := a.bundledBerthd()
 	if err != nil {
 		return
@@ -955,10 +979,18 @@ func (a *Agent) localBoxRoutes(mux *http.ServeMux) {
 			return
 		}
 		defer a.local.mu.Unlock()
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+		var req struct {
+			Native bool `json:"native"`
+		}
+		if r.ContentLength != 0 && !decodeBody(w, r, &req) {
+			return
+		}
+		// Downloading a Linux distribution the first time on Windows takes
+		// longer than setting up a Mac.
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 		defer cancel()
 		say, finish := streamProgress(w)
-		name, err := a.setUpLocalBox(ctx, say)
+		name, err := a.setUpLocalBoxAs(ctx, req.Native, say)
 		finish(name, err)
 	})
 	// On Windows the box runs in WSL: this asks Windows to install it, which
