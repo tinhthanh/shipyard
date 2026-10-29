@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::path::PathBuf;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 use tauri::Manager;
 
 mod agent;
