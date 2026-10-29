@@ -7,7 +7,9 @@ Shipyard keeps two kinds of files:
 
 - **State**, which Shipyard writes: identities, trust stores, sockets, logs.
   It lives in the state directory: `~/Library/Application Support/berth` on
-  a Mac, `~/.config/berth` (or `$XDG_CONFIG_HOME/berth`) on Linux.
+  a Mac, `~/.config/berth` (or `$XDG_CONFIG_HOME/berth`) on Linux, and
+  `%LOCALAPPDATA%\berth` on Windows, never the roaming `%APPDATA%`, so its
+  keys stay on this computer.
   `BERTH_HOME` moves it; it must be an absolute path.
 - **Things you write**, by hand or through the app: hooks, flows, templates,
   themes, plugins, kits. They live in `~/.berth/`; `BERTH_USER_DIR` moves it.

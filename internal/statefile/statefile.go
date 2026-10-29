@@ -10,7 +10,7 @@ import (
 )
 
 // Home returns the state directory: BERTH_HOME when set, otherwise the OS
-// user config directory plus "berth".
+// user config directory plus "berth" (on Windows the local one, home.go).
 func Home() (string, error) {
 	if dir := os.Getenv("BERTH_HOME"); dir != "" {
 		if !filepath.IsAbs(dir) {
@@ -18,11 +18,7 @@ func Home() (string, error) {
 		}
 		return dir, nil
 	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "berth"), nil
+	return defaultHome()
 }
 
 // UserDir is where people keep what they write for berth by hand: hooks,
