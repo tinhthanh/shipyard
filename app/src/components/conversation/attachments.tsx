@@ -9,6 +9,7 @@ import { type AttachTarget, attachable, isImage, localPaths, MAX_ATTACHMENT, nam
 import { errorMessage } from "@/lib/format";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { APP_NAME } from "@/lib/platform";
 
 // A file on its way to the box, or there: the composer shows it as a chip
 // until the prompt goes.
@@ -190,7 +191,7 @@ export function useAttachments(target: AttachTarget | undefined, { without, wait
       const type = /\.pdf$/i.test(name) ? "application/pdf" : `image/${(name.split(".").pop() ?? "png").toLowerCase().replace("jpg", "jpeg")}`;
       setItems((l) => [...l, { id, name, type, size: 0, state: "uploading" }]);
       sendLocal(id, path, (oldAgent) => {
-        if (oldAgent && !missed) toastManager.add({ type: "warning", title: "Pasted the path as text", description: "Restart the Shipyard agent to upload files from this computer; the box can't read a path here." });
+        if (oldAgent && !missed) toastManager.add({ type: "warning", title: "Pasted the path as text", description: `Restart the ${APP_NAME} agent to upload files from this computer; the box can't read a path here.` });
         if (++missed === paths.length) asText();
       });
     }

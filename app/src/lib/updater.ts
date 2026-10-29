@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { toastManager } from "@/components/ui/toast";
 import { isTauri } from "@/lib/api";
 import { useStore } from "@/lib/store";
+import { APP_NAME } from "@/lib/platform";
 
 // Updates to the app itself. Shipyard checks the latest GitHub release's
 // latest.json when it opens and every few hours after, and downloads a newer
@@ -170,7 +171,7 @@ async function afterLaunch() {
   toastManager.add({
     type: "success",
     title: `Updated to v${version}`,
-    description: r?.restarted ? "The Shipyard agent restarted with it. Your agents kept running." : undefined,
+    description: r?.restarted ? `The ${APP_NAME} agent restarted with it. Your agents kept running.` : undefined,
   });
 }
 

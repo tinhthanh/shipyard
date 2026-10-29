@@ -67,6 +67,7 @@ import {
 import { type BoxData, useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { titleAt } from "@/lib/worktree-names";
+import { APP_NAME } from "@/lib/platform";
 
 // useMinute re-renders once a minute, so relative times and snoozes move.
 export function useMinute(): number {
@@ -546,7 +547,7 @@ export function NotificationCenter() {
         {error && (
           <div className="flex h-8 shrink-0 items-center gap-2 border-t px-4 text-tag text-destructive-foreground dark:text-destructive">
             <span className="min-w-0 flex-1 truncate" title={error}>
-              Not saved: the Shipyard agent did not take the history.
+              Not saved: the {APP_NAME} agent did not take the history.
             </span>
           </div>
         )}

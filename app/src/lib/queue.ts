@@ -6,6 +6,7 @@ import { guessSessionName, sessionName } from "@/lib/derive";
 import { plainError } from "@/lib/errors";
 import { resolve, route } from "@/lib/notifications";
 import { useStore } from "@/lib/store";
+import { APP_NAME } from "@/lib/platform";
 
 // The offline prompt queue (docs/guides/offline-queue.mdx): prompts for a box that
 // is away wait in the laptop agent, which types them in once it is back.
@@ -77,7 +78,7 @@ useStore.subscribe((s, prev) => {
 
 const call = <T>(method: string, path: string, body?: unknown) => {
   const c = useStore.getState().client;
-  if (!c) return Promise.reject(new Error("not connected to the Shipyard agent"));
+  if (!c) return Promise.reject(new Error(`not connected to the ${APP_NAME} agent`));
   return c.laptop<T>(method, path, body);
 };
 

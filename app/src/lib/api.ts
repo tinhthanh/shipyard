@@ -3,7 +3,7 @@ import type { Marketplace, MarketPlugin } from "@/lib/marketplace";
 import type { HelperRemoved, PluginHelpers } from "@/lib/plugin-helpers";
 import { invoke } from "@tauri-apps/api/core";
 import { readTimeout, reconnectDelay, STREAM_SILENCE_MS } from "@/lib/net";
-import { IS_LINUX } from "@/lib/platform";
+import { APP_NAME, IS_LINUX } from "@/lib/platform";
 import type {
   BerthEvent,
   BoxInfo,
@@ -712,7 +712,7 @@ export function httpClient(ep: Endpoint): Client {
         };
         xhr.onerror = () => {
           done();
-          reject(new ApiError("The upload didn't reach the Shipyard agent", 0));
+          reject(new ApiError(`The upload didn't reach the ${APP_NAME} agent`, 0));
         };
         xhr.onabort = () => {
           done();

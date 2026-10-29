@@ -66,6 +66,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { demoDevServer } from "@/demo/dev-server";
 import { rememberUrl } from "@/lib/workspaces";
+import { APP_NAME } from "@/lib/platform";
 
 interface Props {
   url: string;
@@ -400,7 +401,7 @@ function Frames({ worktree, base, address, frames, paused, onGo, onReload, onNav
       />
       {plain && !__BERTH_DEMO__ && (
         <p role="status" className="shrink-0 border-b bg-warning/8 px-3 py-1 text-warning-foreground text-meta">
-          Some frames aren't connected, so they don't sync or switch themes. Pages from Shipyard's proxy (*.localhost:1377) connect once the Shipyard agent is up to date: restart it from the status bar.
+          Some frames aren't connected, so they don't sync or switch themes. Pages from {APP_NAME}'s proxy (*.localhost:1377) connect once the {APP_NAME} agent is up to date: restart it from the status bar.
         </p>
       )}
       <div

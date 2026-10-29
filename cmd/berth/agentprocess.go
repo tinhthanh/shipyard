@@ -162,6 +162,11 @@ func agentCommand(l laptop, args []string) error {
 		if err != nil {
 			return err
 		}
+		if runtime.GOOS == "windows" {
+			// A Run value starts it at sign-in only: nothing restarts it.
+			fmt.Printf("Installed %s\nThe agent now starts when you sign in to Windows; berth stop still stops it.\n", path)
+			return nil
+		}
 		fmt.Printf("Installed %s\nThe agent now starts at login and restarts after a crash; berth stop still stops it.\n", path)
 		return nil
 	case "restart":
