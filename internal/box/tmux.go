@@ -57,6 +57,17 @@ func tmuxPath() (string, error) {
 }
 
 func findTmux() (string, error) {
+	if runtime.GOOS == "windows" {
+		// Shipyard's tmux for Windows (psmux) goes beside berthd, and comes
+		// first: a service started at sign-in has no PATH of its own, and a
+		// tmux on PATH (MSYS2's, say) can't drive a Windows console.
+		if exe, err := os.Executable(); err == nil {
+			p := filepath.Join(filepath.Dir(exe), "tmux.exe")
+			if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+				return p, nil
+			}
+		}
+	}
 	if p, err := exec.LookPath("tmux"); err == nil {
 		return p, nil
 	}
