@@ -74,7 +74,9 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          sed -e "s#^repo=\"cosscom/shipyard\"#repo=\"$REPO\"#" -e "s#github.com/cosscom/shipyard/#github.com/$REPO/#" site/install.sh >dist/install.sh
+          # Its own repository, and its own address in the commands it prints.
+          sed -e "s#^repo=\"cosscom/shipyard\"#repo=\"$REPO\"#" -e "s#github.com/cosscom/shipyard/#github.com/$REPO/#" \
+            -e "s#https://berthd.app/install#https://github.com/$REPO/releases/latest/download/install.sh#g" site/install.sh >dist/install.sh
           grep -q "^repo=\"$REPO\"$" dist/install.sh
           sh -n dist/install.sh
       - name: Attach to a draft release
