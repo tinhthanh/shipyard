@@ -3,22 +3,30 @@
 ; The laptop agent runs from berth-cli.exe (or berth-agent.exe) in the
 ; install folder, and Windows won't let a running program be overwritten: an
 ; update stopped at "Error opening file for writing" until someone chose
-; Retry. So the agent running from here is stopped before the files go in,
-; and started again after, as the Mac app's restarts it after an update.
-; A first install starts none: the app asks.
+; Retry. It will rename one, though. So each is moved aside before the new
+; files go in, and the agent runs on from its old copy until the app, started
+; again by the update, restarts it from the new one, once its work under way
+; is done (berth agent restart --if-stale), as on a Mac. Nothing is stopped
+; here and no console opens. Copies moved aside go at the next update, or
+; with the app.
 
-Var BerthAgentStopped
-
-!macro NSIS_HOOK_PREINSTALL
-  ; Only this install's agent, found by its path; prints how many it stopped.
-  nsExec::ExecToStack `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$p = @(Get-Process berth-cli,berth-agent -ErrorAction SilentlyContinue | Where-Object { $$_.Path -like '$INSTDIR\*' }); $$p | Stop-Process -Force; Start-Sleep -Milliseconds 500; Write-Output $$p.Count"`
-  Pop $0
-  Pop $BerthAgentStopped
+!macro BERTH_MOVE_ASIDE NAME
+  Delete "$INSTDIR\${NAME}.old"
+  Delete "$INSTDIR\${NAME}.old2"
+  Rename "$INSTDIR\${NAME}" "$INSTDIR\${NAME}.old"
+  ; .old still held by a run from the update before: the other name.
+  IfFileExists "$INSTDIR\${NAME}" 0 +2
+    Rename "$INSTDIR\${NAME}" "$INSTDIR\${NAME}.old2"
 !macroend
 
-!macro NSIS_HOOK_POSTINSTALL
-  StrCpy $0 $BerthAgentStopped 1
-  StrCmp $0 "" +3
-  StrCmp $0 "0" +2
-  Exec '"$INSTDIR\berth-agent.exe" agent start'
+!macro NSIS_HOOK_PREINSTALL
+  !insertmacro BERTH_MOVE_ASIDE "berth-cli.exe"
+  !insertmacro BERTH_MOVE_ASIDE "berth-agent.exe"
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  Delete "$INSTDIR\berth-cli.exe.old"
+  Delete "$INSTDIR\berth-cli.exe.old2"
+  Delete "$INSTDIR\berth-agent.exe.old"
+  Delete "$INSTDIR\berth-agent.exe.old2"
 !macroend
