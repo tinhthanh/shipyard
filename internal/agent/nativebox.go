@@ -53,13 +53,28 @@ func copyReplacing(src, dst string) (bool, error) {
 		if have, err := fileSHA256(dst); err == nil && have == want {
 			return false, nil
 		}
+		// Copies moved aside before go when nothing runs them any more. One
+		// still running (an agent's host outlives berthd's updates) stays,
+		// and this one is moved aside under a name of its own.
+		removeAside(dst)
 		old := dst + ".old"
-		os.Remove(old)
+		if _, err := os.Lstat(old); err == nil {
+			old = fmt.Sprintf("%s.old-%d", dst, time.Now().UnixNano())
+		}
 		if err := os.Rename(dst, old); err != nil {
 			return false, err
 		}
 	}
 	return true, copyExecutable(src, dst)
+}
+
+// removeAside deletes the copies of dst moved aside earlier (dst.old,
+// dst.old-…) that can go: a program still running from one can't be.
+func removeAside(dst string) {
+	matches, _ := filepath.Glob(dst + ".old*")
+	for _, m := range matches {
+		os.Remove(m)
+	}
 }
 
 // setUpNativeBox is setUpLocalBox for berthd on Windows itself.
@@ -147,9 +162,8 @@ func (a *Agent) removeNativeBox(ctx context.Context, rec *localBoxRecord, remove
 	}
 	bin := filepath.Dir(rec.Program)
 	for _, name := range nativeFiles {
-		for _, p := range []string{filepath.Join(bin, name), filepath.Join(bin, name+".old")} {
-			os.Remove(p)
-		}
+		os.Remove(filepath.Join(bin, name))
+		removeAside(filepath.Join(bin, name))
 	}
 	dir := filepath.Join(rec.Home, "box")
 	if removeData {

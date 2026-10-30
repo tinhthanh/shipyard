@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -308,5 +309,31 @@ func TestOnWindowsThisComputerCanBeABoxOnWindowsItself(t *testing.T) {
 	}
 	if !strings.Contains(e.log(e.berthd), e.root+"|uninstall\n") || isFile(filepath.Join(bin, "berthd.exe")) || e.record() != nil {
 		t.Fatalf("remove left things behind:\n%s", e.log(e.berthd))
+	}
+}
+
+func TestAProgramMovedAsideAndStillRunningDoesNotStopTheNextUpdate(t *testing.T) {
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "new.exe"), filepath.Join(dir, "berthd.exe")
+	writeFile(t, src, "v3", 0o755)
+	writeFile(t, dst, "v2", 0o755)
+	// v1, moved aside by the last update, can't be deleted: an agent's host
+	// still runs it. A directory stands in for a file that won't go.
+	if err := os.MkdirAll(filepath.Join(dst+".old", "busy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	did, err := copyReplacing(src, dst)
+	if err != nil || !did {
+		t.Fatalf("copyReplacing = %v, %v", did, err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "v3" {
+		t.Fatalf("dst = %q", b)
+	}
+	aside, _ := filepath.Glob(dst + ".old-*")
+	if len(aside) != 1 {
+		t.Fatalf("v2 was not moved aside under a name of its own: %v", aside)
+	}
+	if b, _ := os.ReadFile(aside[0]); string(b) != "v2" {
+		t.Fatalf("aside = %q", b)
 	}
 }
