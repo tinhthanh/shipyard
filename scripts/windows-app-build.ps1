@@ -111,4 +111,4 @@ try {
   if ($LASTEXITCODE) { throw "tauri build failed" }
 } finally { Pop-Location }
 
-Get-ChildItem (Join-Path $root "app\src-tauri\target\release\bundle\nsis") -Include *.exe, *.sig -Recurse | ForEach-Object { $_.FullName }
+Get-ChildItem (Join-Path $root "app\src-tauri\target\release\bundle\nsis") | Where-Object { $_.Extension -in ".exe", ".sig" } | ForEach-Object { $_.FullName }
