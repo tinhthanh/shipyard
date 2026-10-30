@@ -28,8 +28,7 @@ struct Endpoint {
 
 // The agent's state directory: $BERTH_HOME/client when set, otherwise the
 // OS config directory's berth/client (~/Library/Application Support on macOS),
-// matching statefile.Home in the Go code. On Windows that is the local
-// AppData, unless the state hasn't moved there from the roaming one yet.
+// matching statefile.Home in the Go code.
 fn token_path() -> Result<PathBuf, String> {
     if let Ok(home) = std::env::var("BERTH_HOME") {
         if !home.is_empty() {
@@ -72,7 +71,7 @@ fn restart_app(app: tauri::AppHandle) {
     app.request_restart();
 }
 
-// open_terminal brings up Terminal on this Mac (a terminal elsewhere), for a card that copied a
+// open_terminal brings up Terminal on this Mac, for a card that copied a
 // command to paste there (installing tmux for this Mac's box, whose own
 // terminals need tmux). It never types or runs anything: the person pastes
 // the command, reads it and presses Enter.
@@ -96,7 +95,7 @@ fn open_terminal() -> Result<(), String> {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
-        Err("opening a terminal is only for macOS, Linux and Windows".into())
+        Err("opening a terminal is only for macOS and Linux".into())
     }
 }
 
@@ -114,10 +113,10 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     linux::prefer_compatible_rendering();
     let builder = tauri::Builder::default();
-    // On Linux and Windows a berth:// link starts the app again with the
-    // link as its argument: one already running takes it instead (and comes
-    // to the front), and the deep-link plugin hands it to the webview.
-    // Registered first, as the plugin asks.
+    // On Linux a berth:// link starts the app again with the link as its
+    // argument: one already running takes it instead (and comes to the
+    // front), and the deep-link plugin hands it to the webview. Registered
+    // first, as the plugin asks.
     #[cfg(any(target_os = "linux", windows))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
         if let Some(w) = app.get_webview_window("main") {

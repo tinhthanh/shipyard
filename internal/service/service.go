@@ -102,7 +102,7 @@ func Preflight() error {
 	case "windows":
 		return nil
 	}
-	return fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
+	return fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
 }
 
 // findRuntimeDir points systemctl at the user's manager when the login did
@@ -151,7 +151,7 @@ func unitPath(s Spec) (string, error) {
 	case "windows":
 		return filepath.Join(home, "AppData", "Local", "berth", "services", s.Name+".run"), nil
 	}
-	return "", fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
+	return "", fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
 }
 
 // Render produces the unit file for the current platform.
@@ -216,7 +216,7 @@ func Render(s Spec) ([]byte, error) {
 	case "windows":
 		return renderRun(s)
 	}
-	return nil, fmt.Errorf("services are supported on macOS, Linux and Windows, not %s", goos)
+	return nil, fmt.Errorf("services are supported on macOS and Linux, not %s", goos)
 }
 
 func esc(s string) string { return html.EscapeString(s) }
