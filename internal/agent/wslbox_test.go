@@ -337,3 +337,23 @@ func TestAProgramMovedAsideAndStillRunningDoesNotStopTheNextUpdate(t *testing.T)
 		t.Fatalf("aside = %q", b)
 	}
 }
+
+func TestCopiesMovedAsideGoOnceNothingRunsThem(t *testing.T) {
+	bin := t.TempDir()
+	writeFile(t, filepath.Join(bin, "berthd.exe"), "v3", 0o755)
+	writeFile(t, filepath.Join(bin, "berthd.exe.old"), "v1", 0o755)
+	writeFile(t, filepath.Join(bin, "berthd-bg.exe.old-1"), "v2", 0o755)
+	// One an agent's host still runs stays. A directory stands in for it.
+	if err := os.MkdirAll(filepath.Join(bin, "tmux.exe.old-2", "busy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sweepAside(bin)
+	left, _ := filepath.Glob(filepath.Join(bin, "*"))
+	var names []string
+	for _, l := range left {
+		names = append(names, filepath.Base(l))
+	}
+	if strings.Join(names, " ") != "berthd.exe tmux.exe.old-2" {
+		t.Fatalf("left %v", names)
+	}
+}
