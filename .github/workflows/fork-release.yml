@@ -13,7 +13,11 @@ name: fork-release
 # the feed installed Windows apps update from. The Mac and Linux apps are
 # built from source and find nothing for them in it (lib/fork-updates.ts).
 # The release stays a draft until all of CI (ci.yml) passes on the tag and
-# the Windows app is on it.
+# the Windows app is on it. Once it is out, the winget job asks winget's
+# community repository (microsoft/winget-pkgs) to list the new version of
+# tinhthanh.Vetgo, with the repository secret WINGET_TOKEN (a GitHub token of
+# the account that owns this repository, scope public_repo): wingetcreate
+# opens the pull request there from that account's fork.
 on:
   push:
     tags: ["v*-fork.*"]
@@ -178,3 +182,31 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: gh release edit "$TAG" --draft=false --latest
+
+  winget:
+    # After publish: winget's validation downloads the installer from the
+    # release. Without WINGET_TOKEN it says so and does nothing; a failure
+    # here leaves the release as it is, and the pull request can be opened
+    # by hand (wingetcreate update, as below).
+    needs: [publish]
+    runs-on: windows-latest
+    steps:
+      - name: Ask winget to list this version
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if (-not $env:WINGET_TOKEN) { Write-Output "::notice::WINGET_TOKEN is not set: no winget pull request"; exit 0 }
+          # wingetcreate, pinned and checked against its release's sha256.
+          $exe = "$env:RUNNER_TEMP\wingetcreate.exe"
+          curl.exe -fsSL -o $exe "https://github.com/microsoft/winget-create/releases/download/v1.12.13.0/wingetcreate.exe"
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash.ToLower() -ne "24042bd37915805615e6cf969ac57c6439124c3fe85823327f5f3fb24bd9ffea") { throw "wingetcreate.exe is not the release's" }
+          $version = $env:TAG.TrimStart("v")
+          $url = "https://github.com/$env:REPO/releases/download/$env:TAG/Vetgo-windows-x64-setup.exe"
+          # The token goes in its environment variable, never the command line,
+          # which wingetcreate may log.
+          $env:WINGET_CREATE_GITHUB_TOKEN = $env:WINGET_TOKEN
+          & $exe update tinhthanh.Vetgo --version $version --urls $url --release-notes-url "https://github.com/$env:REPO/releases/tag/$env:TAG" --submit --no-open
+          if ($LASTEXITCODE) { throw "wingetcreate update failed" }

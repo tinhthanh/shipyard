@@ -19,8 +19,10 @@ the fork adds files of its own, and upstream's files only call into them.
   repository's links and install command), `app/src-tauri/tauri.fork.conf.json`
   (the update feed), `branding/` with `scripts/brand.mjs`.
 - **Releases:** `.github/workflows/fork-release.yml`, on `vX.Y.Z-fork.N`
-  tags. Upstream's `release.yml` stays as upstream has it and is turned off
-  in this repository (`gh workflow disable release.yml`).
+  tags: the CLI and daemons, the Windows app and its update feed, then a
+  pull request to winget's community repository for `tinhthanh.Vetgo`
+  (secret `WINGET_TOKEN`). Upstream's `release.yml` stays as upstream has it
+  and is turned off in this repository (`gh workflow disable release.yml`).
 - **Docs:** `docs/windows/`, and `docs/changelog-fork.mdx`.
 
 ## Rules
