@@ -150,14 +150,8 @@ fn parse_team(described: &str) -> Option<String> {
 pub fn run(bin: &Path, args: &[&str]) -> Result<String, String> {
     let mut cmd = Command::new(bin);
     cmd.args(args).stdin(Stdio::null());
-    // berth is a console program: on Windows it would open a console window
-    // each time the app runs it.
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    crate::windows::no_window(&mut cmd);
     let out = cmd
         .output()
         .map_err(|e| format!("could not run {}: {e}", bin.display()))?;

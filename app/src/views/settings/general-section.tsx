@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toastManager } from "@/components/ui/toast";
 import { type CliLink, cliLinkStatus, installCliLink } from "@/lib/cli-link";
-import { IS_WINDOWS } from "@/lib/platform";
 import { errorMessage } from "@/lib/format";
 import { setPrefs, usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
+import { HAS_CLI_LINK } from "@/platform/windows";
 import { ConfirmButton } from "@/views/settings/confirm";
 import { Code, SettingsGroup, SettingsPage, SettingsRow, Value } from "@/views/settings/rows";
 
@@ -108,8 +108,7 @@ function CommandLineGroup() {
   useEffect(() => {
     cliLinkStatus().then(setCli, () => setCli(null));
   }, []);
-  // A link needs a symlink and ~/.local/bin, neither of which Windows has.
-  if (cli === undefined || IS_WINDOWS) return null;
+  if (cli === undefined || !HAS_CLI_LINK) return null;
 
   let description: React.ReactNode;
   let control: React.ReactNode = null;

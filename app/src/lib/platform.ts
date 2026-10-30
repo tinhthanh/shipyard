@@ -4,6 +4,10 @@
 // e2e suite runs on Linux); ?platform=linux shows the Linux app's instead,
 // for screenshots and tests.
 
+import { ISSUES } from "../platform/brand.ts";
+
+export { APP_NAME } from "../platform/brand.ts";
+
 const forced = (() => {
   try {
     return new URLSearchParams(location.search).get("platform");
@@ -22,14 +26,10 @@ export const IS_WINDOWS = forced ? forced === "windows" : tauri && /Windows|Win3
 export const IS_LINUX = forced ? forced === "linux" || forced === "windows" : tauri && (/Linux/.test(nav) || IS_WINDOWS);
 export const IS_MAC = !IS_LINUX;
 
-// The app's name: Shipyard, or a fork's brand when the build carries one
-// (branding/, scripts/brand.mjs sets VITE_BRAND_NAME).
-export const APP_NAME: string = (import.meta.env?.VITE_BRAND_NAME as string | undefined) || "Shipyard";
-
 // The Linux app is an alpha: it says so beside its name.
 export const LINUX_ALPHA = IS_LINUX;
 
-export const LINUX_BUGS = "https://github.com/tinhthanh/shipyard/issues/new?labels=linux&title=Linux%3A+";
+export const LINUX_BUGS = `${ISSUES}/new?labels=linux&title=Linux%3A+`;
 
 // How the Linux app's keys meet a terminal's (hooks/use-shortcuts.ts).
 export const LINUX_TERMINAL_KEYS =
