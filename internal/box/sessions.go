@@ -211,8 +211,13 @@ set -s extended-keys on
 func NewSessions(dir string) (*Sessions, error) {
 	path := filepath.Join(dir, "tmux.conf")
 	s := &Sessions{Config: path, Commands: filepath.Join(dir, "commands")}
-	if b, err := os.ReadFile(path); err != nil || string(b) != tmuxConfig {
-		if err := statefile.Write(path, []byte(tmuxConfig)); err != nil {
+	config := tmuxConfig
+	if runtime.GOOS == "windows" {
+		// Programs for Windows (Git's less, say) know no tmux-256color.
+		config = strings.Replace(config, `"tmux-256color"`, `"xterm-256color"`, 1)
+	}
+	if b, err := os.ReadFile(path); err != nil || string(b) != config {
+		if err := statefile.Write(path, []byte(config)); err != nil {
 			return nil, err
 		}
 		// A server still running from an older build reads the change now;
@@ -244,7 +249,10 @@ func (s *Sessions) tmux(ctx context.Context, args ...string) ([]byte, error) {
 //
 // Sessions started since keep their command in a file (@berth_command_file)
 // and only its start in @berth_command, for older builds to show.
-const listFormat = "#{session_name}\t#{session_created}\t#{session_attached}\t#{@berth_location}\t#{?@berth_command64,,#{@berth_command}}\t#{pane_dead}\t#{pane_start_path}\t#{@berth_command64}\t#{@berth_agent}\t#{@berth_title}\t#{@berth_service}\t#{@berth_command_file}\t#{@berth_scope}\t#{pane_pid}\t#{@berth_driver}\t#{@berth_conv}\t#{@berth_sock}\t#{@berth_bypass}"
+//
+// The directory is the pane's start path, or where it is now when the tmux
+// has no start path (psmux, on Windows, leaves it empty).
+const listFormat = "#{session_name}\t#{session_created}\t#{session_attached}\t#{@berth_location}\t#{?@berth_command64,,#{@berth_command}}\t#{pane_dead}\t#{?pane_start_path,#{pane_start_path},#{pane_current_path}}\t#{@berth_command64}\t#{@berth_agent}\t#{@berth_title}\t#{@berth_service}\t#{@berth_command_file}\t#{@berth_scope}\t#{pane_pid}\t#{@berth_driver}\t#{@berth_conv}\t#{@berth_sock}\t#{@berth_bypass}"
 
 // plainCommandMax is how much of a command the plain @berth_command keeps.
 const plainCommandMax = 1024

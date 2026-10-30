@@ -10,9 +10,8 @@ import (
 )
 
 // stopServing ends the berthd this box's service runs now, found by the pid
-// it wrote (serve), and only when that process is this box's berthd: its
-// program is program or berthd.exe beside it. It waits, briefly, for it to
-// be gone.
+// it wrote (serve), and only when that process is this box's berthd: a
+// berthd program in program's folder. It waits, briefly, for it to be gone.
 func stopServing(b boxHome, program string) {
 	raw, err := os.ReadFile(filepath.Join(b.dir, "berthd.pid"))
 	if err != nil {
@@ -32,9 +31,12 @@ func stopServing(b boxHome, program string) {
 	if windows.QueryFullProcessImageName(h, 0, &buf[0], &n) != nil {
 		return
 	}
+	// One of the berthd programs in program's folder, under its own name or
+	// moved aside to be replaced (berthd-bg.exe.old: Windows names a running
+	// program by its file's name now).
 	image := windows.UTF16ToString(buf[:n])
-	ours := strings.EqualFold(image, program) || strings.EqualFold(image, filepath.Join(filepath.Dir(program), "berthd.exe"))
-	if !ours {
+	base := strings.ToLower(filepath.Base(image))
+	if !strings.EqualFold(filepath.Dir(image), filepath.Dir(program)) || !strings.HasPrefix(base, "berthd") {
 		return
 	}
 	if windows.TerminateProcess(h, 0) == nil {
