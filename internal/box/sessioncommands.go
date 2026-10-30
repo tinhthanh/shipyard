@@ -183,10 +183,12 @@ func isPowerShell(shell string) bool {
 func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
 // shellRun is the argv that runs script in shell: a login shell's -lc, or
-// PowerShell's -Command.
+// PowerShell's -Command. PowerShell's own default refuses every script,
+// npm's claude.ps1 included: a session's PowerShell runs local scripts
+// (RemoteSigned, for that process only), as a developer's usually does.
 func shellRun(shell, script string) []string {
 	if isPowerShell(shell) {
-		return []string{shell, "-NoLogo", "-Command", script}
+		return []string{shell, "-NoLogo", "-ExecutionPolicy", "RemoteSigned", "-Command", script}
 	}
 	return []string{shell, "-lc", script}
 }
@@ -195,7 +197,7 @@ func shellRun(shell, script string) []string {
 // command.
 func shellLogin(shell string) []string {
 	if isPowerShell(shell) {
-		return []string{shell, "-NoLogo"}
+		return []string{shell, "-NoLogo", "-ExecutionPolicy", "RemoteSigned"}
 	}
 	return []string{shell, "-l"}
 }

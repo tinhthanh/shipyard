@@ -22,14 +22,14 @@ func TestASessionOnWindowsRunsItsCommandInPowerShell(t *testing.T) {
 	ps := "powershell.exe"
 	file := `C:\Users\ana\berth\box\commands\it's.cmd`
 	got := shellRun(ps, withPATH(ps, `C:\node;C:\tools`, sourceCommand(ps, file)))
-	want := []string{ps, "-NoLogo", "-Command", `$env:Path = 'C:\node;C:\tools;' + $env:Path; $c = [IO.File]::ReadAllText('C:\Users\ana\berth\box\commands\it''s.cmd'); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`}
+	want := []string{ps, "-NoLogo", "-ExecutionPolicy", "RemoteSigned", "-Command", `$env:Path = 'C:\node;C:\tools;' + $env:Path; $c = [IO.File]::ReadAllText('C:\Users\ana\berth\box\commands\it''s.cmd'); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`}
 	if runtimeSeparator() != ";" {
-		want[3] = `$env:Path = 'C:\node;C:\tools:' + $env:Path; $c = [IO.File]::ReadAllText('C:\Users\ana\berth\box\commands\it''s.cmd'); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`
+		want[5] = `$env:Path = 'C:\node;C:\tools:' + $env:Path; $c = [IO.File]::ReadAllText('C:\Users\ana\berth\box\commands\it''s.cmd'); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("shellRun = %q\nwant      %q", got, want)
 	}
-	if got := shellLogin(ps); !reflect.DeepEqual(got, []string{ps, "-NoLogo"}) {
+	if got := shellLogin(ps); !reflect.DeepEqual(got, []string{ps, "-NoLogo", "-ExecutionPolicy", "RemoteSigned"}) {
 		t.Errorf("shellLogin = %q", got)
 	}
 	// Other shells are as before.
