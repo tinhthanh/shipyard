@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -149,7 +150,19 @@ func (b *Box) agentHostCommand() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// On Windows the service runs berthd-bg.exe, built without a console;
+	// a host runs in a session's console, where only berthd.exe can write.
+	if runtime.GOOS == "windows" && strings.EqualFold(filepath.Base(exe), "berthd-bg.exe") {
+		if console := filepath.Join(filepath.Dir(exe), "berthd.exe"); fileExists(console) {
+			exe = console
+		}
+	}
 	return []string{exe, "agent-host"}, nil
+}
+
+func fileExists(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && st.Mode().IsRegular()
 }
 
 // newConversation makes a new conversation's folder and names its socket.
@@ -176,6 +189,15 @@ func newConvID() string {
 // is limited to about 100 bytes and a state folder's can be longer. The
 // folder is the box user's alone.
 func hostSocket(id string) (string, error) {
+	if runtime.GOOS == "windows" {
+		// The user's own temporary folder, which only they can open; a
+		// Windows file has no Unix owner or mode to check.
+		dir := filepath.Join(os.TempDir(), "berth")
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, id+".sock"), nil
+	}
 	dir := filepath.Join("/tmp", "berth-"+strconv.Itoa(os.Getuid()))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err

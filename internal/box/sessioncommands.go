@@ -69,8 +69,10 @@ func (s *Sessions) removeCommand(name string) {
 func sourceCommand(shell, file string) string {
 	if isPowerShell(shell) {
 		// Read and run, rather than dot-source: the file is no .ps1, and
-		// this way the execution policy doesn't refuse it.
-		return "Invoke-Expression ([IO.File]::ReadAllText(" + psQuote(file) + "))"
+		// this way the execution policy doesn't refuse it. A command that
+		// starts with a quoted program ('C:\…\berthd.exe' agent-host) is an
+		// expression to PowerShell unless called with &.
+		return "$c = [IO.File]::ReadAllText(" + psQuote(file) + `); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`
 	}
 	if filepath.Base(shell) == "fish" {
 		return "source " + shellQuote(file)
