@@ -24,6 +24,7 @@ import (
 	"github.com/cosscom/shipyard/internal/agenthost"
 	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/boxcmd"
+	"github.com/cosscom/shipyard/internal/childreap"
 	"github.com/cosscom/shipyard/internal/debugserver"
 	"github.com/cosscom/shipyard/internal/doctor"
 	"github.com/cosscom/shipyard/internal/events"
@@ -281,6 +282,10 @@ func utf8Locale() {
 }
 
 func serve(b boxHome, args []string) error {
+	// Children of this process now were started by the build it was
+	// before an upgrade exec'd this one (upgrade.go): nothing else would
+	// ever wait for them. Looked at first, before this build starts any.
+	inherited := childreap.Inherited()
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", "", "address to listen on (default: this box's tailnet address only)")
 	logPath := fs.String("log", "", "append the log to this file rather than standard error (a Windows service has none)")
@@ -332,6 +337,12 @@ func serve(b boxHome, args []string) error {
 	// install on Windows stops the berthd it replaces by this (install.go).
 	statefile.Write(filepath.Join(b.dir, "berthd.pid"), []byte(strconv.Itoa(os.Getpid())))
 	logger := log.New(os.Stderr, "", log.LstdFlags)
+	if len(inherited) > 0 {
+		go func() {
+			n := childreap.Reap(ctx, inherited, 5*time.Second)
+			logger.Printf("berthd: reaped %d of %d processes the build before this one left", n, len(inherited))
+		}()
+	}
 	s := &wire.Server{
 		Identity: id,
 		Clients:  b.clients(),
@@ -418,8 +429,15 @@ func serve(b boxHome, args []string) error {
 	// Plugins' helpers run as berthd's own children: started before it
 	// serves anything, so the first service finds them up, and stopped
 	// with it. A new build taking over starts them again itself.
+	// What agents it didn't start last said, by folder, is from before it
+	// stopped (a reboot, often): nothing still running there is exited.
+	if n := bx.SettleAgentStates(); n > 0 {
+		logger.Printf("settled %d agent states left from before berthd started", n)
+	}
 	bx.Helpers = &box.Helpers{Dir: filepath.Join(b.dir, "helpers"), Box: hostname, Logf: logger.Printf}
-	bx.Update.BeforeRestart = func() { shares.StopAll(); bx.Helpers.Stop(); ln.Close() }
+	// Terminals' tmux clients end and are waited for before the exec: the
+	// new build couldn't wait for them (the sessions keep running).
+	bx.Update.BeforeRestart = func() { shares.StopAll(); bx.Helpers.Stop(); bx.Sessions.Detach(2 * time.Second); ln.Close() }
 	bx.Helpers.Start()
 	defer bx.Helpers.Stop()
 	// A worktree that is removed, however it was, is one they forget.

@@ -74,3 +74,7 @@ func diskSpace(path string) (total, avail, id uint64, ok bool) {
 	}
 	return size, free, id, true
 }
+
+// fileIdentity is "" on Windows: a FileInfo there carries no file index, so
+// a stamp goes by size and modification time alone (gitcache.go's stampOf).
+func fileIdentity(os.FileInfo) string { return "" }

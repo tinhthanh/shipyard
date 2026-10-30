@@ -61,7 +61,7 @@ import { sessionWord } from "@/lib/state-model";
 import { useThemes } from "@/hooks/use-theme";
 import { openBrowserAt, openPreviewAt, resolveUrl } from "@/lib/actions";
 import { FROM_TABLE } from "@/lib/palette-shortcuts";
-import { describe, keysFor, SHORTCUTS } from "@/lib/shortcuts";
+import { describe, keysFor, keysOf, SHORTCUTS } from "@/lib/shortcuts";
 import { runShortcut } from "@/hooks/use-shortcuts";
 import { openRenameWorktree } from "@/components/sidebar/rename-worktree";
 import type { SettingsSectionId } from "@/views/settings/open";
@@ -71,6 +71,7 @@ import { quietNow, setDoNotDisturb, setNotificationsOpen } from "@/lib/notificat
 import { usePrefs } from "@/lib/prefs";
 import { useStore } from "@/lib/store";
 import { isLink, teamRef } from "@/lib/team-ref";
+import { useKeyLabels } from "@/lib/keyboard-layout";
 import { loginUrl, loginUserLabel, useLoginConfig, worktreeOrigin } from "@/lib/login-users";
 import { openReviewSheet } from "@/lib/pr-review";
 import { parseReviewRef } from "@/lib/review-link";
@@ -147,6 +148,8 @@ const slot = (icon: React.ReactNode) => <span className="flex size-4 shrink-0 it
 // where you were; with a query that matches nothing, it offers to make it.
 export function CommandPalette() {
   const open = useStore((s) => s.paletteOpen);
+  // Its shortcuts' keys follow the keyboard layout (lib/keyboard-layout.ts).
+  const keyLabels = useKeyLabels(open);
   const setOpen = useStore((s) => s.setPaletteOpen);
   const sessions = useAllSessions();
   const boxes = useStore((s) => s.boxes);
@@ -235,7 +238,7 @@ export function CommandPalette() {
       ...FROM_TABLE.flatMap((id) => {
         const k = SHORTCUTS.find((x) => x.id === id);
         if (!k || (k.labs && !usePrefs.getState().labs)) return [];
-        return [{ value: `shortcut ${id} ${describe(k)}`, label: k.label, icon: slot(<KeyboardIcon />), shortcut: k.keys, run: go(() => void runShortcut(id, "menu")) }];
+        return [{ value: `shortcut ${id} ${k.label} ${describe(k)}`, label: k.label, icon: slot(<KeyboardIcon />), shortcut: keysOf(k, keyLabels), run: go(() => void runShortcut(id, "menu")) }];
       }),
       { value: "worktrees", label: "Worktrees", icon: slot(<GitBranchIcon />), run: go(() => st.setView({ kind: "worktrees" })) },
       { value: "automations", label: "Automations", icon: slot(<WorkflowIcon />), run: go(() => st.setView({ kind: "automations" })) },
@@ -295,15 +298,17 @@ export function CommandPalette() {
     }
 
     // Sessions are named by where they run, so two "main" branches in
-    // different repositories cannot be confused.
-    const sessionItem = ({ box, session, state }: (typeof sessions)[number]): Item => {
+    // different repositories cannot be confused. Under a heading that
+    // already says their state (Needs you), a row leaves out its agent's
+    // name (its icon says it) and its state, so the title has the room.
+    const sessionItem = ({ box, session, state }: (typeof sessions)[number], grouped = false): Item => {
       const where = worktreeOf(boxes[box]?.locations, session);
       const agent = agentOf(session);
       return {
         value: `session:${box}/${session.name}`,
         label: sessionName(session, { sessions: boxes[box]?.sessions, locations: boxes[box]?.locations, place: true }),
         // Its state in the same words as everywhere else, then where.
-        detail: [sessionAgent(session), state !== "idle" && sessionWord(state), where?.worktree.branch, box].filter(Boolean).join(" · "),
+        detail: [!grouped && sessionAgent(session), !grouped && state !== "idle" && sessionWord(state), where?.worktree.branch, box].filter(Boolean).join(" · "),
         search: [session.name, where?.worktree.title ? where.worktree.name : undefined].filter(Boolean).join(" "),
         icon: (
           <span className="flex w-8 shrink-0 items-center gap-1">
@@ -371,7 +376,7 @@ export function CommandPalette() {
     }));
 
     if (!q) {
-      const waiting = sessions.filter((s) => s.state === "waiting").map(sessionItem);
+      const waiting = sessions.filter((s) => s.state === "waiting").map((s) => sessionItem(s, true));
       const recent: Item[] = recentWorktrees(spaces, 5).map((w) => ({
         value: `recent:${w.ref.box}:${w.ref.path}`,
         label: placeLabel(w.ref),
@@ -394,7 +399,7 @@ export function CommandPalette() {
       { value: `new-worktree:${q}`, label: `New task from "${q}"`, icon: slot(<GitBranchPlusIcon />), run: go(() => st.openNewWorktree({ name: q })) },
     ];
     return [
-      { value: "Sessions", items: sessions.map(sessionItem) },
+      { value: "Sessions", items: sessions.map((s) => sessionItem(s)) },
       { value: "Worktrees", items: worktreeItems },
       { value: "Actions", items: actions },
       { value: "Plugins", items: pluginItems },
@@ -404,7 +409,7 @@ export function CommandPalette() {
     ].filter((g) => g.items.length);
     // close is stable enough: it only reads refs and store setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, boxes, status, themes, themeId, spaces, pluginCommands, query, nav.hidden, open, login]);
+  }, [sessions, boxes, status, themes, themeId, spaces, pluginCommands, query, nav.hidden, open, login, keyLabels]);
   shown.current = { groups, query };
 
   return (
@@ -442,7 +447,8 @@ export function CommandPalette() {
                       <CommandItem key={item.value} value={item} className="gap-2" onClick={() => item.run()}>
                         {item.icon}
                         <span className="truncate">{item.label}</span>
-                        {item.detail && <span className="ml-auto min-w-0 shrink truncate text-muted-foreground text-meta">{item.detail}</span>}
+                        {/* The title has the room; the detail gives way first. */}
+                        {item.detail && <span className="ml-auto min-w-0 max-w-[40%] shrink-0 truncate text-muted-foreground text-meta">{item.detail}</span>}
                         {item.trailing}
                         {item.shortcut && <Kbd className={item.detail ? "" : "ml-auto"}>{item.shortcut}</Kbd>}
                       </CommandItem>

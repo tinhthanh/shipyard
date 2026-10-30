@@ -66,9 +66,10 @@ func (b *Box) handleStats(w http.ResponseWriter, r *http.Request) error {
 }
 
 // placeAgents names the location and worktree each agent works in, and
-// its state. It needs only where the worktrees are: one git command a
-// location, where Locations.List runs four and reads every config (the
-// app reads stats on every agent event), and none when no agent runs.
+// its state. It needs only where the worktrees are, where Locations.List
+// also reads every config (the app reads stats on every agent event), and
+// nothing when no agent runs. The worktree list is git's, kept until the
+// repository changes or a minute passes (gitcache.go).
 func (b *Box) placeAgents(ctx context.Context, agents []Agent) {
 	if len(agents) == 0 {
 		return
@@ -84,6 +85,32 @@ func (b *Box) placeAgents(ctx context.Context, agents []Agent) {
 			}
 		}
 	}
+}
+
+// SettleAgentStates, as berthd starts, ends the states the ledger keeps by
+// folder for agents berth didn't start whose folder no agent process works
+// in any more (Turns.Settle). Without /proc (macOS) it can't tell which
+// still run, so it only forgets folders that are gone or long quiet.
+func (b *Box) SettleAgentStates() int {
+	return b.settleAgentStates("/proc")
+}
+
+func (b *Box) settleAgentStates(proc string) int {
+	if b.Turns == nil {
+		return 0
+	}
+	if _, err := os.Stat(filepath.Join(proc, "self")); err != nil {
+		return b.Turns.Settle(nil, time.Now())
+	}
+	agents := agentProcesses(proc)
+	return b.Turns.Settle(func(dir string) bool {
+		for _, a := range agents {
+			if sameDir(a.Path, dir) || strings.HasPrefix(a.Path, dir+"/") {
+				return true
+			}
+		}
+		return false
+	}, time.Now())
 }
 
 // worktreeFor names the location and worktree a directory is in, choosing
