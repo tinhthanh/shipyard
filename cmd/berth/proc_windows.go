@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -9,10 +11,24 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// detached starts a program with no console, in a process group of its
-// own, so it outlives the console that started it.
+// detached starts a program in a process group of its own, so it outlives
+// the console that started it, with a console that is never shown: the
+// programs it starts (ssh, git) share that one rather than each opening a
+// window, as they would from a program with no console at all.
 func detached() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{CreationFlags: windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP}
+	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP}
+}
+
+// consoleBerth is the berth that runs the agent: berth-cli.exe rather than
+// berth-agent.exe, which has no console, and so would give each console
+// program the agent starts a window of its own.
+func consoleBerth(exe string) string {
+	if strings.EqualFold(filepath.Base(exe), "berth-agent.exe") {
+		if cli := filepath.Join(filepath.Dir(exe), "berth-cli.exe"); fileExists(cli) {
+			return cli
+		}
+	}
+	return exe
 }
 
 // resizes sends when the console on fd changes size. Windows has no

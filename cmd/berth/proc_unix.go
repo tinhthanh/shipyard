@@ -18,3 +18,6 @@ func resizes(fd uintptr) (<-chan os.Signal, func()) {
 	signal.Notify(ch, syscall.SIGWINCH)
 	return ch, func() { signal.Stop(ch) }
 }
+
+// consoleBerth is Windows' (proc_windows.go).
+func consoleBerth(exe string) string { return exe }

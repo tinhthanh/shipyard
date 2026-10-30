@@ -95,6 +95,9 @@ func helpText() string {
 }
 
 func main() {
+	if runHidden(os.Args[1:]) {
+		return
+	}
 	if err := run(os.Args[1:]); err != nil {
 		// A command that already said why ends with its own status.
 		var code exitCode
