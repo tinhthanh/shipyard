@@ -58,10 +58,11 @@ func runRegistered(s Spec) bool {
 	return err == nil
 }
 
-// startRun runs the program as the Run value would.
+// startRun runs the program as the Run value would, and doesn't wait for
+// it: a daemon (berthd serve) never ends.
 func startRun(s Spec) error {
-	if out, err := command(s.Program, s.Args...); err != nil {
-		return fmt.Errorf("starting %s: %v: %s", s.Name, err, strings.TrimSpace(string(out)))
+	if err := spawn(s.Program, s.Args...); err != nil {
+		return fmt.Errorf("starting %s: %v", s.Name, err)
 	}
 	return nil
 }

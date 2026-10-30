@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -45,7 +46,9 @@ const (
 
 const usage = `berthd — the berth daemon for a development box
 
-  berthd serve [--listen ADDR]            Serve paired laptops (default: tailnet address only)
+  berthd serve [--listen ADDR] [--log FILE]
+                                          Serve paired laptops (default: tailnet address only);
+                                          --log appends its log to FILE (a Windows service has no output)
   berthd install [--listen ADDR] [--keep-listen] [--no-integrations] [--no-tools] [--dry-run]
                                           Run serve as a user service (systemd/launchd), and install
                                           hooks and skills for the agent CLIs found here; --keep-listen
@@ -92,6 +95,9 @@ func helpText() string {
 }
 
 func main() {
+	if runHidden(os.Args[1:]) {
+		return
+	}
 	if err := run(os.Args[1:]); err != nil {
 		// A command that already said why ends with its own status.
 		var code exitCode
@@ -129,6 +135,12 @@ func run(args []string) error {
 		fmt.Println(version.Line("berthd"))
 		return nil
 	}
+	// --home DIR is BERTH_HOME, for where no environment can be given: a
+	// Windows service is only a command line (install.go).
+	if args[0] == "--home" && len(args) > 2 {
+		os.Setenv("BERTH_HOME", args[1])
+		args = args[2:]
+	}
 	home, err := statefile.Home()
 	if err != nil {
 		return err
@@ -149,10 +161,13 @@ func run(args []string) error {
 	case "install":
 		return install(b, args[1:])
 	case "uninstall":
-		path, err := service.Uninstall(daemonService(b, ""))
+		spec := daemonService(b, "")
+		path, err := service.Uninstall(spec)
 		if err != nil {
 			return err
 		}
+		// Removing a Windows Run value stops nothing: stop berthd too.
+		stopServing(b, spec.Program)
 		if path == "" {
 			fmt.Println("berthd is not installed as a service.")
 		} else {
@@ -268,8 +283,18 @@ func utf8Locale() {
 func serve(b boxHome, args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", "", "address to listen on (default: this box's tailnet address only)")
+	logPath := fs.String("log", "", "append the log to this file rather than standard error (a Windows service has none)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *logPath != "" {
+		f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		os.Stderr = f
 	}
 	if runtime.GOOS == "darwin" {
 		// A plist from an older install gives launchd's bare PATH, without
@@ -304,6 +329,8 @@ func serve(b boxHome, args []string) error {
 		ln.Close()
 		return err
 	}
+	// install on Windows stops the berthd it replaces by this (install.go).
+	statefile.Write(filepath.Join(b.dir, "berthd.pid"), []byte(strconv.Itoa(os.Getpid())))
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	s := &wire.Server{
 		Identity: id,

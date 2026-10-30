@@ -17,7 +17,11 @@
     },
     "resources": {
       "binaries/berthd-linux-amd64": "berthd-linux-amd64",
-      "binaries/berthd-linux-arm64": "berthd-linux-arm64"
+      "binaries/berthd-linux-arm64": "berthd-linux-arm64",
+      "binaries/berthd.exe": "berthd.exe",
+      "binaries/berthd-bg.exe": "berthd-bg.exe",
+      "binaries/tmux.exe": "tmux.exe",
+      "binaries/psmux-LICENSE.txt": "psmux-LICENSE.txt"
     }
   },
   "plugins": {

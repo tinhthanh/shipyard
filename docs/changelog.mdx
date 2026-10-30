@@ -11,6 +11,13 @@ again.
 
 ## Unreleased
 
+- **On Windows, this PC can be a box without WSL (Labs).** **Use this
+  computer** offers berthd on Windows itself, with agents in PowerShell under
+  psmux, a tmux for Windows the app now carries. It starts at sign-in with
+  no window, and an app update replaces it while sessions keep running.
+- **On Windows, nothing opens console windows behind your back.** The agent
+  runs with a hidden console, so the programs it starts (ssh, git) no longer
+  each flash a window.
 - **On Windows, this PC can be a box.** **Use this computer** sets up
   Ubuntu in WSL as `berth-box`, with berthd, tmux and git, and pairs with it,
   listening on this computer only. Without WSL, it offers to install it (the

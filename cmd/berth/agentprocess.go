@@ -94,7 +94,7 @@ func spawnAgent(l laptop, exe string) error {
 		return err
 	}
 	defer logFile.Close()
-	cmd := exec.Command(exe, "agent")
+	cmd := exec.Command(consoleBerth(exe), "agent")
 	cmd.Env = append(os.Environ(), "BERTH_HOME="+filepath.Dir(l.dir))
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.SysProcAttr = detached()

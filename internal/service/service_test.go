@@ -428,9 +428,10 @@ func TestLaunchdReloadGivesUpWithTheError(t *testing.T) {
 // deletes it. No scheduled task, nothing hidden, no proxy program.
 func TestAWindowsServiceIsARunValue(t *testing.T) {
 	home := t.TempDir()
-	saved := []any{goos, homeDir, command}
+	saved := []any{goos, homeDir, command, spawn}
 	defer func() {
 		goos, homeDir, command = saved[0].(string), saved[1].(func() (string, error)), saved[2].(func(string, ...string) ([]byte, error))
+		spawn = saved[3].(func(string, ...string) error)
 	}()
 	goos = "windows"
 	homeDir = func() (string, error) { return home, nil }
@@ -438,6 +439,11 @@ func TestAWindowsServiceIsARunValue(t *testing.T) {
 	command = func(name string, args ...string) ([]byte, error) {
 		ran = append(ran, append([]string{name}, args...))
 		return nil, nil
+	}
+	// Started and left running, not waited for: berthd serve never ends.
+	spawn = func(name string, args ...string) error {
+		ran = append(ran, append([]string{"spawn", name}, args...))
+		return nil
 	}
 	s := Spec{Name: "berth-agent", Description: "berth agent", Program: "/opt/Vetgo App/berth-agent.exe", Args: []string{"agent", "start"}}
 	data, err := Render(s)
@@ -453,7 +459,7 @@ func TestAWindowsServiceIsARunValue(t *testing.T) {
 	}
 	want := [][]string{
 		{"reg", "add", runKey, "/v", "berth-agent", "/t", "REG_SZ", "/d", "\"/opt/Vetgo App/berth-agent.exe\" agent start", "/f"},
-		{"/opt/Vetgo App/berth-agent.exe", "agent", "start"},
+		{"spawn", "/opt/Vetgo App/berth-agent.exe", "agent", "start"},
 	}
 	if fmt.Sprint(ran) != fmt.Sprint(want) {
 		t.Fatalf("ran %q, want %q", ran, want)
