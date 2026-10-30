@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -137,12 +136,7 @@ func run(args []string) error {
 		fmt.Println(version.Line("berthd"))
 		return nil
 	}
-	// --home DIR is BERTH_HOME, for where no environment can be given: a
-	// Windows service is only a command line (install.go).
-	if args[0] == "--home" && len(args) > 2 {
-		os.Setenv("BERTH_HOME", args[1])
-		args = args[2:]
-	}
+	args = takeHome(args)
 	home, err := statefile.Home()
 	if err != nil {
 		return err
@@ -293,15 +287,11 @@ func serve(b boxHome, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *logPath != "" {
-		f, err := os.OpenFile(*logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		log.SetOutput(f)
-		os.Stderr = f
+	closeLog, err := serveLog(*logPath)
+	if err != nil {
+		return err
 	}
+	defer closeLog()
 	if runtime.GOOS == "darwin" {
 		// A plist from an older install gives launchd's bare PATH, without
 		// Homebrew's tmux; find it anyway.
@@ -335,8 +325,7 @@ func serve(b boxHome, args []string) error {
 		ln.Close()
 		return err
 	}
-	// install on Windows stops the berthd it replaces by this (install.go).
-	statefile.Write(filepath.Join(b.dir, "berthd.pid"), []byte(strconv.Itoa(os.Getpid())))
+	notePID(b)
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 	if len(inherited) > 0 {
 		go func() {
@@ -443,16 +432,7 @@ func serve(b boxHome, args []string) error {
 	defer bx.Helpers.Stop()
 	// A worktree that is removed, however it was, is one they forget.
 	defer bx.Helpers.Watch(bus)()
-	// Plugins a laptop puts here, for the box's agents (box/plugins.go):
-	// in the same ~/.berth/plugins that berthd syncs agents' tools from.
-	if dir, err := pluginsDir(); err == nil {
-		home, _ := os.UserHomeDir()
-		exe, _ := os.Executable()
-		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
-			exe = resolved
-		}
-		bx.Plugins = &box.BoxPlugins{Dir: dir, Home: home, Exe: exe}
-	}
+	bx.Plugins = boxPlugins()
 	bx.AutoFix = &box.AutoFixStore{Path: filepath.Join(b.dir, "autofix.json")}
 	// How agents start when what starts them names no driver
 	// (agentdefaults.go): the app keeps it to the person's Labs setting.

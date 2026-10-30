@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -526,17 +525,7 @@ type PluginInfo struct {
 	Main        string   `json:"main,omitempty"`
 	Themes      []string `json:"themes,omitempty"`
 	Hooks       int      `json:"hooks"`
-	// MCP and Skills name the tools the plugin gives agents (see
-	// integrations.SyncPluginTools).
-	MCP    []string `json:"mcp,omitempty"`
-	Skills []string `json:"skills,omitempty"`
-	// Setup is the one-time step its tools need on this computer, if any
-	// (GET and POST /v1/plugins/{id}/setup).
-	Setup *PluginSetupInfo `json:"setup,omitempty"`
-	// Settings are switches for its tools (GET and PUT
-	// /v1/plugins/{id}/settings), if it has any.
-	Settings *PluginSetupInfo `json:"settings,omitempty"`
-	Enabled  bool             `json:"enabled"`
+	Enabled     bool     `json:"enabled"`
 	// Allowed is the hash of the files the user allowed (hooks.PluginHash),
 	// which the app checks against what it is about to import.
 	Allowed string `json:"allowed,omitempty"`
@@ -549,6 +538,8 @@ type PluginInfo struct {
 	// (marketplace.go), which the app can update and remove.
 	Source string `json:"source,omitempty"`
 	Error  string `json:"error,omitempty"`
+	// The tools it gives agents (fork): plugintools.go.
+	pluginTools
 }
 
 func (a *Agent) plugins() []PluginInfo {
@@ -566,11 +557,8 @@ func (a *Agent) plugins() []PluginInfo {
 		}
 		var raw struct {
 			PluginInfo
-			Hooks    []json.RawMessage          `json:"hooks"`
-			MCP      map[string]json.RawMessage `json:"mcp"`
-			Skills   map[string]json.RawMessage `json:"skills"`
-			Setup    *PluginSetupInfo           `json:"setup"`
-			Settings *PluginSetupInfo           `json:"settings"`
+			Hooks []json.RawMessage `json:"hooks"`
+			pluginToolsManifest
 		}
 		if b, err := os.ReadFile(m); err != nil {
 			p.Error = err.Error()
@@ -579,7 +567,7 @@ func (a *Agent) plugins() []PluginInfo {
 		} else {
 			p.Name, p.Version, p.Description, p.Main, p.Themes = raw.Name, raw.Version, raw.Description, raw.Main, raw.Themes
 			p.Hooks = len(raw.Hooks)
-			p.MCP, p.Skills, p.Setup, p.Settings = sortedKeys(raw.MCP), sortedKeys(raw.Skills), raw.Setup, raw.Settings
+			p.pluginTools = raw.tools()
 		}
 		// The folder name is the ID, so it is always a safe path segment.
 		if p.Name == "" {
@@ -651,21 +639,4 @@ func headerHasToken(v, token string) bool {
 		}
 	}
 	return false
-}
-
-// PluginSetupInfo is what the app needs to offer a plugin's setup.
-type PluginSetupInfo struct {
-	Label string `json:"label,omitempty"`
-}
-
-func sortedKeys[V any](m map[string]V) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

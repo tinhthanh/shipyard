@@ -1,12 +1,14 @@
 package main
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/cosscom/shipyard/internal/statefile"
 	"github.com/cosscom/shipyard/internal/winsys"
 )
 
@@ -40,4 +42,36 @@ func stopServing(b boxHome, program string) {
 		return
 	}
 	winsys.StopIfIn(pid, filepath.Dir(program), "berthd")
+}
+
+// takeHome takes a leading --home DIR as BERTH_HOME, for where no
+// environment can be given: a Windows service is only a command line
+// (install.go).
+func takeHome(args []string) []string {
+	if len(args) > 2 && args[0] == "--home" {
+		os.Setenv("BERTH_HOME", args[1])
+		return args[2:]
+	}
+	return args
+}
+
+// serveLog sends serve's log to path when one is given (serve --log): a
+// Windows service has no output of its own.
+func serveLog(path string) (func(), error) {
+	if path == "" {
+		return func() {}, nil
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	log.SetOutput(f)
+	os.Stderr = f
+	return func() { f.Close() }, nil
+}
+
+// notePID writes serve's pid to box/berthd.pid: install on Windows stops the
+// berthd it replaces by it (stopServing).
+func notePID(b boxHome) {
+	statefile.Write(filepath.Join(b.dir, "berthd.pid"), []byte(strconv.Itoa(os.Getpid())))
 }

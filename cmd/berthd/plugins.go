@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/integrations"
 	"github.com/cosscom/shipyard/internal/statefile"
 )
@@ -102,4 +103,20 @@ func syncPluginToolsLoop(ctx context.Context, home, pluginsDir, exe string, logg
 			sync()
 		}
 	}
+}
+
+// boxPlugins is where plugins a laptop puts on this box go, for its agents
+// (box/plugins.go): the same ~/.berth/plugins that berthd syncs agents'
+// tools from. Nil when there is no such folder.
+func boxPlugins() *box.BoxPlugins {
+	dir, err := pluginsDir()
+	if err != nil {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	exe, _ := os.Executable()
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return &box.BoxPlugins{Dir: dir, Home: home, Exe: exe}
 }
