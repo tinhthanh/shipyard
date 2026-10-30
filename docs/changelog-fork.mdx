@@ -14,6 +14,11 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **On Windows, Esc closes what a shortcut opened from a browser tab.**
+  Pressing Ctrl+K (or another of the app's shortcuts) with a page focused
+  in a browser tab opened the palette, but Esc then did nothing, and keys
+  could end up in the hidden page. The keys after a shortcut now go to the
+  app.
 - **About names the app you run.** Settings → About said "Shipyard" beside
   the version in a branded build; it says the build's name (Vetgo) now.
 - **The Windows app comes with each release, and updates itself.** Each
