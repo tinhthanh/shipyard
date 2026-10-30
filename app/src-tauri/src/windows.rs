@@ -7,7 +7,7 @@ use std::process::Command;
 use ::windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, VIRTUAL_KEY, VK_CONTROL, VK_MENU, VK_SHIFT,
 };
-use tauri::{App, AppHandle, Runtime, Webview};
+use tauri::{App, AppHandle, Manager, Runtime, Webview};
 use webview2_com::AcceleratorKeyPressedEventHandler;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_KEY_EVENT_KIND, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
@@ -71,6 +71,10 @@ pub fn setup<R: Runtime>(app: &mut App<R>) {
 // page does (AcceleratorKeyPressed). One of the app's shortcuts goes to the
 // app as its menu item would (menu.rs), and the page never sees it. A page
 // can't send one: only a key really pressed reaches the controller.
+//
+// The keys after it go to the app too: Windows' focus moves to the app's own
+// webview. Left in the pane, it stayed there while a palette or dialog hid
+// the pane, so Esc never reached what the shortcut had opened.
 
 fn held(key: VIRTUAL_KEY) -> bool {
     unsafe { GetKeyState(key.0 as i32) < 0 }
@@ -100,6 +104,9 @@ pub fn forward_shortcuts<R: Runtime>(app: AppHandle<R>, wv: &Webview<R>) -> Resu
             };
             if let Some((_, id)) = shortcuts.iter().find(|(k, _)| *k == keys) {
                 unsafe { args.SetHandled(true)? };
+                if let Some(main) = app.get_webview("main") {
+                    let _ = main.set_focus();
+                }
                 menu::on_event(&app, id);
             }
             Ok(())
