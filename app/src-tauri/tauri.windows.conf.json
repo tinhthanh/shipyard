@@ -12,7 +12,8 @@
     "longDescription": "Run coding agents on your own boxes and watch them from here. This is the Windows app's alpha.",
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "windows/hooks.nsh"
       }
     },
     "resources": {

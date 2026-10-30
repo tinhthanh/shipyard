@@ -14,6 +14,12 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **The Windows app updates without stopping halfway.** Restart to update
+  stopped at "Error opening file for writing" (berth-cli.exe) until someone
+  chose Retry: the laptop agent was running from that file. An update now
+  moves the agent's program aside instead, and the app, started again,
+  restarts the agent from the new one once its work under way is done, as
+  on a Mac. This takes effect from the update after this one.
 - **Usage no longer reports a phantom agent on every read.** Reading a
   Claude login's plan limits started Claude Code with its hooks on, so each
   box's journal got an agent that started and stopped in
