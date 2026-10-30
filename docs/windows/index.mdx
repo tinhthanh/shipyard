@@ -7,19 +7,32 @@ The Windows app is an alpha that this fork adds to Shipyard. It works as the
 [Linux app](/getting-started/install) does: Ctrl stands in for ⌘, there is no
 menu bar, and the app says "this computer" where the Mac app says "this Mac".
 
-## Build and install
+## Install
 
-The fork's releases carry no app yet. Build it on Windows with Go, Node and
-pnpm, Rust (MSVC) and the Visual Studio C++ build tools, from the
-repository's root:
+Download `Vetgo-windows-x64-setup.exe` from the
+[latest release](https://github.com/tinhthanh/shipyard/releases/latest) and
+run it. It installs for your user, with no administrator. Windows'
+SmartScreen may say it doesn't know the app, since the installer isn't
+signed with a code-signing certificate yet: **More info → Run anyway**.
+
+Installed this way, the app updates itself from the fork's releases: it
+checks when it opens and every few hours, and offers **Restart to update**.
+
+## Build from source
+
+Build it on Windows with Go, Node and pnpm, Rust (MSVC) and the Visual
+Studio C++ build tools, from the repository's root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows-app-build.ps1 -Version 0.3.31
 ```
 
-The installer lands in `app\src-tauri\target\release\bundle\nsis\`. It
-installs for your user, with no administrator. `-Brand NAME` builds it
-under another name and icon (`branding/README.md`).
+The installer lands in `app\src-tauri\target\release\bundle\nsis\`.
+`-Brand NAME` builds it under another name and icon (`branding/README.md`).
+A build from source updates itself from the releases too, but only to a
+newer version: `0.3.31` counts as newer than the release `0.3.31-fork.2`,
+so build with the release's version (`-Version 0.3.31-fork.2`) to be
+offered the next one.
 
 The app carries `berth` (as `berth-cli.exe`, and `berth-agent.exe` without a
 console), the Linux `berthd` for boxes in WSL or over SSH, and `berthd.exe`

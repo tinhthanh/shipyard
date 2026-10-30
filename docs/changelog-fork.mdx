@@ -14,6 +14,13 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **The Windows app comes with each release, and updates itself.** Each
+  release of this fork now carries the Windows app's installer
+  (`Vetgo-windows-x64-setup.exe`), so it no longer needs building from
+  source. Installed from there, the app checks the fork's releases and
+  offers **Restart to update** as the Mac app does. On a Mac or on Linux,
+  where the app is still built from source, Settings → About says so
+  rather than that the update check failed.
 - **A box's install command comes from the fork's release.** Add a box →
   install command now downloads `install.sh` from this fork's latest
   release, which installs this fork's berthd. The Homebrew cask is
