@@ -77,6 +77,13 @@ func removeAside(dst string) {
 	}
 }
 
+// sweepAside is removeAside for each of the box's files in bin.
+func sweepAside(bin string) {
+	for _, name := range nativeFiles {
+		removeAside(filepath.Join(bin, name))
+	}
+}
+
 // setUpNativeBox is setUpLocalBox for berthd on Windows itself.
 func (a *Agent) setUpNativeBox(ctx context.Context, say sayFunc) (string, error) {
 	if err := a.nativeBundle(); err != nil {
@@ -163,8 +170,8 @@ func (a *Agent) removeNativeBox(ctx context.Context, rec *localBoxRecord, remove
 	bin := filepath.Dir(rec.Program)
 	for _, name := range nativeFiles {
 		os.Remove(filepath.Join(bin, name))
-		removeAside(filepath.Join(bin, name))
 	}
+	sweepAside(bin)
 	dir := filepath.Join(rec.Home, "box")
 	if removeData {
 		say("Deleting %s…", dir)
@@ -200,6 +207,9 @@ func (a *Agent) refreshNativeBox(ctx context.Context, rec *localBoxRecord) {
 		return
 	}
 	defer a.local.mu.Unlock()
+	// Copies an update moved aside while something still ran them go once
+	// nothing does, not only at the next update.
+	sweepAside(filepath.Dir(rec.Program))
 	if a.local.seen == stamp {
 		return
 	}

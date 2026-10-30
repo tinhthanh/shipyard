@@ -14,6 +14,11 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **A box on Windows itself no longer keeps old copies of berthd.** An
+  update moves the running `berthd.exe`, `berthd-bg.exe` and `tmux.exe`
+  aside as `.old` files, since Windows won't overwrite a running program.
+  Those stayed until the next update; they now go as soon as nothing runs
+  them.
 - **On Windows, Esc closes what a shortcut opened from a browser tab.**
   Pressing Ctrl+K (or another of the app's shortcuts) with a page focused
   in a browser tab opened the palette, but Esc then did nothing, and keys
