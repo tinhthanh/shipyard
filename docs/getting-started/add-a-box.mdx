@@ -123,6 +123,29 @@ update the agent copies the new `berthd` in and restarts its service.
 keeping `berth-box`; with **Also delete its data** it unregisters `berth-box`,
 which deletes everything in it, repositories cloned there included.
 
+#### Or on Windows itself (Labs)
+
+With Labs on, the card also offers **Or run agents on Windows itself,
+without WSL**. berthd then runs on Windows, and agents in PowerShell, under
+[psmux](https://github.com/psmux/psmux), a tmux for Windows (MIT) that the
+app carries, built from a reviewed release's source:
+
+- The app copies `berthd.exe`, `berthd-bg.exe` and `tmux.exe` (psmux) to
+  `%LOCALAPPDATA%\berth\bin` and runs `berthd install` there, listening on
+  `127.0.0.1` only. Windows starts it at sign-in from your Run key.
+- `berthd-bg.exe` only starts `berthd.exe` with a console that is never
+  shown, which the programs it runs share: no window opens for them.
+- An app update copies the new files over and restarts berthd; sessions keep
+  running in psmux.
+- Agent CLIs are the Windows ones (Claude Code installed with npm or its
+  installer). A session's PowerShell runs local scripts (`RemoteSigned`, for
+  that session only), so npm's `claude.ps1` starts.
+
+It is an alpha: psmux doesn't report how a stopped program exited, so a
+stopped service tab says exit 0 whatever the code was. A box is one or the
+other: to switch between WSL and Windows itself, stop using this computer
+first.
+
 ## On your tailnet
 
 When this Mac runs [Tailscale](https://tailscale.com), **Add a box** (and the
