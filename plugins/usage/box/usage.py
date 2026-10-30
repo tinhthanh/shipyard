@@ -13,6 +13,7 @@ changed; a first run on a box with years of transcripts may need a few runs
 (it reports `partial`).
 """
 import base64
+import contextlib
 import datetime as dt
 import glob
 import json
@@ -168,9 +169,9 @@ def mkaccount(agent, name):
 # Claude Code writes its limits nowhere on disk, but its own `/usage` prints
 # them, off the login the CLI already holds:
 #
-#   Current session: 31% used · resets Oct 15 at 3:30am (Asia/Saigon)
-#   Current week (all models): 64% used · resets Oct 19 at 8am (Asia/Saigon)
-#   Current week (Fable): 32% used · resets Oct 19 at 8am (Asia/Saigon)
+#   Current session: 31% used · resets Oct 15 at 3:30am (Europe/Paris)
+#   Current week (all models): 64% used · resets Oct 19 at 8am (Europe/Paris)
+#   Current week (Fable): 32% used · resets Oct 19 at 8am (Europe/Paris)
 #
 # --print skips the workspace-trust question, --no-session-persistence the
 # transcript, --strict-mcp-config every MCP server. Run from one folder of its
@@ -178,21 +179,27 @@ def mkaccount(agent, name):
 # ClaudeUsageCLI, MIT.)
 CLAUDE_LIMITS_CACHE = HOME / ".cache" / "berth-usage" / "claude-limits.json"
 # How often each login's /usage is asked (the home widget reads every 5
-# minutes while it shows), and how long one read may take: every login is
-# read at once, so a box with several waits about as long as for one, and a
-# `claude` that hangs costs the report this much at most, never its tokens.
+# minutes while it shows), and how long one read may take: logins are read
+# CLAUDE_READERS at a time, so a box with a few waits about as long as for
+# one, and a `claude` that hangs costs the report this much at most, never
+# its tokens. A timeout of 0 would fail every read: it means the default.
 CLAUDE_LIMITS_TTL = env_seconds("BERTH_USAGE_CLAUDE_LIMITS_TTL", "600")
-CLAUDE_USAGE_TIMEOUT = env_seconds("BERTH_USAGE_CLAUDE_TIMEOUT", "12")
-CLAUDE_USAGE_ARGS = ["--print", "--no-session-persistence", "--strict-mcp-config", "/usage"]
+CLAUDE_USAGE_TIMEOUT = env_seconds("BERTH_USAGE_CLAUDE_TIMEOUT", "12") or 12.0
+CLAUDE_READERS = 4
+# Claude Code runs its hooks on every start, Shipyard's own among them, so
+# each read would tell berthd an agent had started and stopped: none run.
+CLAUDE_NO_HOOKS = ["--settings", '{"disableAllHooks":true}']
+CLAUDE_USAGE_ARGS = ["--print", "--no-session-persistence", "--strict-mcp-config", *CLAUDE_NO_HOOKS, "/usage"]
 LIMIT_LINE = re.compile(r"^Current (?:(session)|week \(([^)]+)\)):\s*(\d+(?:\.\d+)?)%\s*used(?:\s*·\s*resets\s*(.+?))?\s*$", re.M)
 MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
 RESET = re.compile(r"^([A-Za-z]{3})[a-z]*\s+(\d{1,2})\s+at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)$", re.I)
 
 
 def reset_epoch(text, now=None):
-    """`Oct 19 at 8am (Asia/Saigon)` as Unix seconds, or None. No year is
+    """`Oct 19 at 8am (Europe/Paris)` as Unix seconds, or None. No year is
     printed: the candidate nearest now, over last, this and next year, is
-    taken, so a window read across New Year lands in the right one."""
+    taken, so a window read across New Year lands in the right one. A zone
+    this box can't name is read as the box's own, at that date's offset."""
     now = now or dt.datetime.now(dt.timezone.utc)
     text = text.strip()
     zone = None
@@ -210,12 +217,13 @@ def reset_epoch(text, now=None):
     month, day, hour, minute = MONTHS[m.group(1).lower()], int(m.group(2)), int(m.group(3)) % 12, int(m.group(4) or 0)
     if m.group(5).lower() == "pm":
         hour += 12
-    zone = zone or dt.datetime.now().astimezone().tzinfo
     best = None
     for year in (now.year - 1, now.year, now.year + 1):
         try:
-            t = dt.datetime(year, month, day, hour, minute, tzinfo=zone)
-        except ValueError:
+            # Without a zone, the box's own as of that date: a fixed offset
+            # taken now would be an hour off across a daylight saving change.
+            t = dt.datetime(year, month, day, hour, minute, tzinfo=zone) if zone else dt.datetime(year, month, day, hour, minute).astimezone()
+        except (ValueError, OverflowError):
             continue
         if best is None or abs((t - now).total_seconds()) < abs((best - now).total_seconds()):
             best = t
@@ -246,11 +254,15 @@ def claude_binary():
     return shutil.which("claude") or next((str(p) for p in [HOME / ".local" / "bin" / "claude", HOME / ".claude" / "local" / "claude"] if p.exists()), None)
 
 
-def run_claude(name, d, binary, args):
-    """Claude Code's output for args, run for the login in d."""
+def run_claude(name, d, binary, args, check=False):
+    """Claude Code's output for args, run for the login in d. With check, an
+    exit status other than 0 raises, as a timeout does."""
     env = {k: v for k, v in os.environ.items() if k != "CLAUDE_CONFIG_DIR"}
     if name != "default":
         env["CLAUDE_CONFIG_DIR"] = str(d)
+    # Shipyard's hooks stay quiet for it even where --settings can't reach
+    # them (berthd's hook reads this: an agent it drives itself).
+    env["BERTH_DRIVER"] = "structured"
     cwd = CLAUDE_LIMITS_CACHE.parent / "claude-usage"
     cwd.mkdir(parents=True, exist_ok=True, mode=0o700)
     # In a process group of its own, so a timeout ends whatever Claude Code
@@ -259,18 +271,23 @@ def run_claude(name, d, binary, args):
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
     try:
         out, _ = proc.communicate(timeout=CLAUDE_USAGE_TIMEOUT)
-        return out
     except subprocess.TimeoutExpired:
         try:
             os.killpg(proc.pid, 9)
         except OSError:
             pass
-        proc.communicate()
+        try:
+            proc.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
         raise
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, args)
+    return out
 
 
 def claude_usage_text(name, d, binary):
-    return run_claude(name, d, binary, CLAUDE_USAGE_ARGS)
+    return run_claude(name, d, binary, CLAUDE_USAGE_ARGS, check=True)
 
 
 # The profile in a login's .claude.json outlives the login itself: when
@@ -300,67 +317,120 @@ def claude_logged_in(name, d, binary):
 
 
 def claude_auth(logins, binary):
-    """claude_logged_in for each login, all at once: a hang costs one
-    timeout, not one per login."""
+    """claude_logged_in for each login, CLAUDE_READERS at a time: a hang
+    costs one timeout, not one per login."""
     if not logins or not binary:
         return {}
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=len(logins)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(logins), CLAUDE_READERS)) as pool:
         return dict(zip([n for n, _ in logins], pool.map(lambda nd: claude_logged_in(*nd, binary), logins)))
 
 
-def claude_signed_out():
+def claude_logins():
+    """What claude_limits and claude_signed_out start from, asked once:
+    Claude Code's binary, the logins with a profile here, and what Claude
+    Code says about each. Nothing with BERTH_USAGE_CLAUDE_LIMITS=0."""
+    if os.environ.get("BERTH_USAGE_CLAUDE_LIMITS") == "0":
+        return None, [], {}
+    binary = claude_binary()
+    logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
+    return binary, logins, claude_auth(logins, binary)
+
+
+def claude_signed_out(state=None):
     """The Claude logins whose profile is here but whose login Claude Code
     has lost: they need signing in again."""
-    if os.environ.get("BERTH_USAGE_CLAUDE_LIMITS") == "0":
-        return []
-    logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
-    auth = claude_auth(logins, claude_binary())
+    _, logins, auth = state or claude_logins()
     return [name for name, _ in logins if auth.get(name) is False]
+
+
+# A read that didn't finish (a timeout, a crash), as opposed to one that
+# finished with no limits in it (a login without a plan that has them).
+READ_FAILED = "failed"
 
 
 def read_claude_limits(name, d, binary):
     try:
         return parse_claude_usage(claude_usage_text(name, d, binary))
     except (OSError, ValueError, subprocess.SubprocessError):
-        return None
+        return READ_FAILED
 
 
-def claude_limits():
+@contextlib.contextmanager
+def claude_limits_lock():
+    """One report at a time reads and refreshes the limits, so two at once
+    (the widget and the Usage screen, or two laptops) don't both ask /usage
+    for the same login: the second waits, then finds the first's reading.
+    Without one (no flock on Windows, or a lock file it can't make) it reads
+    unlocked: at worst a read twice."""
+    try:
+        import fcntl
+        CLAUDE_LIMITS_CACHE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        f = open(CLAUDE_LIMITS_CACHE.with_name("claude-limits.lock"), "a")
+    except (ImportError, OSError):
+        # No lock to be had (a read-only home, say): read unlocked.
+        yield
+        return
+    with f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX)
+        except OSError:
+            yield
+            return
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def claude_limits(state=None):
     """Each signed-in Claude login's limits, read with `/usage` at most once
-    every CLAUDE_LIMITS_TTL seconds per login, all logins at once. Off with
-    BERTH_USAGE_CLAUDE_LIMITS=0."""
-    if os.environ.get("BERTH_USAGE_CLAUDE_LIMITS") == "0":
-        return []
-    binary = claude_binary()
+    every CLAUDE_LIMITS_TTL seconds per login, CLAUDE_READERS at a time.
+    Off with BERTH_USAGE_CLAUDE_LIMITS=0."""
+    binary, logins, auth = state or claude_logins()
     if not binary:
         return []
+    with claude_limits_lock():
+        return read_claude_limits_cached(binary, logins, auth)
+
+
+def read_claude_limits_cached(binary, logins, auth):
     from concurrent.futures import ThreadPoolExecutor
     cache = read_json(CLAUDE_LIMITS_CACHE) or {}
-    logins = [(name, d) for name, d in claude_dirs() if claude_account(name, d)["signed_in"]]
-    auth = claude_auth(logins, binary)
+    # Who each login is now: a folder signed in to another account since
+    # (`/login` again) must not show the last one's limits as its own.
+    who = {name: [a["email"], a["org_id"]] for name, d in logins for a in [claude_account(name, d)]}
     # Signed out: its last limits are of a login that is gone. Hung: it would
     # hang /usage too; the last good read stays.
-    gone = [name for name, _ in logins if auth.get(name) is False and name in cache]
-    logins = [(name, d) for name, d in logins if auth.get(name) is not False]
-    due = [(name, d) for name, d in logins if auth.get(name) != TIMED_OUT and time.time() - (cache.get(name) or {}).get("read", 0) > CLAUDE_LIMITS_TTL]
+    gone = [name for name, _ in logins if name in cache and (auth.get(name) is False or cache[name].get("who", who[name]) != who[name])]
     for name in gone:
         del cache[name]
+    logins = [(name, d) for name, d in logins if auth.get(name) is not False]
+    due = [(name, d) for name, d in logins if auth.get(name) != TIMED_OUT and time.time() - (cache.get(name) or {}).get("read", 0) > CLAUDE_LIMITS_TTL]
     if due or gone:
         read = {}
         if due:
             # Each read ends by its own timeout, so waiting for all of them is
-            # bounded by one: a pool left running would hold the script open.
-            with ThreadPoolExecutor(max_workers=len(due)) as pool:
+            # bounded: a pool left running would hold the script open.
+            with ThreadPoolExecutor(max_workers=min(len(due), CLAUDE_READERS)) as pool:
                 read = dict(zip([n for n, _ in due], pool.map(lambda nd: read_claude_limits(*nd, binary), due)))
         now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         for name, _ in due:
             hit = cache.get(name) or {}
-            # A read that failed keeps the last good one, as of when it was.
-            cache[name] = {"read": time.time(), "at": now, "limits": read[name]} if read[name] else {**hit, "read": time.time()}
+            if read[name] == READ_FAILED:
+                # A read that didn't finish keeps the last good one, as of
+                # when it was.
+                cache[name] = {**hit, "read": time.time(), "who": who[name]}
+            elif read[name] is None:
+                # Finished with no limits: the login has none now.
+                cache[name] = {"read": time.time(), "who": who[name]}
+            else:
+                cache[name] = {"read": time.time(), "at": now, "limits": read[name], "who": who[name]}
         tmp = CLAUDE_LIMITS_CACHE.with_name(f"claude-limits.{os.getpid()}.tmp")
         try:
-            tmp.write_text(json.dumps(cache))
+            # It names each login's email: this user's only.
+            with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as f:
+                f.write(json.dumps(cache))
             tmp.replace(CLAUDE_LIMITS_CACHE)
         except OSError:
             tmp.unlink(missing_ok=True)
@@ -537,7 +607,11 @@ def report(days):
     # The limits are extra: whatever goes wrong reading them, the tokens are
     # still reported.
     try:
-        for l in claude_limits():
+        claude_state = claude_logins()
+    except Exception:
+        claude_state = (None, [], {})
+    try:
+        for l in claude_limits(claude_state):
             limits[("claude", l["account"])] = l
     except Exception:
         pass
@@ -551,8 +625,8 @@ def report(days):
         a = who.get(k) or {}
         l["email"] = a.get("email")
         l["org"] = a.get("org_id")
-        # What the floating bar and the widget say under a login: whose
-        # organisation, on which plan.
+        # Whose organisation a login is with, and on which plan, for the
+        # floating bar's line under it.
         l["org_name"] = a.get("org")
         l["org_type"] = a.get("org_type")
         l["tier"] = a.get("tier")
@@ -561,7 +635,7 @@ def report(days):
             l["plan"] = a.get("plan")
     signed_out = []
     try:
-        for name in claude_signed_out():
+        for name in claude_signed_out(claude_state):
             a = who.get(("claude", name)) or {}
             signed_out.append({"agent": "claude", "account": name, "email": a.get("email"), "org": a.get("org_id")})
     except Exception:
@@ -581,6 +655,11 @@ def report(days):
     text = json.dumps(out, separators=(",", ":"))
     while len(text) > MAX_OUT and out["sessions"]:
         out["sessions"] = out["sessions"][: max(0, len(out["sessions"]) * 3 // 4)]
+        out["truncated"] = True
+        text = json.dumps(out, separators=(",", ":"))
+    # Then the limits read longest ago, should a box have that many logins.
+    while len(text) > MAX_OUT and out["limits"]:
+        out["limits"].remove(min(out["limits"], key=lambda l: l["at"]))
         out["truncated"] = True
         text = json.dumps(out, separators=(",", ":"))
     return text

@@ -21,7 +21,7 @@ Each session has **Open** if it is still running in Shipyard, or **Resume** (`cl
 - The floating bar names each login with whose organisation it is with (a personal plan says "personal"), its plan, and the boxes it was read on.
 - Each box keeps its own days, in its own time zone.
 
-The numbers come from the files each agent writes on the box. Nothing is estimated or made up.
+The token numbers come from the files each agent writes on the box, and plan limits from the agents themselves (below). Nothing is estimated or made up.
 
 | Agent | Read from | What's in it |
 | --- | --- | --- |
@@ -32,12 +32,12 @@ The numbers come from the files each agent writes on the box. Nothing is estimat
 - **Cost** is shown only for Claude Code, and only as Claude Code's own estimate at API list prices. On a subscription (Claude Max or Pro) the screen says the plan covers the use. Codex gets no dollar figure: it records none, and the plugin keeps no price table.
 - **Plan limits** come from the agents themselves. A window that has reset since says so instead of showing an old percentage.
   - **Codex** writes its 5-hour and weekly windows into its transcripts; they show as "as of" the last turn Codex took.
-  - **Claude Code** writes its limits nowhere, but its own `/usage` prints them. For each signed-in account the box runs `claude --print --no-session-persistence --strict-mcp-config "/usage"` (with that account's `CLAUDE_CONFIG_DIR`; none for the default) from `~/.cache/berth-usage/claude-usage`, and shows the session, the week and any week scoped to one model.
-    - That flag set asks no trust question, writes no transcript and starts no MCP server. It is Claude Code itself running, so it does what the CLI does on any start: one request to Anthropic for the figures, and its own update check or token refresh when they are due.
+  - **Claude Code** writes its limits nowhere, but its own `/usage` prints them. For each signed-in account the box runs `claude --print --no-session-persistence --strict-mcp-config --settings '{"disableAllHooks":true}' "/usage"` (with that account's `CLAUDE_CONFIG_DIR`; none for the default) from `~/.cache/berth-usage/claude-usage`, and shows the session, the week and any week scoped to one model.
+    - That flag set asks no trust question, writes no transcript, starts no MCP server and runs no hooks (Shipyard's own would report an agent starting and stopping at every read). It is Claude Code itself running, so it does what the CLI does on any start: one request to Anthropic for the figures, and its own update check or token refresh when they are due.
     - Each account is read at most every 10 minutes (`BERTH_USAGE_CLAUDE_LIMITS_TTL`, seconds); the widget's 5-minute poll mostly gets the cached figures.
-    - All accounts are read at once, each for at most 12 seconds (`BERTH_USAGE_CLAUDE_TIMEOUT`), and a timeout ends whatever Claude Code started. Nothing about the limits can fail the report: a read that goes wrong keeps the last good one, or shows none, and the tokens are reported either way.
+    - Accounts are read four at a time, each for at most 12 seconds (`BERTH_USAGE_CLAUDE_TIMEOUT`), and a timeout ends whatever Claude Code started. Nothing about the limits can fail the report: a read that doesn't finish keeps the last good one, and the tokens are reported either way. A read that finishes with no limits, or a folder now signed in to another account, drops the old ones.
     - A login without a subscription prints no limits and shows none. `BERTH_USAGE_CLAUDE_LIMITS=0` turns the reads off.
-    - The approach is Codenotch's (MIT).
+    - The approach is [Codenotch](https://github.com/vinzdg/codenotch)'s (MIT).
 
 ### How it runs on the box
 
