@@ -12,12 +12,12 @@ spec = importlib.util.spec_from_file_location("usage", pathlib.Path(__file__).wi
 usage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(usage)
 
-# What Claude Code 2.1.296 printed, word for word.
+# What Claude Code 2.1.296 prints (its zone is the box's).
 SAMPLE = """You are currently using your subscription to power your Claude Code usage
 
-Current session: 31% used · resets Oct 15 at 3:30am (Asia/Saigon)
-Current week (all models): 64% used · resets Oct 19 at 8am (Asia/Saigon)
-Current week (Fable): 32% used · resets Oct 19 at 8am (Asia/Saigon)
+Current session: 31% used · resets Oct 15 at 3:30am (Europe/Paris)
+Current week (all models): 64% used · resets Oct 19 at 8am (Europe/Paris)
+Current week (Fable): 32% used · resets Oct 19 at 8am (Europe/Paris)
 
 What's contributing to your limits usage?
 Last 24h · 318 requests · 5 sessions
@@ -30,7 +30,7 @@ NOW = dt.datetime(2026, 10, 14, 12, 0, tzinfo=dt.timezone.utc)
 def has_tzdata():
     try:
         from zoneinfo import ZoneInfo
-        ZoneInfo("Asia/Saigon")
+        ZoneInfo("Europe/Paris")
         return True
     except Exception:
         return False
@@ -41,7 +41,7 @@ def has_tzdata():
 needs_tzdata = unittest.skipUnless(has_tzdata(), "no time zone database here")
 
 
-def at(y, mo, d, h, mi, zone="Asia/Saigon"):
+def at(y, mo, d, h, mi, zone="Europe/Paris"):
     from zoneinfo import ZoneInfo
     return int(dt.datetime(y, mo, d, h, mi, tzinfo=ZoneInfo(zone)).timestamp())
 
@@ -59,8 +59,8 @@ class ClaudeUsageTest(unittest.TestCase):
         # session and a model's week, no week for all models.
         text = """You are currently using your subscription to power your Claude Code usage
 
-Current session: 5% used · resets Oct 15 at 4:09pm (Asia/Saigon)
-Current week (Fable): 0% used · resets Oct 21 at 3pm (Asia/Saigon)
+Current session: 5% used · resets Oct 15 at 4:09pm (Europe/Paris)
+Current week (Fable): 0% used · resets Oct 21 at 3pm (Europe/Paris)
 
 What's contributing to your limits usage?
 """
@@ -102,6 +102,19 @@ What's contributing to your limits usage?
         new_year = dt.datetime(2027, 1, 2, 12, tzinfo=dt.timezone.utc)
         self.assertEqual(usage.reset_epoch("Dec 31 at 9am (UTC)", new_year), at(2026, 12, 31, 9, 0, "UTC"))
 
+    def test_the_boxs_own_zone_is_read_at_the_resets_date(self):
+        # A fixed offset taken now would be an hour off across a daylight
+        # saving change: read in October, a reset in November is in winter.
+        import subprocess, sys
+        if not has_tzdata():
+            self.skipTest("no time zone database here")
+        code = ("import datetime as dt,importlib.util,sys;s=importlib.util.spec_from_file_location('u',sys.argv[1]);"
+                "m=importlib.util.module_from_spec(s);s.loader.exec_module(m);"
+                "print(m.reset_epoch('Nov 2 at 8am (Nowhere/Atlantis)', dt.datetime(2026,10,14,12,tzinfo=dt.timezone.utc)))")
+        r = subprocess.run([sys.executable, "-c", code, str(pathlib.Path(usage.__file__))], env={**os.environ, "TZ": "Europe/Berlin"}, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(int(r.stdout), at(2026, 11, 2, 8, 0, "Europe/Berlin"))
+
     def test_an_unknown_zone_is_read_as_the_boxs_own(self):
         # What a box without the zone database does with every zone.
         t = usage.reset_epoch("Oct 19 at 8am (Nowhere/Atlantis)", NOW)
@@ -142,7 +155,7 @@ FAKE_CLAUDE = r"""#!/usr/bin/env python3
 import os, subprocess, sys, time
 home = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.environ["FAKE_HOME"], ".claude")
 with open(os.environ["FAKE_LOG"], "a") as f:
-    f.write((os.environ.get("CLAUDE_CONFIG_DIR") or "-") + " " + " ".join(sys.argv[1:]) + " cwd=" + os.getcwd() + "\n")
+    f.write((os.environ.get("CLAUDE_CONFIG_DIR") or "-") + " " + " ".join(sys.argv[1:]) + " driver=" + os.environ.get("BERTH_DRIVER", "-") + " cwd=" + os.getcwd() + "\n")
 def flag(n):
     return os.path.exists(os.path.join(home, n))
 if flag("fail"):
@@ -159,8 +172,8 @@ if flag("apikey"):
     print("Usage is only available for subscription plans.")
     sys.exit(0)
 pct = open(os.path.join(home, "pct")).read().strip() if flag("pct") else "10"
-print("Current session: %s%% used · resets Oct 15 at 3:30am (Asia/Saigon)" % pct)
-print("Current week (all models): 50% used · resets Oct 19 at 8am (Asia/Saigon)")
+print("Current session: %s%% used · resets Oct 15 at 3:30am (Europe/Paris)" % pct)
+print("Current week (all models): 50% used · resets Oct 19 at 8am (Europe/Paris)")
 """
 
 HANG_WRAPPER = """#!/bin/sh
@@ -230,8 +243,15 @@ class ClaudeLimitsTest(unittest.TestCase):
         # default runs without CLAUDE_CONFIG_DIR, even when the worktree set one.
         self.assertEqual(dirs, ["-", str(self.work)])
         for r in self.runs():
-            self.assertIn("--print --no-session-persistence --strict-mcp-config /usage", r)
+            # No hooks run: Shipyard's would report an agent at every read.
+            self.assertIn('--print --no-session-persistence --strict-mcp-config --settings {"disableAllHooks":true} /usage', r)
+            self.assertIn(" driver=structured ", r)
             self.assertTrue(r.endswith(str(self.home / ".cache" / "berth-usage" / "claude-usage")), r)
+
+    def test_the_cache_is_this_users_only(self):
+        # It names each login's email.
+        self.by_account()
+        self.assertEqual(usage.CLAUDE_LIMITS_CACHE.stat().st_mode & 0o777, 0o600)
 
     def test_a_read_is_kept_for_the_ttl(self):
         self.by_account()
@@ -251,6 +271,23 @@ class ClaudeLimitsTest(unittest.TestCase):
 
     def test_a_login_without_limits_shows_none(self):
         (self.work / "apikey").touch()
+        self.assertEqual(sorted(self.by_account()), ["default"])
+
+    def test_a_login_that_has_no_limits_any_more_drops_the_last_ones(self):
+        self.assertIn("work", self.by_account())
+        # Signed in to a plan without them (an API key): /usage says so,
+        # which is a reading, not a failure.
+        (self.work / "apikey").touch()
+        usage.CLAUDE_LIMITS_TTL = 0
+        self.assertEqual(sorted(self.by_account()), ["default"])
+
+    def test_another_login_in_the_same_folder_never_shows_the_last_ones_limits(self):
+        import json
+        self.assertEqual(self.by_account()["work"]["limits"]["primary"]["used_percent"], 70.0)
+        # `/login` again as someone else, and this read fails: the old
+        # login's limits must not show as the new one's.
+        (self.work / ".claude.json").write_text(json.dumps({"oauthAccount": {"emailAddress": "c@acme.test"}}))
+        (self.work / "fail").touch()
         self.assertEqual(sorted(self.by_account()), ["default"])
 
     def test_hanging_logins_cost_one_timeout_and_leave_nothing_running(self):
@@ -293,7 +330,12 @@ class ClaudeLimitsTest(unittest.TestCase):
         self.assertNotIn("work", json.loads(usage.CLAUDE_LIMITS_CACHE.read_text()))
         self.assertEqual(len([r for r in self.runs() if r.startswith(str(self.work))]), asked, "a signed-out login's /usage is not asked")
         self.assertEqual(usage.claude_signed_out(), ["work"])
-        rows = {a["id"]: a for a in usage.accounts()["accounts"] if a["agent"] == "claude"}
+        saved = usage.session_accounts
+        usage.session_accounts = lambda: {}
+        try:
+            rows = {a["id"]: a for a in usage.accounts()["accounts"] if a["agent"] == "claude"}
+        finally:
+            usage.session_accounts = saved
         self.assertFalse(rows["work"]["signed_in"])
         self.assertTrue(rows["work"]["signed_out"])
         self.assertEqual(rows["work"]["email"], "b@acme.test")
@@ -314,6 +356,16 @@ class ClaudeLimitsTest(unittest.TestCase):
         out = json.loads(usage.report(1))
         self.assertEqual(out["signed_out"], [{"agent": "claude", "account": "work", "email": "b@acme.test", "org": None}])
         self.assertEqual([l["account"] for l in out["limits"]], ["default"])
+
+    def test_the_report_tells_two_plans_of_one_email_apart(self):
+        import json
+        # One email can sign in to a team seat and a personal plan: the
+        # organisation's id tells the two logins apart.
+        (self.work / ".claude.json").write_text(json.dumps({"oauthAccount": {
+            "emailAddress": "a@acme.test", "organizationUuid": "o-team", "organizationName": "Acme"}}))
+        out = {l["account"]: l for l in json.loads(usage.report(1))["limits"]}
+        self.assertEqual((out["work"]["email"], out["work"]["org"]), ("a@acme.test", "o-team"))
+        self.assertEqual((out["default"]["email"], out["default"]["org"]), ("a@acme.test", None))
 
     def test_the_report_says_whose_organisation_and_plan_each_login_is(self):
         import json
@@ -337,7 +389,7 @@ class ClaudeLimitsTest(unittest.TestCase):
     def test_the_report_survives_limits_that_break(self):
         import json
         saved = usage.claude_limits
-        usage.claude_limits = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
+        usage.claude_limits = lambda *a: (_ for _ in ()).throw(RuntimeError("boom"))
         try:
             r = json.loads(usage.report(7))
         finally:
@@ -347,17 +399,25 @@ class ClaudeLimitsTest(unittest.TestCase):
 
     def test_the_report_carries_claude_and_codex_defaults_apart(self):
         import json
+        # Codex's default login has limits too, in its transcript: both
+        # "default"s must be in the report.
+        sessions = self.home / ".codex" / "sessions" / "2026" / "10" / "14"
+        sessions.mkdir(parents=True)
+        when = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+        (sessions / "rollout.jsonl").write_text(json.dumps({"timestamp": when, "type": "event_msg", "payload": {
+            "type": "token_count", "info": {"total_token_usage": {"input_tokens": 10, "output_tokens": 2}},
+            "rate_limits": {"primary": {"used_percent": 42.0, "window_minutes": 300}}}}) + "\n")
         r = json.loads(usage.report(7))
-        self.assertEqual(sorted((l["agent"], l["account"]) for l in r["limits"]), [("claude", "default"), ("claude", "work")])
+        got = {(l["agent"], l["account"]): l for l in r["limits"]}
+        self.assertEqual(sorted(got), [("claude", "default"), ("claude", "work"), ("codex", "default")])
+        self.assertEqual(got[("codex", "default")]["limits"]["primary"]["used_percent"], 42.0)
+        self.assertEqual(got[("claude", "default")]["limits"]["primary"]["used_percent"], 10.0)
 
     def test_the_report_says_whose_limits_they_are(self):
         import json
         r = json.loads(usage.report(7))
         self.assertEqual({l["account"]: l["email"] for l in r["limits"]}, {"default": "a@acme.test", "work": "b@acme.test"})
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 
 class ClaudeAccountTest(unittest.TestCase):
@@ -375,3 +435,7 @@ class ClaudeAccountTest(unittest.TestCase):
             a = usage.claude_account("max", d)
             self.assertEqual((a["email"], a["org"], a["org_id"], a["tier"]),
                              ("ana@acme.test", "Ana's Organization", "org-max", "default_claude_max_20x"))
+
+
+if __name__ == "__main__":
+    unittest.main()

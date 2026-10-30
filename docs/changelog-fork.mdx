@@ -14,6 +14,16 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **Usage no longer reports a phantom agent on every read.** Reading a
+  Claude login's plan limits started Claude Code with its hooks on, so each
+  box's journal got an agent that started and stopped in
+  `~/.cache/berth-usage/claude-usage` every ten minutes per login. They
+  run with no hooks now. Also: a login's old limits no longer show after it
+  signs in to a plan without them or to another account, a reset read in
+  the box's own zone is right across a daylight saving change, two plans on
+  one email both show on the Usage screen, and `claude auth status` runs
+  once per report instead of twice. The plugin sends its script with each
+  read, so no box needs upgrading.
 - **A box on Windows itself no longer keeps old copies of berthd.** An
   update moves the running `berthd.exe`, `berthd-bg.exe` and `tmux.exe`
   aside as `.old` files, since Windows won't overwrite a running program.

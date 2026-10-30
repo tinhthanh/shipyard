@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import type { Account, Agent, Limits, Window } from "./box";
 import { DailyChart, OTHER_BOXES, SERIES, agentSeries, boxColor, boxSeries } from "./chart";
-import { AGENT_NAME, ago, compact, days, firstDay, plan, summarize, total, usd, worktreeOf, type BoxSession, type Period, type Source } from "./data";
+import { AGENT_NAME, ago, compact, days, dedupeLimits, identity, plan, summarize, total, usd, worktreeOf, type BoxSession, type Period, type SharedLimits, type Source } from "./data";
 
 // What the screen knows about one box while reading it.
 export interface BoxState {
@@ -241,7 +241,6 @@ export function BoxChip({ box, allBoxes }: { box: string; allBoxes: string[] }) 
 
 // The same login on two boxes counts once: matched by the email the agent
 // recorded, or else it is its own account on its own box.
-const identity = (a: Account | undefined, box: string, id: string) => (a?.email ? `${a.agent}:${a.email}` : `${box}:${a?.agent}:${id}`);
 
 // usedAccounts: the accounts an agent ran under in these reports, plus each
 // box's default, one per login.
@@ -263,36 +262,6 @@ function usedAccounts(agent: Agent, sources: Source[], accounts: Record<string, 
 
 function claudeAccounts(sources: Source[], accounts: Record<string, Account[] | undefined>) {
   return usedAccounts("claude", sources, accounts).map((u) => u.account);
-}
-
-export interface SharedLimits {
-  label?: string;
-  boxes: string[];
-  limits: Limits;
-}
-
-// dedupeLimits keeps the newest limits each login reported.
-// Limits read before the period are left out, as its tokens are.
-function dedupeLimits(agent: Agent, sources: Source[], accounts: Record<string, Account[] | undefined>, period: Period): SharedLimits[] {
-  const out = new Map<string, SharedLimits>();
-  for (const { box, report } of sources) {
-    const from = firstDay(report.today, period);
-    for (const l of report.limits.filter((x) => x.agent === agent && x.at.slice(0, 10) >= from)) {
-      const a = accounts[box]?.find((x) => x.agent === agent && x.id === l.account);
-      const k = identity(a, box, l.account);
-      const label = a?.email ?? (l.account === "default" ? box : `${box} · ${l.account}`);
-      const seen = out.get(k);
-      if (!seen) out.set(k, { label, boxes: [box], limits: l });
-      else {
-        seen.boxes.push(box);
-        if (l.at > seen.limits.at) seen.limits = l;
-      }
-    }
-  }
-  const list = [...out.values()];
-  // One login needs no name.
-  if (list.length === 1) list[0].label = undefined;
-  return list;
 }
 
 function AgentTile({
@@ -378,7 +347,7 @@ function AgentTile({
           </p>
         )}
         {limits.map((l) => (
-          <LimitRows key={l.label ?? "one"} shared={l} />
+          <LimitRows key={l.key} shared={l} />
         ))}
       </FramePanel>
     </Frame>
