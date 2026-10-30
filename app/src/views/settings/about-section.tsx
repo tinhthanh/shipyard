@@ -44,7 +44,7 @@ function Hero({ version }: { version: string }) {
       <div className={cn("flex items-center gap-4 bg-background px-5 py-4", picture && "border-t")}>
         <img src={`${import.meta.env.BASE_URL}berth-mark.svg`} alt="" className="size-12 shrink-0 rounded-xl shadow-sm" />
         <div className="min-w-0 flex-1">
-          <div className="text-heading">Shipyard{plain ? "" : ` ${version}`}</div>
+          <div className="text-heading">{APP_NAME}{plain ? "" : ` ${version}`}</div>
           <div className="mt-0.5 flex items-center gap-1.5 text-desc text-muted-foreground">
             {u.dot && <span className={cn("size-1.5 shrink-0 rounded-full", u.dot)} />}
             <span className="truncate">{plain ? `${version} build · ${u.line}` : u.line}</span>
@@ -68,7 +68,7 @@ function Hero({ version }: { version: string }) {
 // the person is the restart (lib/updater.ts).
 function useUpdates(): { line: string; dot?: string; action?: ReactNode } {
   const u = useUpdater();
-  if (!updatesSupported()) return { line: "Updates come with the Shipyard app" };
+  if (!updatesSupported()) return { line: `Updates come with the ${APP_NAME} app` };
   const busy = u.status === "checking" || u.status === "downloading" || u.status === "installing";
   const check = (
     <Button size="sm" variant="outline" loading={u.status === "checking"} disabled={busy} onClick={() => void checkForUpdate({ manual: true })}>
