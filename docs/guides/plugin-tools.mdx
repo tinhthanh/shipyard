@@ -1,0 +1,155 @@
+---
+title: Plugin tools for agents
+description: Install a plugin from its release, and give agents on your boxes a plugin's MCP servers and skills, with its setup and settings.
+---
+
+What this fork adds to [plugins](/guides/plugins): installing one from its
+own release, and tools a plugin gives the agents on your boxes.
+
+## From a release
+
+A plugin that isn't listed can come from its own release. **Install from
+URL…**, beside Reload, takes an `https://` link to a `.tar.gz` of the
+plugin's folder (one top folder named after its id, such as `chrome/`, with
+`berth-plugin.json` in it), and its SHA-256: give it, or leave it empty when
+the release publishes it beside the archive as `<url>.sha256`. The agent
+downloads it (following redirects only to `https://`), checks the
+checksum, unpacks it with no path or link leading out of the folder, and
+swaps it into `~/.berth/plugins/<id>/` in one step. Nothing is written when
+a check fails. A plugin already there is replaced only when you choose
+**Replace the installed one**, and like an update, new files are off until
+you allow them again.
+
+## Tools for agents
+
+A plugin can ship tools for the agents on a box: MCP servers and skills,
+files in its own folder. The manifest pins each file by its sha256, and the
+manifest is part of what you allow, so allowing the plugin allows exactly
+those bytes:
+
+```json title="~/.berth/plugins/computer/berth-plugin.json"
+{
+  "id": "computer", "name": "Computer use", "version": "1.0.0",
+  "mcp": {
+    "computer": { "command": "bin/open-computer-use", "args": ["mcp"], "sha256": "…" }
+  },
+  "skills": {
+    "berth-computer": { "path": "skills/berth-computer/SKILL.md", "sha256": "…" }
+  }
+}
+```
+
+Paths are relative to the plugin's folder and cannot climb out of it with
+`..`. Names are lowercase letters, digits and dashes, and a skill cannot
+take the name of one of berth's own.
+
+While the plugin is on, berthd gives its tools to Claude Code, Codex and
+Gemini CLI wherever berth's own MCP server or skills are installed: a server
+called `berth-<plugin>` (or `berth-<plugin>-<server>` when the names differ),
+and a copy of each skill. It checks every 30 seconds and when it starts;
+`berthd plugins sync` does it at once. Turn the plugin off and the servers
+and skills it added go away. Berth only ever removes what it added: a server
+or skill of yours with the same name is left alone.
+
+An agent's config never runs the plugin's binary itself. It runs
+`berthd plugin-mcp <plugin> <server>`, which checks that the plugin is still
+on and that the binary still hashes to what its manifest pins, and only then
+becomes it, in the plugin's folder with `BERTH_PLUGIN_DIR` set. A binary
+swapped after you allowed the plugin does not start; neither does one
+whose plugin you turned off.
+
+### Setup
+
+Some tools need a step only the person at the computer can take, such as
+macOS Accessibility and Screen Recording for a tool that uses desktop apps.
+A plugin describes it in `setup`, run by the binary of one of its MCP
+servers, so it needs no pin of its own:
+
+```json
+"setup": {
+  "server": "computer",
+  "args": [],
+  "status": ["doctor", "--json"],
+  "ready": "allGranted",
+  "problem": "missingPermissions",
+  "label": "Allow Accessibility and Screen Recording for Open Computer Use"
+}
+```
+
+When you allow the plugin, the app starts `args` at once (typically a
+window that walks you through the step). Settings → Plugins then shows
+whether it is done, by running `status` every few seconds until the JSON it
+prints has `ready` set to true (or, without `ready`, until it exits 0), and
+offers **Set up…** until then. Both run only while the plugin is on and its
+binary is the one you allowed.
+
+`problem`, when set, names the key of that JSON that says what is left, in
+the plugin's words: a string ("turn on the extension in the Agent profile")
+or a list of strings (shown as "Still needs: …"). Settings shows it instead
+of `label` while setup isn't done, here and on each box. On a Mac box whose
+screen is locked, the box's row says so: setup there waits for someone to
+unlock it.
+
+### Settings
+
+A plugin can offer switches for its tools, such as which Chrome profiles
+agents may use. It lists them from the binary of one of its MCP servers:
+
+```json
+"settings": {
+  "server": "chrome",
+  "list": ["shipyard", "settings", "--json"],
+  "label": "Chrome profiles agents may use"
+}
+```
+
+`list` prints `{"settings": [{"key", "label", "description", "value",
+"warning"}]}`. Settings → Plugins shows each one as a switch, and asks first
+before turning on one that has a `warning`. Shipyard keeps the values in
+`~/.berth/plugin-settings/<id>.json`, outside the plugin's folder: changing
+one doesn't need a new review, and updates keep them. Every binary of the
+plugin gets that file's path in `BERTH_PLUGIN_SETTINGS` and reads it there,
+and Shipyard only stores keys the plugin lists.
+
+Settings say what the plugin's tools should do. They don't sandbox it: the
+plugin's binary enforces them.
+
+### On boxes
+
+A plugin's tools can go to your boxes too, so the agents running there get
+them. Under a plugin that is on, Settings → Plugins lists each online box
+with a switch: turning it on sends the box the plugin's folder as you
+allowed it on this computer, with the hash you allowed. The box takes it
+only if it is that plugin, every file its manifest pins hashes to its pin,
+and its binaries run on the box (a plugin built for Apple silicon doesn't
+go to an Intel Mac or a Linux box). It records the grant in its own
+`~/.berth/plugins.json` and gives its agents the tools at once. Only a
+paired laptop can put a plugin on a box or take one off; an agent on the
+box can't.
+
+When you allow a new version here, the box keeps the old one until you
+**Update** it there. A plugin's [setup](#setup) runs on the box: **Set up
+on box…** opens it on that box's screen, for whoever is at it, or reaching
+it by remote desktop, to finish (macOS permissions can't be given from
+another computer). A box on this computer doesn't show: its agents have
+this computer's plugins already.
+
+[Settings](#settings) stay each box's own, and a box starts from the
+plugin's defaults: which Chrome profiles agents may use differs from one
+computer to the next. **Settings** on a box's row opens that box's
+switches, read from the plugin on the box and kept in the box's
+`~/.berth/plugin-settings/<id>.json`. As on this computer, a switch with a
+warning asks first. Only a paired laptop can change them; an agent on the
+box can read them but not turn one on for itself.
+
+Turning a plugin off here, or uninstalling it, takes it off the boxes you
+put it on: at once from those online, and from the others when they next
+connect. Turning it back on puts it on no box; you do, box by box. A
+plugin whose files changed, and that waits for you to allow them again,
+stays on its boxes in the version you allowed.
+
+<Callout title="Tools run as you">
+  A plugin's MCP server runs with the agent's access, like any other tool
+  the agent uses. Allowing a plugin decides whether its tools exist; what an
+  agent then does with them is up to the agent and your prompts.
+</Callout>
