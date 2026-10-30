@@ -11,6 +11,8 @@ mod keys;
 mod linux;
 mod menu;
 mod overlay;
+#[cfg(windows)]
+mod windows;
 
 // The app is a view over the laptop agent (`berth agent`), which serves it on
 // loopback. The agent writes a token to its state directory; this shell reads
@@ -37,12 +39,7 @@ fn token_path() -> Result<PathBuf, String> {
     let base = dirs::config_dir().ok_or("no config directory on this system")?;
     let token = base.join("berth").join("client").join("ui-token");
     #[cfg(windows)]
-    if let Some(local) = dirs::data_local_dir() {
-        let moved = local.join("berth").join("client").join("ui-token");
-        if moved.exists() || !token.exists() {
-            return Ok(moved);
-        }
-    }
+    let token = windows::token_path(token);
     Ok(token)
 }
 
@@ -95,15 +92,7 @@ fn open_terminal() -> Result<(), String> {
     }
     #[cfg(windows)]
     {
-        // Windows Terminal where it is installed (Windows 11 has it), else a
-        // console of its own.
-        use std::os::windows::process::CommandExt;
-        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
-        std::process::Command::new("wt.exe")
-            .spawn()
-            .or_else(|_| std::process::Command::new("cmd.exe").creation_flags(CREATE_NEW_CONSOLE).spawn())
-            .map(|_| ())
-            .map_err(|e| format!("couldn't open a terminal: {e}"))
+        windows::open_terminal()
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
@@ -165,14 +154,7 @@ pub fn run() {
             // the repository registers it itself. Windows has no menu either:
             // the webview handles the keys, as on Linux.
             #[cfg(windows)]
-            {
-                #[cfg(debug_assertions)]
-                {
-                    use tauri_plugin_deep_link::DeepLinkExt;
-                    let _ = app.deep_link().register_all();
-                }
-                let _ = app;
-            }
+            windows::setup(app);
             Ok(())
         })
         .on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()))

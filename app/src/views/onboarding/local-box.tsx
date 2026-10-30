@@ -6,9 +6,9 @@ import { plainError } from "@/lib/errors";
 import { localBoxApi, type LocalBoxStatus, useLocalBoxName } from "@/lib/local-box";
 import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { InstallWSLButton, useWindowsBox, WindowsBoxNotes } from "@/views/onboarding/local-box-windows";
 import { CommandLog } from "@/views/settings/command-log";
 import { thisComputer } from "@/lib/platform";
-import { usePrefs } from "@/lib/prefs";
 
 type State = "ready" | "running" | "done" | "failed";
 
@@ -40,42 +40,12 @@ export function UseThisMac({
   const [lines, setLines] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [paired, setPaired] = useState<string>();
-  // On Windows without WSL: installing it comes first (installWSL).
-  const [needsWSL, setNeedsWSL] = useState(!!status.needs_wsl);
-  const [wslAsked, setWSLAsked] = useState(false);
+  const win = useWindowsBox(status, setError);
 
-  const installWSL = async () => {
+  const run = async (asNative = win.native) => {
     const client = useStore.getState().client;
     if (!client) return;
-    setError(undefined);
-    try {
-      await localBoxApi.installWSL(client);
-      setWSLAsked(true);
-    } catch (err) {
-      setError(plainError(err));
-    }
-  };
-
-  // After WSL was installed (in Windows' own window): look again.
-  const checkWSL = async () => {
-    const client = useStore.getState().client;
-    if (!client) return;
-    const s = await localBoxApi.status(client).catch(() => undefined);
-    if (s && !s.needs_wsl) {
-      setNeedsWSL(false);
-      void run();
-    } else {
-      setError("WSL isn't installed yet. Finish its install (and restart Windows if it asks), then check again.");
-    }
-  };
-
-  // On Windows, Labs offers berthd on Windows itself instead of in WSL.
-  const labs = usePrefs((p) => p.labs);
-  const [native, setNative] = useState(!!status.native);
-  const run = async (asNative = native) => {
-    const client = useStore.getState().client;
-    if (!client) return;
-    setNative(asNative);
+    win.setNative(asNative);
     setState("running");
     setLines([]);
     setError(undefined);
@@ -99,7 +69,7 @@ export function UseThisMac({
   // Once, on arrival; StrictMode's second mount must not start it again.
   const started = useRef(false);
   useEffect(() => {
-    if (!autoStart || started.current || needsWSL) return;
+    if (!autoStart || started.current || win.needsWSL) return;
     started.current = true;
     void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -119,11 +89,7 @@ export function UseThisMac({
           <p className="mt-0.5 text-muted-foreground text-meta" aria-live="polite">
             {autoStart
               ? state === "running"
-                ? native
-                  ? "Installing berthd on Windows and pairing with it. This takes a few seconds."
-                  : status.wsl
-                  ? "Setting up Ubuntu in WSL, berthd in it, and pairing with it. The first time takes a few minutes."
-                  : "Installing berthd and pairing with it. This takes a few seconds."
+                ? (win.runningLine ?? "Installing berthd and pairing with it. This takes a few seconds.")
                 : state === "failed"
                   ? "It stopped before pairing; the log below says where."
                   : state === "done"
@@ -136,47 +102,21 @@ export function UseThisMac({
           <span className="flex h-7 shrink-0 items-center gap-1 text-body text-success-foreground">
             <CheckIcon className="size-4" /> Paired
           </span>
-        ) : needsWSL ? (
-          <Button size="sm" variant="outline" className="shrink-0" autoFocus={autoFocus} onClick={() => void (wslAsked ? checkWSL() : installWSL())}>
-            {wslAsked ? "Check again" : "Install WSL"}
-          </Button>
+        ) : win.needsWSL ? (
+          <InstallWSLButton win={win} autoFocus={autoFocus} onInstalled={() => void run()} />
         ) : (
           <Button size="sm" variant="outline" className="shrink-0" autoFocus={autoFocus} loading={state === "running"} onClick={() => void run()}>
             {state === "failed" ? "Try again" : thisComputer("Set up this Mac")}
           </Button>
         )}
       </div>
-      {state === "ready" && needsWSL && (
+      {state === "ready" && !win.needsWSL && !compact && (
         <p className="mt-2 ps-11 text-muted-foreground text-meta">
-          {wslAsked
-            ? "Windows is installing WSL in a window of its own. Restart Windows if it asks, then check again."
-            : "Agents need Linux, which Windows runs in WSL. Installing it is the one step that needs an administrator: Windows asks, and may ask to restart."}
-        </p>
-      )}
-      {state === "ready" && !needsWSL && !compact && (
-        <p className="mt-2 ps-11 text-muted-foreground text-meta">
-          {status.native
-            ? "berthd runs on Windows itself, and agents in PowerShell. "
-            : status.wsl
-            ? `Shipyard sets up Ubuntu in WSL (${status.wsl}) with berthd, tmux and git: a one-time download of a few hundred MB, no password needed. `
-            : reuse
-              ? "Uses the berthd already installed here. "
-              : "Shipyard installs berthd for your user, no password needed. "}
+          {win.readyLine ?? (reuse ? "Uses the berthd already installed here. " : "Shipyard installs berthd for your user, no password needed. ")}
           {thisComputer("It listens on this Mac only, so nothing opens to your network.")}
         </p>
       )}
-      {state === "ready" && labs && status.native_available && !status.installed && (
-        <p className="mt-1 ps-11 text-meta">
-          <Button variant="link" size="sm" className="h-auto p-0 text-meta" onClick={() => void run(true)}>
-            Or run agents on Windows itself, without WSL (Labs)
-          </Button>
-        </p>
-      )}
-      {state === "ready" && error && (
-        <p role="alert" className="mt-2 ps-11 text-destructive-foreground text-meta">
-          {error}
-        </p>
-      )}
+      {state === "ready" && <WindowsBoxNotes win={win} error={error} onNative={() => void run(true)} />}
       {state !== "ready" && <CommandLog className="mt-3" lines={lines} done={state === "done"} error={error} />}
       {state === "done" && paired && (
         <p className="mt-2 text-muted-foreground text-meta">
