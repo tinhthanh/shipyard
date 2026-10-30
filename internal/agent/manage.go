@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/cosscom/shipyard/internal/integrations"
 	"github.com/cosscom/shipyard/internal/sshsetup"
 	"github.com/cosscom/shipyard/internal/trust"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // Adding, pairing, upgrading and forgetting boxes are the CLI's job, and the
@@ -28,20 +28,10 @@ func (a *Agent) cliPath() (string, error) {
 	if a.cfg.CLI != "" {
 		return a.cfg.CLI, nil
 	}
+	// On Windows, the console build beside a program without one: a
+	// command the agent runs in a pseudo console (berth add ssh) needs it.
 	exe, err := os.Executable()
-	if err != nil || runtime.GOOS != "windows" {
-		return exe, err
-	}
-	// The Windows app starts the agent from berth-agent.exe, built without
-	// a console so none opens at sign-in. A command it runs in a pseudo
-	// console (berth add ssh) needs one: the same CLI beside it has it.
-	if strings.EqualFold(filepath.Base(exe), "berth-agent.exe") {
-		cli := filepath.Join(filepath.Dir(exe), "berth-cli.exe")
-		if _, err := os.Stat(cli); err == nil {
-			return cli, nil
-		}
-	}
-	return exe, nil
+	return winsys.ConsoleTwin(exe), err
 }
 
 func (a *Agent) cli(ctx context.Context, args ...string) *exec.Cmd {

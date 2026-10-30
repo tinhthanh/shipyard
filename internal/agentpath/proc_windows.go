@@ -6,14 +6,12 @@ import (
 	"strconv"
 	"syscall"
 
-	"golang.org/x/sys/windows"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // ownSession starts a command in a process group of its own and without a
 // console window of its own (an agent's CLI is a console program).
-func ownSession() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
-}
+func ownSession() *syscall.SysProcAttr { return winsys.Detached() }
 
 // killSession ends the process and everything it started: Windows has no
 // process groups to signal, so taskkill walks the tree.

@@ -5,14 +5,13 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/cosscom/shipyard/internal/winsys"
 	"golang.org/x/sys/windows"
 )
 
 // ownGroup starts the agent in a process group of its own, without a
 // console window of its own.
-func ownGroup() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
-}
+func ownGroup() *syscall.SysProcAttr { return winsys.Detached() }
 
 // signalTree ends the process tree under pid. Windows has no signals to
 // send a tree: a SIGTERM asks taskkill to close it, anything else forces it.

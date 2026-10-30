@@ -15,6 +15,7 @@ import (
 	"github.com/cosscom/shipyard/internal/doctor"
 	"github.com/cosscom/shipyard/internal/service"
 	"github.com/cosscom/shipyard/internal/version"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 func agentService(l laptop) (service.Spec, error) {
@@ -41,9 +42,7 @@ func agentService(l laptop) (service.Spec, error) {
 		// app, is the same program built without a console, so no console
 		// window opens at logon.
 		args = []string{"agent", "start"}
-		if gui := filepath.Join(filepath.Dir(exe), "berth-agent.exe"); fileExists(gui) {
-			exe = gui
-		}
+		exe = winsys.WindowlessTwin(exe)
 	}
 	return service.Spec{
 		Name:        name,
@@ -94,7 +93,7 @@ func spawnAgent(l laptop, exe string) error {
 		return err
 	}
 	defer logFile.Close()
-	cmd := exec.Command(consoleBerth(exe), "agent")
+	cmd := exec.Command(winsys.ConsoleTwin(exe), "agent")
 	cmd.Env = append(os.Environ(), "BERTH_HOME="+filepath.Dir(l.dir))
 	cmd.Stdout, cmd.Stderr = logFile, logFile
 	cmd.SysProcAttr = detached()
@@ -296,8 +295,3 @@ func restartAgent(l laptop, spec service.Spec, ifStale bool) (RestartResult, err
 // How long a restart waits for the agent to finish its work under way and
 // stop: its own limit, and a little more.
 const agentDrainWait = 2*time.Minute + 30*time.Second
-
-func fileExists(p string) bool {
-	fi, err := os.Stat(p)
-	return err == nil && !fi.IsDir()
-}

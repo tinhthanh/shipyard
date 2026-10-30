@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/cosscom/shipyard/internal/identity"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // This computer as a box, on Windows. berthd and the agents it runs need
@@ -44,7 +45,7 @@ var errNoWSL = errors.New("this computer's box runs in WSL, which isn't installe
 var wslCmd = func(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "wsl.exe", args...)
 	cmd.Env = append(os.Environ(), "WSL_UTF8=1")
-	noConsole(cmd)
+	winsys.HideWindow(cmd)
 	return cmd
 }
 
