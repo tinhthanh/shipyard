@@ -20,6 +20,7 @@ import (
 	"github.com/cosscom/shipyard/internal/events"
 	"github.com/cosscom/shipyard/internal/integrations/adapters"
 	"github.com/cosscom/shipyard/internal/transcript"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // The Claude driver: Claude Code without its TUI, as `claude -p` speaking
@@ -150,19 +151,9 @@ func (b *Box) agentHostCommand() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	// On Windows the service runs berthd-bg.exe, built without a console;
-	// a host runs in a session's console, where only berthd.exe can write.
-	if runtime.GOOS == "windows" && strings.EqualFold(filepath.Base(exe), "berthd-bg.exe") {
-		if console := filepath.Join(filepath.Dir(exe), "berthd.exe"); fileExists(console) {
-			exe = console
-		}
-	}
-	return []string{exe, "agent-host"}, nil
-}
-
-func fileExists(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.Mode().IsRegular()
+	// A host runs in a session's console, where a Windows program built
+	// without one (berthd-bg.exe) can't write: its console build can.
+	return []string{winsys.ConsoleTwin(exe), "agent-host"}, nil
 }
 
 // newConversation makes a new conversation's folder and names its socket.

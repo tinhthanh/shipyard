@@ -19,6 +19,7 @@ import (
 	"github.com/cosscom/shipyard/internal/integrations"
 	"github.com/cosscom/shipyard/internal/service"
 	"github.com/cosscom/shipyard/internal/version"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 func daemonService(b boxHome, listen string) service.Spec {
@@ -35,9 +36,7 @@ func daemonService(b boxHome, listen string) service.Spec {
 		// Windows starts it at sign-in from the Run key, with no console
 		// and nowhere for its output: berthd-bg.exe, the same program built
 		// without a console, when it is beside this one, and its own log.
-		if bg := filepath.Join(filepath.Dir(exe), "berthd-bg.exe"); isRegular(bg) {
-			exe = bg
-		}
+		exe = winsys.WindowlessTwin(exe)
 		args = append(append([]string{"--home", filepath.Dir(b.dir)}, args...), "--log", logPath)
 	}
 	return service.Spec{
@@ -49,11 +48,6 @@ func daemonService(b boxHome, listen string) service.Spec {
 		LogPath:      logPath,
 		KeepChildren: true,
 	}
-}
-
-func isRegular(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.Mode().IsRegular()
 }
 
 // install runs berthd serve as a user service: a systemd user unit on Linux,

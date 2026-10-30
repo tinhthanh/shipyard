@@ -23,6 +23,7 @@ import (
 	"github.com/cosscom/shipyard/internal/statefile"
 	"github.com/cosscom/shipyard/internal/trust"
 	"github.com/cosscom/shipyard/internal/version"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // Use this Mac: the laptop as a box of its own, set up from the app with no
@@ -1001,7 +1002,7 @@ func (a *Agent) localBoxRoutes(mux *http.ServeMux) {
 			writeError(w, http.StatusBadRequest, "WSL is for this computer's box on Windows")
 			return
 		}
-		if err := elevate("wsl.exe", "--install --no-distribution"); err != nil {
+		if err := winsys.Elevate("wsl.exe", "--install --no-distribution"); err != nil {
 			writeError(w, http.StatusConflict, "Windows did not start the WSL install: "+err.Error())
 			return
 		}

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"golang.org/x/sys/windows"
+	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // defaultHome is %LOCALAPPDATA%\berth. The state holds this computer's
@@ -36,27 +36,7 @@ func defaultHome() (string, error) {
 // (an identity key from an older berth) took their folder's, which can
 // include every administrator, and change with it here. Once done, the
 // folder's list is protected, and later calls leave it be.
-func privateDir(dir string) error {
-	if sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION); err == nil {
-		if ctl, _, err := sd.Control(); err == nil && ctl&windows.SE_DACL_PROTECTED != 0 {
-			return nil
-		}
-	}
-	u, err := windows.GetCurrentProcessToken().GetTokenUser()
-	if err != nil {
-		return err
-	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;" + u.User.Sid.String() + ")")
-	if err != nil {
-		return err
-	}
-	dacl, _, err := sd.DACL()
-	if err != nil {
-		return err
-	}
-	return windows.SetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT,
-		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
-}
+func privateDir(dir string) error { return winsys.PrivateDir(dir) }
 
 // moveHome moves what old holds into home, entry by entry, and answers the
 // folder to use: home, or old while an entry of it can't move yet. An

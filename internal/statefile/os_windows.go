@@ -3,6 +3,7 @@ package statefile
 import (
 	"os"
 
+	"github.com/cosscom/shipyard/internal/winsys"
 	"golang.org/x/sys/windows"
 )
 
@@ -23,21 +24,4 @@ func unlockFile(f *os.File) {
 // list, which can let every user of the machine read it (a BERTH_HOME of
 // C:\berth). The list is replaced by one that grants the current user and
 // SYSTEM, and inherits nothing.
-func private(f *os.File) error {
-	tok := windows.GetCurrentProcessToken()
-	u, err := tok.GetTokenUser()
-	if err != nil {
-		return err
-	}
-	sd, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;SY)(A;;FA;;;" + u.User.Sid.String() + ")")
-	if err != nil {
-		return err
-	}
-	dacl, _, err := sd.DACL()
-	if err != nil {
-		return err
-	}
-	// By name: f's handle was opened to read and write, without WRITE_DAC.
-	return windows.SetNamedSecurityInfo(f.Name(), windows.SE_FILE_OBJECT,
-		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
-}
+func private(f *os.File) error { return winsys.PrivateFile(f.Name()) }

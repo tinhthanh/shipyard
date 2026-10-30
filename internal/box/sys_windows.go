@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/cosscom/shipyard/internal/winsys"
 	"golang.org/x/sys/windows"
 )
 
@@ -20,9 +21,7 @@ const (
 	sigTTIN = syscall.Signal(0x15)
 )
 
-func ownGroup() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.CREATE_NO_WINDOW}
-}
+func ownGroup() *syscall.SysProcAttr { return winsys.Detached() }
 
 func ownSession() *syscall.SysProcAttr { return ownGroup() }
 

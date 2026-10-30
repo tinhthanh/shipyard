@@ -37,6 +37,7 @@ import (
 	"github.com/cosscom/shipyard/internal/statefile"
 	"github.com/cosscom/shipyard/internal/trust"
 	"github.com/cosscom/shipyard/internal/version"
+	"github.com/cosscom/shipyard/internal/winsys"
 	"github.com/cosscom/shipyard/internal/wire"
 )
 
@@ -96,7 +97,7 @@ func helpText() string {
 }
 
 func main() {
-	if runHidden(os.Args[1:]) {
+	if winsys.RelaunchHidden(os.Args[1:]) {
 		return
 	}
 	if err := run(os.Args[1:]); err != nil {
