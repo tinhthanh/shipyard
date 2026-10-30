@@ -5,6 +5,7 @@ package box
 import (
 	"errors"
 	"os"
+	"strconv"
 	"syscall"
 )
 
@@ -55,4 +56,13 @@ func diskSpace(path string) (total, avail, id uint64, ok bool) {
 	}
 	bs := uint64(st.Bsize)
 	return uint64(st.Blocks) * bs, uint64(st.Bavail) * bs, uint64(st.Blocks)<<16 ^ uint64(st.Bsize), true
+}
+
+// fileIdentity is a file's device and inode, "dev:ino ", which a rename over
+// it changes (gitcache.go's stampOf).
+func fileIdentity(fi os.FileInfo) string {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return strconv.FormatUint(uint64(st.Dev), 10) + ":" + strconv.FormatUint(st.Ino, 10) + " "
+	}
+	return ""
 }
