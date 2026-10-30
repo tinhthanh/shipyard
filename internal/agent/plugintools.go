@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cosscom/shipyard/internal/integrations"
@@ -92,4 +94,48 @@ func writePluginSettingsError(w http.ResponseWriter, err error) {
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}
+}
+
+// pluginTools is what PluginInfo (ui.go) says about the tools a plugin
+// gives agents.
+type pluginTools struct {
+	// MCP and Skills name the tools the plugin gives agents (see
+	// integrations.SyncPluginTools).
+	MCP    []string `json:"mcp,omitempty"`
+	Skills []string `json:"skills,omitempty"`
+	// Setup is the one-time step its tools need on this computer, if any
+	// (GET and POST /v1/plugins/{id}/setup).
+	Setup *PluginSetupInfo `json:"setup,omitempty"`
+	// Settings are switches for its tools (GET and PUT
+	// /v1/plugins/{id}/settings), if it has any.
+	Settings *PluginSetupInfo `json:"settings,omitempty"`
+}
+
+// pluginToolsManifest is how a plugin's manifest lists them.
+type pluginToolsManifest struct {
+	MCP      map[string]json.RawMessage `json:"mcp"`
+	Skills   map[string]json.RawMessage `json:"skills"`
+	Setup    *PluginSetupInfo           `json:"setup"`
+	Settings *PluginSetupInfo           `json:"settings"`
+}
+
+func (m pluginToolsManifest) tools() pluginTools {
+	return pluginTools{MCP: sortedKeys(m.MCP), Skills: sortedKeys(m.Skills), Setup: m.Setup, Settings: m.Settings}
+}
+
+// PluginSetupInfo is what the app needs to offer a plugin's setup.
+type PluginSetupInfo struct {
+	Label string `json:"label,omitempty"`
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

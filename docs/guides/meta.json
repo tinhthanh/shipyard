@@ -2,6 +2,7 @@
   "title": "Guides",
   "pages": [
     "home",
+    "floating-bar",
     "structured-agents",
     "orchestration",
     "runs",
