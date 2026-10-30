@@ -1,0 +1,7 @@
+{
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/tinhthanh/shipyard/releases/latest/download/latest.json"]
+    }
+  }
+}

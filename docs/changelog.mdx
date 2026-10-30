@@ -10,137 +10,6 @@ upgrades with `berth upgrade BOX`, or by running the
 again.
 
 ## Unreleased
-
-- **On Windows, this PC can be a box without WSL (Labs).** **Use this
-  computer** offers berthd on Windows itself, with agents in PowerShell under
-  psmux, a tmux for Windows the app now carries. It starts at sign-in with
-  no window, and an app update replaces it while sessions keep running.
-- **On Windows, nothing opens console windows behind your back.** The agent
-  runs with a hidden console, so the programs it starts (ssh, git) no longer
-  each flash a window.
-- **On Windows, this PC can be a box.** **Use this computer** sets up
-  Ubuntu in WSL as `berth-box`, with berthd, tmux and git, and pairs with it,
-  listening on this computer only. Without WSL, it offers to install it (the
-  one step that asks for an administrator). The Windows app now carries the
-  Linux berthd, which adding a Linux box over SSH needs too.
-- **On Windows, the app's shortcuts work inside a browser tab.** With a
-  page focused in a browser tab, Ctrl+K, Ctrl+T, Ctrl+Shift+B and the other
-  shortcuts went to the page; they go to the app now, as they do on a Mac.
-- **On Windows, Shipyard's keys stay on the computer.** Its state (this
-  computer's identity key, the app's token, paired boxes) moves from the
-  roaming `%APPDATA%\berth` to `%LOCALAPPDATA%\berth`, which a roaming
-  profile doesn't copy to a server or another machine. It moves by itself
-  the first time the agent starts after the update, and the folder is then
-  open only to your account: files from an older version, such as the
-  identity key, were readable by the computer's administrators too.
-- **The Windows app adds a box over SSH.** Add a box → SSH runs in a real
-  terminal on Windows now (a pseudo console), and boxes reached over SSH
-  connect from there too. Windows' ssh can't share one login between steps,
-  so each step logs in on its own: a key or the Windows SSH agent answers
-  that without asking, a password would be asked at each step.
-- **On Windows, the agent starts when you sign in, with no console window.**
-  `berth agent install` adds it to your account's startup programs, and it
-  runs as a windowless program, so no terminal opens and nothing runs as a
-  hidden task. The files that hold the agent's keys, such as the UI token,
-  are now readable only by your account.
-- **The agent screen names your app and says what Start at login does on
-  Windows.** A branded build says "Start the Vetgo agent" rather than
-  Shipyard, as do its errors and notices about the agent, and on Windows
-  Start at login no longer promises to restart the agent if it stops: it
-  starts it each time you sign in.
-- **The Windows app fits Windows better.** Its title bar follows your theme,
-  light or dark. A screenshot path pasted from Windows (`C:\…\shot.png`,
-  a network share or a `file://` link) is uploaded like one from a Mac. The
-  app says "this computer" where it said "this Mac", F5 and Ctrl+R no longer
-  reload the window and lose its tabs, a card that opens a terminal opens
-  Windows Terminal, and Settings no longer offers a command-line link that
-  only works on macOS and Linux.
-
-- **The floating bar says whose each login is.** Under each login on the
-  floating bar's card, a line says whose organisation it is with, on which
-  plan, and which boxes it was read on: "Acme · Claude Team · devl",
-  "personal · Claude Max 5x · gpu". Two logins that share a
-  name, or one person's team seat and personal plan, are told apart at a
-  glance; hovering a ring says the same.
-- **A Claude login that signed itself out says so.** When Claude Code
-  loses an account's login, it keeps the account's profile, so Usage →
-  Accounts went on showing the email and plan as if nothing had happened,
-  and its plan limits just disappeared from the widget and the floating
-  bar. Each login is now checked with Claude Code itself: one it lost
-  shows **Signed out** with **Sign in…**, and the widget and the floating
-  bar name the logins to sign in again.
-- **Usage reads boxes with no projects.** A box you haven't added a
-  project to yet had its logins and plan limits left out of Usage, the
-  widget and the floating bar. It is read too now, in its home folder.
-- **A Claude team seat says Claude Team.** Usage → Accounts named a
-  team or enterprise seat after the Max-like tier it records ("Claude Max
-  5x"); it now says Claude Team (or Claude Enterprise).
-- **A box's plugin settings, from this computer.** Under Settings →
-  Plugins → On boxes, a box's row has **Settings**: the plugin's switches
-  on that box, such as which of the box's Chrome profiles its agents may
-  use. Before, the app had no way to change them, so an agent asking you
-  to turn a profile on sent you to switches that changed this computer's
-  instead. An agent on the box still can't change them.
-- **A plugin packed on a Mac installs.** A Mac's `tar` adds hidden `._`
-  files for extended attributes; a release archive with them was refused
-  ("no plugin folder") and, inside an app, would have broken its signature.
-  They are now left out when a plugin is unpacked, here and on boxes.
-- **Install a plugin from its release.** Settings → Plugins → **Install
-  from URL…** takes an `https://` link to a plugin's `.tar.gz` and its
-  SHA-256 (or the `.sha256` beside it), checks both, and installs it off,
-  like one from Browse. A plugin that's there already is replaced only when
-  you say so.
-- **A plugin's setup says what is left.** Settings → Plugins shows what a
-  plugin says is left to do (its manifest's new `setup.problem`), such as
-  "turn on the extension in the Agent profile", instead of the same label
-  every time, here and on each box. A box whose screen is locked says so,
-  since setup there waits for someone to unlock it, and opening setup on it
-  warns. With more than one box on an older version of a plugin, **Update
-  all** sends the allowed version to each.
-- **Two plans on one email both show.** One email signed in to two plans
-  (a team seat and a personal Max, as two accounts in Usage & accounts)
-  showed as one login in the floating bar and the Agent usage widget, with
-  one plan's numbers and the other's gone. Logins are now told apart by
-  their organisation too, and two that share an email are named by their
-  account ("ana · ana-max").
-- **About says how this fork's app updates.** The fork's releases carry
-  `berth` and `berthd` only, so the app's update check found nothing to read
-  and showed "Couldn't check for updates". It now says the app updates by
-  building it from source, with a link to the releases.
-- **A plugin's tools on your boxes.** Settings → Plugins lists each online
-  box under a plugin that gives agents tools (MCP servers, skills): turn it
-  on and the box gets the plugin as you allowed it here, checked file by
-  file and for the box's platform, and its agents get the tools.
-  **Update** sends a newer version you allowed, and **Set up on box…**
-  opens the plugin's setup (such as macOS permissions) on that box's
-  screen, to finish there or by remote desktop. Turning the plugin off
-  here, or uninstalling it, takes it off those boxes too. Needs the box
-  upgraded.
-- **A floating bar over every app.** Settings → Appearance → Floating bar
-  (macOS) keeps a small bar on the right edge of the screen, or around the
-  notch, over every app and full-screen ones: a ring for each Claude Code
-  and Codex login's plan limits (with the Usage & accounts plugin on), and
-  how many agents need you or are working. It waits as a sliver on the
-  edge (or inside the notch) and opens under the pointer, whatever app is
-  in front; rest on it for each window's reset and the agents' names, and
-  click one to open it in Shipyard. It is a native macOS panel after
-  Codenotch's.
-- **Usage shows Claude Code's plan limits.** The Usage screen and its home
-  widget now show each Claude login's current session, its week and any week
-  for one model (such as Fable), with when each resets — what Claude Code's
-  own `/usage` prints. The box asks `/usage` at most every ten minutes per
-  login, all logins at once and for at most 12 seconds, in a way that leaves
-  no transcript and starts no MCP server; if it fails, the tokens still show.
-- **The Agent usage widget shows each plan window once.** A login used on
-  several boxes was listed once per box, pushing the other windows out of
-  the widget; it is now shown once, as most recently read, even when the
-  boxes printed its reset a minute apart.
-- **The Agent usage widget says whose window each row is.** With more than
-  one login of an agent, each row ends with the login's email name (such as
-  "Claude Code · 5h · ana"), so two logins with the same numbers no longer
-  look like one shown twice. A box with no projects yet is left out instead
-  of listed as one it couldn't read, and in the Medium size that line now
-  takes the week's place rather than being cut off.
 - **Quiet projects are grayed out.** On the rail and in the two-column
   sidebar, a project with no agent or shell open in it is grayed out, so
   the ones you're using stand out. Switching to one of those opens New
@@ -718,6 +587,7 @@ Keeping main up to date and opening Codex edits need each box's new
   math in code stays as code. A formula that doesn't parse shows as its
   source, in red.
 
+
 ## v0.3.19
 
 - **Labs: a structured agent keeps its permission mode when it's resumed.**
@@ -755,37 +625,6 @@ Keeping main up to date and opening Codex edits need each box's new
   of it, ended the wait a second later and then the turn: the chat had no
   Allow / Deny, said the agent was done, and the agent waited forever. The
   screen no longer settles structured sessions; their own stream does.
-- **Plugins can have settings.** A plugin can list switches for its tools,
-  for example which Chrome profiles agents may use, and you set them in
-  Settings → Plugins. Changing one keeps the plugin allowed, and updating the
-  plugin keeps your choices.
-- **A plugin's tools can ask for the one step only you can take.** A plugin
-  whose agent tools need something on this computer first, such as macOS
-  Accessibility and Screen Recording, starts that step as soon as you allow
-  it (for the computer plugin, a window that shows what to switch on), and
-  Settings → Plugins says whether it is done, with a **Set up…** button until
-  it is. No command to look up.
-- **Updating Shipyard no longer leaves this Mac's box stopped.** Reinstalling
-  berthd's launchd job right after the old one was taken down could fail with
-  "Bootstrap failed: 5: Input/output error"; it now waits for the old job to
-  go and tries again.
-- **A plugin without a main module turns on.** One that only adds hooks,
-  themes, kits or agent tools used to show as failed in Settings → Plugins;
-  now it is on, and nothing runs in the app. Settings → Plugins shows the
-  MCP servers and skills a plugin gives agents, and the dialog that asks you
-  to allow a plugin lists them with each file and its sha256.
-- **Plugins can give agents tools.** A plugin's `berth-plugin.json` can list
-  MCP servers and skills it ships, each pinned by its sha256. Once you allow
-  the plugin, berthd adds its servers (as `berth-<plugin>`) and skills to
-  Claude Code, Codex and Gemini CLI wherever berth's own are installed, and
-  takes them away when you turn the plugin off. Agents start a plugin's
-  server through `berthd plugin-mcp`, which refuses one whose plugin is off
-  or whose binary is not the file you allowed.
-- **This fork updates and installs from its own releases.** The app's
-  updater, the install command, the Homebrew cask and the links in Settings →
-  About point at `tinhthanh/shipyard` instead of upstream, and agents no
-  longer add a "Review in Shipyard" button that goes through berthd.app to
-  the pull requests they open.
   Needs the box upgraded.
 - **Settings › Boxes reads correctly to a screen reader.** A box with no
   browsers running put its "No browsers running" note inside the browsers
@@ -1805,6 +1644,7 @@ October 5, 2026.
 
 Worktree pages open on a Mac's own box, in your browser and in Berth's.
 
+
 - **Worktree URLs work on a Mac's own box, and in the Browser tab.** On
   this Mac's box, `http://WORKTREE.LOCATION.BOX.localhost:1377/` said "not
   found" for a dev server started in the worktree (`npm start` on 3000), since
@@ -1825,6 +1665,7 @@ Worktree pages open on a Mac's own box, in your browser and in Berth's.
 October 5, 2026.
 
 Agents start however long the prompt, and on a fresh Mac.
+
 
 - **Long prompts start.** A task or session whose prompt was over about
   16 KB failed with "tmux new-session: ." and its worktree was removed: the
@@ -1855,6 +1696,7 @@ October 5, 2026.
 
 Two worktrees side by side, nineteen themes, a chat that keeps every
 turn, and browsers that show you the page.
+
 
 - **Fix a blocked agent's browser from Berth.** On Ubuntu 24.04, whose
   sandbox setting stops Chromium starting, the browser pane marks the
@@ -1925,6 +1767,7 @@ October 5, 2026.
 
 The chat takes on the rest of what a terminal does: Claude's questions,
 its artifacts, its edits as diffs, and dev servers in tabs of their own.
+
 
 - **Archiving follows through.** Archive or remove a worktree from the
   sidebar, zen, the launcher or the Worktrees table and it shows as

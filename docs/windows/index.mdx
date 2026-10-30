@@ -1,0 +1,61 @@
+---
+title: Windows
+description: The Windows app, an alpha of this fork's. How to build and install it, where it keeps things, and how it differs from the Mac app.
+---
+
+The Windows app is an alpha that this fork adds to Shipyard. It works as the
+[Linux app](/getting-started/install) does: Ctrl stands in for ⌘, there is no
+menu bar, and the app says "this computer" where the Mac app says "this Mac".
+
+## Build and install
+
+The fork's releases carry no app yet. Build it on Windows with Go, Node and
+pnpm, Rust (MSVC) and the Visual Studio C++ build tools, from the
+repository's root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows-app-build.ps1 -Version 0.3.31
+```
+
+The installer lands in `app\src-tauri\target\release\bundle\nsis\`. It
+installs for your user, with no administrator. `-Brand NAME` builds it
+under another name and icon (`branding/README.md`).
+
+The app carries `berth` (as `berth-cli.exe`, and `berth-agent.exe` without a
+console), the Linux `berthd` for boxes in WSL or over SSH, and `berthd.exe`
+with [psmux](https://github.com/psmux/psmux) for a box on Windows itself.
+
+## The laptop agent
+
+`berth agent install` adds the agent to your account's startup programs
+(the Run key), as `berth-agent.exe`: it starts when you sign in, with no
+console window, and nothing restarts it if it stops. The programs it runs
+(ssh, git) get a console that is never shown.
+
+Adding a box over SSH runs in a pseudo console. Windows' ssh can't share one
+login between steps, so each step logs in on its own: a key or the Windows
+SSH agent answers that without asking.
+
+## Where it keeps things
+
+State is in `%LOCALAPPDATA%\berth\` (`client\` for the agent), never the
+roaming `%APPDATA%`, so its keys stay on this computer; a version that kept
+it in `%APPDATA%\berth` moves it the first time the agent starts. The
+folder and the files that hold keys are open only to your account.
+`$BERTH_HOME` moves it, as elsewhere. Things you write by hand stay in
+`%USERPROFILE%\.berth\`.
+
+## This computer as a box
+
+**Use this computer** sets up a box in WSL, or with Labs on, on Windows
+itself: [This PC as a box](/windows/this-pc).
+
+The app's API for it is [`/v1/boxes/local`](/reference/app-api), with more
+in its status on Windows: `needs_wsl` (WSL isn't installed; `POST
+/v1/boxes/local/wsl` asks Windows to install it), `wsl` (the distribution
+the box runs in), and `native_available` and `native` (berthd on Windows
+itself, which `POST /v1/boxes/local` sets up with `{ native: true }`).
+
+## Changes
+
+What changed on Windows is in the [fork changelog](/changelog-fork#windows).

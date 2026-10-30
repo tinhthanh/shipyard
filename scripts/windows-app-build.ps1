@@ -87,7 +87,8 @@ Push-Location (Join-Path $root "app")
 try {
   pnpm.cmd install --frozen-lockfile
   if ($LASTEXITCODE) { throw "pnpm install failed" }
-  $extra = @()
+  # The fork's own update feed (tauri.fork.conf.json).
+  $extra = @("--config", "src-tauri\tauri.fork.conf.json")
   if ($Brand) {
     $brandConf = (node (Join-Path $root "scripts\brand.mjs") $Brand | Select-Object -Last 1)
     if ($LASTEXITCODE) { throw "brand $Brand failed" }

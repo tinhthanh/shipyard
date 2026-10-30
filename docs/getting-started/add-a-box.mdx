@@ -95,56 +95,7 @@ Mac…**: Shipyard forgets the box, stops berthd and removes its launch agent, a
 deletes the copy. Its data (keys, projects list, session records) stays
 unless you tick **Also delete its data**. Your repositories are never touched.
 
-### This PC, on Windows
-
-berthd and the agents it runs need Linux, so on Windows **Use this
-computer** sets up a box in [WSL](https://learn.microsoft.com/windows/wsl/)
-instead, still with one click:
-
-1. **WSL itself**, once. Without it, the card offers **Install WSL**: Windows
-   asks for an administrator (the only step that needs one) and may ask to
-   restart. Then **Check again**.
-2. **A distribution of its own**, `berth-box`: Ubuntu 24.04, installed with
-   `wsl --install Ubuntu-24.04 --name berth-box --no-launch` (a one-time
-   download of a few hundred MB). Your other WSL distributions are left
-   alone.
-3. In it, a user named after yours, tmux and git, and lingering, so its
-   services run with no one logged in. The Linux `berthd` the app carries goes
-   to `~/.local/bin/berthd` there and runs as that user's systemd service,
-   listening on `127.0.0.1` only, on the first free port from 7445. WSL
-   forwards Windows' loopback to it, so nothing opens to your network and no
-   firewall rule is needed.
-4. It pairs this laptop with it, as on a Mac.
-
-WSL stops a distribution nothing uses, and berthd with it, so the laptop
-agent keeps one process running in `berth-box` while it runs. After an app
-update the agent copies the new `berthd` in and restarts its service.
-**Stop using this computer…** forgets the box and removes berthd's service,
-keeping `berth-box`; with **Also delete its data** it unregisters `berth-box`,
-which deletes everything in it, repositories cloned there included.
-
-#### Or on Windows itself (Labs)
-
-With Labs on, the card also offers **Or run agents on Windows itself,
-without WSL**. berthd then runs on Windows, and agents in PowerShell, under
-[psmux](https://github.com/psmux/psmux), a tmux for Windows (MIT) that the
-app carries, built from a reviewed release's source:
-
-- The app copies `berthd.exe`, `berthd-bg.exe` and `tmux.exe` (psmux) to
-  `%LOCALAPPDATA%\berth\bin` and runs `berthd install` there, listening on
-  `127.0.0.1` only. Windows starts it at sign-in from your Run key.
-- `berthd-bg.exe` only starts `berthd.exe` with a console that is never
-  shown, which the programs it runs share: no window opens for them.
-- An app update copies the new files over and restarts berthd; sessions keep
-  running in psmux.
-- Agent CLIs are the Windows ones (Claude Code installed with npm or its
-  installer). A session's PowerShell runs local scripts (`RemoteSigned`, for
-  that session only), so npm's `claude.ps1` starts.
-
-It is an alpha: psmux doesn't report how a stopped program exited, so a
-stopped service tab says exit 0 whatever the code was. A box is one or the
-other: to switch between WSL and Windows itself, stop using this computer
-first.
+On Windows, see [This PC as a box](/windows/this-pc).
 
 ## On your tailnet
 
