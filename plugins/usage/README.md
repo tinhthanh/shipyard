@@ -21,7 +21,7 @@ Each session has **Open** if it is still running in Shipyard, or **Resume** (`cl
 - The floating bar names each login with whose organisation it is with (a personal plan says "personal"), its plan, and the boxes it was read on.
 - Each box keeps its own days, in its own time zone.
 
-The numbers come from the files each agent writes on the box. Nothing is estimated or made up.
+The token numbers come from the files each agent writes on the box, and plan limits from the agents themselves (below). Nothing is estimated or made up.
 
 | Agent | Read from | What's in it |
 | --- | --- | --- |

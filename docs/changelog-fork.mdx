@@ -22,8 +22,11 @@ than in the changelog, which stays as upstream writes it.
   signs in to a plan without them or to another account, a reset read in
   the box's own zone is right across a daylight saving change, two plans on
   one email both show on the Usage screen, and `claude auth status` runs
-  once per report instead of twice. The plugin sends its script with each
-  read, so no box needs upgrading.
+  once per report instead of twice. Two reports at once read each login
+  once. The plugin sends its script with each read, so no box needs
+  upgrading for these. `POST /v1/exec` without a location now runs only on
+  a box with no projects yet, so no command skips a project's `before:`
+  gates by starting outside it (needs the box upgraded).
 - **A box on Windows itself no longer keeps old copies of berthd.** An
   update moves the running `berthd.exe`, `berthd-bg.exe` and `tmux.exe`
   aside as `.old` files, since Windows won't overwrite a running program.
