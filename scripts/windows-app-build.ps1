@@ -10,6 +10,9 @@
 # The installer lands in app\src-tauri\target\release\bundle\nsis\.
 param([string]$Version = "", [string]$Brand = "")
 $ErrorActionPreference = "Stop"
+# Windows PowerShell's progress bars make downloads and Expand-Archive crawl,
+# and in a hidden window can stall them outright.
+$ProgressPreference = "SilentlyContinue"
 $root = Split-Path -Parent $PSScriptRoot
 $triple = "x86_64-pc-windows-msvc"
 $bin = Join-Path $root "app\src-tauri\binaries"
@@ -65,7 +68,9 @@ if (-not ((Test-Path $tmuxExe) -and (Test-Path $tmuxStamp) -and ((Get-Content $t
   if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne $psmuxSha256) { throw "psmux $psmuxTag's source archive is not the one that was reviewed" }
   $src = Join-Path $work "src"
   Remove-Item $src -Recurse -Force -ErrorAction SilentlyContinue
-  Expand-Archive $zip $src
+  New-Item -ItemType Directory -Force -Path $src | Out-Null
+  tar.exe -xf $zip -C $src
+  if ($LASTEXITCODE) { throw "unpacking psmux $psmuxTag failed" }
   $dir = (Get-ChildItem $src -Directory | Select-Object -First 1).FullName
   Push-Location $dir
   try {
