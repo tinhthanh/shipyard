@@ -131,24 +131,6 @@ jobs:
             gh release create "$TAG" dist/*.tar.gz dist/checksums.txt --verify-tag --draft --title "Shipyard $TAG" --generate-notes
           fi
 
-  # Which app builds this repository can sign. A fork has none of upstream's
-  # secrets; without them the macos and linux jobs are skipped rather than
-  # failed, and publish-cli publishes the release with the CLI and daemons
-  # alone. Jobs cannot read secrets in `if:`, so this job says what is there.
-  signing:
-    runs-on: ubuntu-latest
-    outputs:
-      apple: ${{ steps.check.outputs.apple }}
-      tauri: ${{ steps.check.outputs.tauri }}
-    steps:
-      - id: check
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          echo "apple=$([ -n "$APPLE_CERTIFICATE" ] && echo true || echo false)" >>"$GITHUB_OUTPUT"
-          echo "tauri=$([ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && echo true || echo false)" >>"$GITHUB_OUTPUT"
-
   macos:
     # After the release job, which has made the release by then; it takes
     # Shipyard's tmux from the tmux job, since a Mac runner has no Docker. Safe to
@@ -156,8 +138,7 @@ jobs:
     # version (scripts/publish.sh uploaded it, or an earlier run did), and
     # otherwise replaces only its own four assets, the feed last, so the feed
     # never points at an archive that is not there yet.
-    needs: [tmux, release, signing]
-    if: needs.signing.outputs.apple == 'true'
+    needs: [tmux, release]
     runs-on: macos-latest
     timeout-minutes: 90
     permissions:
@@ -323,8 +304,7 @@ jobs:
     # AppImage runs on distributions with an older glibc too. Safe to re-run:
     # it replaces only its own assets, which no feed points at until the
     # feed job has checked they are there.
-    needs: [tmux, release, signing]
-    if: needs.signing.outputs.tauri == 'true'
+    needs: [tmux, release]
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     permissions:
@@ -435,25 +415,6 @@ jobs:
         run: echo "::warning::The Linux app was not built; latest.json stays the Mac's alone"
       - name: Publish the release
         # Last: the feed and the apps are up, so it can become "latest".
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release edit "$TAG" --draft=false --latest
-
-  publish-cli:
-    # Without a Mac app there is no feed job to publish the release, so the
-    # release job's draft becomes "latest" here, with the CLI and daemons
-    # site/install.sh downloads. Installed apps see no update: there is no
-    # latest.json without a signed Mac app.
-    needs: [release, signing]
-    if: needs.signing.outputs.apple != 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      TAG: ${{ github.ref_name }}
-      GH_REPO: ${{ github.repository }}
-    steps:
-      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release edit "$TAG" --draft=false --latest

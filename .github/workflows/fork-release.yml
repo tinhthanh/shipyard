@@ -1,0 +1,104 @@
+name: fork-release
+
+# The fork's releases, in place of release.yml (upstream's, kept as upstream
+# has it and turned off in this repository: its tags would start both). A
+# vX.Y.Z-fork.N tag builds berthd and berth for every platform install.sh and
+# the CLI support, as release.yml's release job does, and attaches the
+# archives, checksums.txt and install.sh, with this repository in place of
+# upstream's, so `curl -fsSL …/releases/latest/download/install.sh | sh`
+# installs this fork's berthd. There is no app: apps are built from source
+# (scripts/windows-app-build.ps1, make app-build), so no latest.json either.
+# The release stays a draft until all of CI (ci.yml) passes on the tag.
+on:
+  push:
+    tags: ["v*-fork.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  # Shipyard's static tmux for Linux boxes, as in release.yml.
+  tmux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: |
+            bin/tmux-linux-amd64
+            bin/tmux-linux-arm64
+          key: tmux-${{ hashFiles('scripts/build-tmux.sh') }}
+      - run: scripts/build-tmux.sh bin amd64 arm64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tmux
+          path: |
+            bin/tmux-linux-amd64
+            bin/tmux-linux-arm64
+          if-no-files-found: error
+
+  release:
+    needs: [tmux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: tmux
+          path: bin
+      - run: chmod +x bin/tmux-linux-amd64 bin/tmux-linux-arm64
+      - name: Build archives
+        run: make release VERSION="$GITHUB_REF_NAME"
+      - name: Check the stamped version
+        run: |
+          tar -xzf dist/berthd-linux-amd64.tar.gz -C "$RUNNER_TEMP" berthd
+          "$RUNNER_TEMP/berthd" version | tee /dev/stderr | grep -q "^berthd $GITHUB_REF_NAME "
+      - name: install.sh for this repository
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          sed -e "s#^repo=\"cosscom/shipyard\"#repo=\"$REPO\"#" -e "s#github.com/cosscom/shipyard/#github.com/$REPO/#" site/install.sh >dist/install.sh
+          grep -q "^repo=\"$REPO\"$" dist/install.sh
+          sh -n dist/install.sh
+      - name: Attach to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.tar.gz dist/checksums.txt dist/install.sh --clobber
+          else
+            gh release create "$TAG" dist/*.tar.gz dist/checksums.txt dist/install.sh --verify-tag --draft --title "Shipyard $TAG" --generate-notes
+          fi
+
+  publish:
+    # Only once CI passed on the tag: until then the release is a draft,
+    # which releases/latest/download/ never serves.
+    needs: [checks, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --draft=false --latest

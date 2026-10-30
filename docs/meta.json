@@ -8,10 +8,13 @@
     "...concepts",
     "---Guides---",
     "...guides",
+    "---Windows---",
+    "...windows",
     "---Reference---",
     "...reference",
     "---Project---",
     "changelog",
+    "changelog-fork",
     "...contributing"
   ]
 }

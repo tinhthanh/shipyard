@@ -139,6 +139,7 @@ BRAND ?=
 app-build: app-binaries
 	$(if $(BRAND),node scripts/brand.mjs $(BRAND) >/dev/null)
 	cd app && $(if $(BRAND),VITE_BRAND_NAME="$$(sed -n 's/^VITE_BRAND_NAME=//p' src-tauri/target/brand/$(BRAND)/env)") pnpm tauri build --config src-tauri/tauri.bundle.conf.json \
+		--config src-tauri/tauri.fork.conf.json \
 		$(if $(BRAND),--config src-tauri/target/brand/$(BRAND)/brand.conf.json) \
 		$(if $(findstring apple-darwin,$(APP_TARGET)),--config src-tauri/tauri.bar.conf.json) \
 		$(if $(APP_VERSION),--config '{"version":"$(APP_VERSION)"}') \

@@ -4,11 +4,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toastManager } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { INSTALL_COMMAND as FORK_INSTALL_COMMAND } from "@/platform/brand";
 
 // The one line that installs berthd on a box (site/install.sh, served at
-// the fork's raw GitHub URL): it installs for the user who runs it, starts the
+// berthd.app/install): it installs for the user who runs it, starts the
 // service, and prints a pairing link.
-export const INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/tinhthanh/shipyard/main/site/install.sh | sh";
+export const INSTALL_COMMAND = FORK_INSTALL_COMMAND;
 
 // InstallCommand shows the line to run on the box, with a copy button.
 export function InstallCommand({ className }: { className?: string }) {

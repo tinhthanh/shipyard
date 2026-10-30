@@ -11,6 +11,7 @@ import { openDocs, openUrl } from "@/lib/open-url";
 import { useOutdatedBoxes } from "@/lib/outdated";
 import { APP_NAME, LINUX_ALPHA, LINUX_BUGS } from "@/lib/platform";
 import { NONE, useStore } from "@/lib/store";
+import { RELEASES } from "@/platform/brand";
 import { NO_APP_RELEASE_LINE, noAppRelease } from "@/lib/fork-updates";
 import { checkForUpdate, restartToUpdate, updatesSupported, useUpdater } from "@/lib/updater";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,6 @@ import { hasWhatsNew, openWhatsNew } from "@/lib/whats-new";
 import { useAppVersion } from "@/views/settings/app-version";
 import { SettingsGroup, SettingsPage, SettingsRow } from "@/views/settings/rows";
 
-const RELEASES = "https://github.com/tinhthanh/shipyard/releases";
 
 export function AboutSection() {
   const version = useAppVersion();
