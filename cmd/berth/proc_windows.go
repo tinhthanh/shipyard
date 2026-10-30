@@ -9,6 +9,20 @@ import (
 	"github.com/cosscom/shipyard/internal/winsys"
 )
 
+// Windows runs the agent's service, a Run value (service, runkey.go), at
+// sign-in only: no supervisor restarts it, or is there to ask to start it.
+const (
+	serviceSupervises  = false
+	agentInstalledNote = "The agent now starts when you sign in to Windows; berth stop still stops it."
+)
+
+// serviceProgram is what the Run value runs: `agent start`, which starts the
+// agent, detached, with its log, and does nothing while one runs, from
+// berth-agent.exe, the build without a console, so none opens at sign-in.
+func serviceProgram(exe string) (string, []string) {
+	return winsys.WindowlessTwin(exe), []string{"agent", "start"}
+}
+
 // detached starts the agent in a process group of its own, with a console
 // that is never shown (winsys.Detached).
 func detached() *syscall.SysProcAttr { return winsys.Detached() }

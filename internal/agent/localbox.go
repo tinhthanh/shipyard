@@ -23,7 +23,6 @@ import (
 	"github.com/cosscom/shipyard/internal/statefile"
 	"github.com/cosscom/shipyard/internal/trust"
 	"github.com/cosscom/shipyard/internal/version"
-	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 // Use this Mac: the laptop as a box of its own, set up from the app with no
@@ -77,12 +76,7 @@ type localBoxRecord struct {
 	// Owned is whether Shipyard put Program there (BERTH_HOME/bin/berthd), as
 	// opposed to reusing a berthd the install script installed.
 	Owned bool `json:"owned"`
-	// WSL is the distribution the box runs in, on Windows (wslbox.go), and
-	// Listen where it listens; Program is then its path in there.
-	WSL    string `json:"wsl,omitempty"`
-	Listen string `json:"listen,omitempty"`
-	// Native: on Windows, berthd runs on Windows itself (nativebox.go).
-	Native bool `json:"native,omitempty"`
+	platformRecord
 }
 
 type localBox struct {
@@ -96,11 +90,7 @@ type localBox struct {
 	// size and modification time, so the periodic check reads and hashes it
 	// only after the app was updated.
 	seen string
-	// keepWSL stops what keeps the WSL box's distribution running, which
-	// lasts as long as runCtx, the agent's.
-	keepMu  sync.Mutex
-	keepWSL context.CancelFunc
-	runCtx  context.Context
+	platformLocal
 }
 
 // LocalBoxStatus answers GET /v1/boxes/local: whether this computer can be
@@ -122,16 +112,7 @@ type LocalBoxStatus struct {
 	Box string `json:"box,omitempty"`
 	// Name is what setting up will call it: this computer's hostname.
 	Name string `json:"name"`
-	// NeedsWSL: on Windows the box runs in WSL, which isn't installed yet
-	// (POST /v1/boxes/local/wsl installs it, as an administrator).
-	NeedsWSL bool `json:"needs_wsl,omitempty"`
-	// WSL is the distribution the box runs in, on Windows.
-	WSL string `json:"wsl,omitempty"`
-	// On Windows, the box can instead run berthd on Windows itself (Labs):
-	// NativeAvailable says the app carries what that needs, and Native that
-	// this computer's box is one.
-	NativeAvailable bool `json:"native_available,omitempty"`
-	Native          bool `json:"native,omitempty"`
+	platformStatus
 }
 
 type sayFunc func(format string, args ...any)
@@ -211,11 +192,7 @@ func (a *Agent) bundledBerthd() (string, error) {
 		exe = resolved
 	}
 	dir := filepath.Dir(exe)
-	p := filepath.Join(dir, "berthd")
-	// The Windows app carries the Linux berthd its WSL box runs.
-	if localGOOS == "windows" {
-		p = filepath.Join(dir, wslBerthdName)
-	}
+	p := filepath.Join(dir, bundledBerthdName())
 	if strings.HasSuffix(dir, ".app/Contents/MacOS") {
 		p = filepath.Join(dir, "..", "Resources", "berthd")
 	}
@@ -305,8 +282,8 @@ func (a *Agent) installedUnit() (unit service.Unit, have bool, home string, err 
 }
 
 func (a *Agent) localBoxStatus() LocalBoxStatus {
-	if localGOOS == "windows" {
-		return a.wslBoxStatus(context.Background())
+	if p := a.platformBox(); p != nil {
+		return p.status(context.Background())
 	}
 	st := LocalBoxStatus{Supported: localGOOS == "darwin" || localGOOS == "linux", Name: localName()}
 	if _, err := a.bundledBerthd(); err != nil {
@@ -342,19 +319,9 @@ func (a *Agent) setUpLocalBox(ctx context.Context, say sayFunc) (string, error) 
 	return a.setUpLocalBoxAs(ctx, false, say)
 }
 
-// setUpLocalBoxAs is setUpLocalBox; on Windows, native asks for berthd on
-// Windows itself rather than in WSL. A box set up already stays the kind it
-// is: switching means removing it first.
-func (a *Agent) setUpLocalBoxAs(ctx context.Context, native bool, say sayFunc) (string, error) {
-	if localGOOS == "windows" {
-		if rec := a.localRecord(); rec != nil {
-			native = rec.Native
-		}
-		if native {
-			return a.setUpNativeBox(ctx, say)
-		}
-		return a.setUpWSLBox(ctx, say)
-	}
+// setUpLocalBoxSystem is setUpLocalBox for a berthd service on this
+// computer itself, as on macOS and Linux (localbox_platform.go chooses).
+func (a *Agent) setUpLocalBoxSystem(ctx context.Context, say sayFunc) (string, error) {
 	if localGOOS != "darwin" && localGOOS != "linux" {
 		return "", fmt.Errorf("berthd runs as a service on macOS and Linux, not %s", localGOOS)
 	}
@@ -721,8 +688,8 @@ func (a *Agent) pairWith(ctx context.Context, run func(ctx context.Context, args
 // Repositories are never touched, and nor is a berthd the install script
 // put on this computer: only Shipyard's own copy is deleted.
 func (a *Agent) removeLocalBox(ctx context.Context, removeData bool, say sayFunc) error {
-	if localGOOS == "windows" {
-		return a.removeWSLBox(ctx, removeData, say)
+	if p := a.platformBox(); p != nil {
+		return p.remove(ctx, removeData, say)
 	}
 	rec := a.localRecord()
 	unit, have, home, err := a.installedUnit()
@@ -805,12 +772,7 @@ func (a *Agent) refreshLocalBox(ctx context.Context) {
 	if rec == nil {
 		return
 	}
-	if rec.WSL != "" {
-		a.refreshWSLBox(ctx, rec)
-		return
-	}
-	if rec.Native {
-		a.refreshNativeBox(ctx, rec)
+	if p := a.platformBox(); p != nil && p.refresh(ctx, rec) {
 		return
 	}
 	src, err := a.bundledBerthd()
@@ -994,21 +956,7 @@ func (a *Agent) localBoxRoutes(mux *http.ServeMux) {
 		name, err := a.setUpLocalBoxAs(ctx, req.Native, say)
 		finish(name, err)
 	})
-	// On Windows the box runs in WSL: this asks Windows to install it, which
-	// shows its administrator prompt. It answers once the prompt was
-	// accepted; the install goes on in a window of its own.
-	mux.HandleFunc("POST /v1/boxes/local/wsl", func(w http.ResponseWriter, r *http.Request) {
-		if localGOOS != "windows" {
-			writeError(w, http.StatusBadRequest, "WSL is for this computer's box on Windows")
-			return
-		}
-		if err := winsys.Elevate("wsl.exe", "--install --no-distribution"); err != nil {
-			writeError(w, http.StatusConflict, "Windows did not start the WSL install: "+err.Error())
-			return
-		}
-		forgetWSLPresent()
-		writeJSON(w, http.StatusAccepted, map[string]bool{"started": true})
-	})
+	a.platformBoxRoutes(mux)
 	mux.HandleFunc("POST /v1/boxes/local/uninstall", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			RemoveData bool `json:"remove_data"`

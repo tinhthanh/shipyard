@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 	"github.com/cosscom/shipyard/internal/sshsetup"
 	"github.com/cosscom/shipyard/internal/statefile"
 	"github.com/cosscom/shipyard/internal/trust"
+	"github.com/cosscom/shipyard/internal/winsys"
 	"github.com/cosscom/shipyard/internal/wire"
 )
 
@@ -241,10 +241,10 @@ func (a *Agent) routesFor(p trust.Peer, settings []RouteSetting) (routes []wire.
 }
 
 // sshControlDir holds the SSH routes' shared connections. Under a state
-// directory too long for a socket path, each connection logs in itself, as
-// on Windows, whose ssh can't share one (no ControlMaster).
+// directory too long for a socket path, or where ssh can't share one
+// (winsys.SharedSSH), each connection logs in itself.
 func (a *Agent) sshControlDir() string {
-	if runtime.GOOS == "windows" {
+	if !winsys.SharedSSH {
 		return ""
 	}
 	return filepath.Join(a.cfg.Dir, "ssh")

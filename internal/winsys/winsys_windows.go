@@ -10,6 +10,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// SharedSSH is whether ssh can share one connection between commands
+// (ControlMaster): Windows' OpenSSH can't, so each logs in itself.
+const SharedSSH = false
+
 // Detached starts a program in a process group of its own, so it outlives
 // the console that started it, with a console that is never shown: the
 // programs it starts share that one rather than each opening a window.

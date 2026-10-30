@@ -79,7 +79,7 @@ func withPATH(shell, dirs, then string) string {
 		return then
 	}
 	if isPowerShell(shell) {
-		return "$env:Path = " + psQuote(dirs+string(filepath.ListSeparator)) + " + $env:Path; " + then
+		return psPATH(dirs, then)
 	}
 	if filepath.Base(shell) == "fish" {
 		args := ""

@@ -19,7 +19,6 @@ import (
 	"github.com/cosscom/shipyard/internal/integrations"
 	"github.com/cosscom/shipyard/internal/service"
 	"github.com/cosscom/shipyard/internal/version"
-	"github.com/cosscom/shipyard/internal/winsys"
 )
 
 func daemonService(b boxHome, listen string) service.Spec {
@@ -31,21 +30,14 @@ func daemonService(b boxHome, listen string) service.Spec {
 	if listen != "" {
 		args = append(args, "--listen", listen)
 	}
-	logPath := filepath.Join(b.dir, "berthd.log")
-	if runtime.GOOS == "windows" {
-		// Windows starts it at sign-in from the Run key, with no console
-		// and nowhere for its output: berthd-bg.exe, the same program built
-		// without a console, when it is beside this one, and its own log.
-		exe = winsys.WindowlessTwin(exe)
-		args = append(append([]string{"--home", filepath.Dir(b.dir)}, args...), "--log", logPath)
-	}
+	exe, args = daemonProgram(b, exe, args)
 	return service.Spec{
 		Name:         service.BerthdName(),
 		Description:  "berth box daemon",
 		Program:      exe,
 		Args:         args,
 		Env:          map[string]string{"BERTH_HOME": filepath.Dir(b.dir)},
-		LogPath:      logPath,
+		LogPath:      filepath.Join(b.dir, "berthd.log"),
 		KeepChildren: true,
 	}
 }
@@ -103,9 +95,6 @@ func install(b boxHome, args []string) error {
 	// Shipyard's tmux and the agent CLIs: the unit carries the user's own PATH,
 	// as their login shell sets it now, with those folders.
 	spec.Env["PATH"] = service.ServicePATH()
-	// Windows has no service manager to restart it: the berthd serving now
-	// stops first, or the new one could not listen, nor its program be
-	// replaced while it runs.
 	stopServing(b, spec.Program)
 	started := time.Now()
 	path, err := service.Install(spec)

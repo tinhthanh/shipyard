@@ -68,11 +68,7 @@ func (s *Sessions) removeCommand(name string) {
 // sourceCommand is what the login shell runs to run the command in file.
 func sourceCommand(shell, file string) string {
 	if isPowerShell(shell) {
-		// Read and run, rather than dot-source: the file is no .ps1, and
-		// this way the execution policy doesn't refuse it. A command that
-		// starts with a quoted program ('C:\…\berthd.exe' agent-host) is an
-		// expression to PowerShell unless called with &.
-		return "$c = [IO.File]::ReadAllText(" + psQuote(file) + `); if ($c -match '^\s*[''\x22]') { $c = '& ' + $c }; Invoke-Expression $c`
+		return psSource(file)
 	}
 	if filepath.Base(shell) == "fish" {
 		return "source " + shellQuote(file)
@@ -166,38 +162,4 @@ func (s *Sessions) sweepCommands(ctx context.Context, minAge time.Duration) {
 		os.Remove(path)
 		commandCache.Delete(path)
 	}
-}
-
-// isPowerShell is whether a session's shell is PowerShell, as on a Windows
-// box (sessionShell), where commands and PATH are written its way.
-func isPowerShell(shell string) bool {
-	name := shell[strings.LastIndexAny(shell, `\/`)+1:]
-	switch strings.ToLower(strings.TrimSuffix(name, ".exe")) {
-	case "pwsh", "powershell":
-		return true
-	}
-	return false
-}
-
-// psQuote is s as a PowerShell literal string.
-func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
-
-// shellRun is the argv that runs script in shell: a login shell's -lc, or
-// PowerShell's -Command. PowerShell's own default refuses every script,
-// npm's claude.ps1 included: a session's PowerShell runs local scripts
-// (RemoteSigned, for that process only), as a developer's usually does.
-func shellRun(shell, script string) []string {
-	if isPowerShell(shell) {
-		return []string{shell, "-NoLogo", "-ExecutionPolicy", "RemoteSigned", "-Command", script}
-	}
-	return []string{shell, "-lc", script}
-}
-
-// shellLogin is the argv of the shell on its own, for a session with no
-// command.
-func shellLogin(shell string) []string {
-	if isPowerShell(shell) {
-		return []string{shell, "-NoLogo", "-ExecutionPolicy", "RemoteSigned"}
-	}
-	return []string{shell, "-l"}
 }

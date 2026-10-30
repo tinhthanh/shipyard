@@ -8,6 +8,9 @@ import (
 	"syscall"
 )
 
+// SharedSSH: ssh shares one connection between commands (ControlMaster).
+const SharedSSH = true
+
 // Detached is Windows'; elsewhere a caller sets its own (Setsid).
 func Detached() *syscall.SysProcAttr { return nil }
 
