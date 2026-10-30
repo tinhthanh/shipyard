@@ -34,16 +34,7 @@ func agentService(l laptop) (service.Spec, error) {
 	if runtime.GOOS == "darwin" {
 		name = "dev.berth.agent"
 	}
-	args := []string{"agent"}
-	if runtime.GOOS == "windows" {
-		// Windows runs the service at logon only (service, runkey.go):
-		// `agent start` starts the agent, detached, with its log, and does
-		// nothing while one runs. berth-agent.exe, beside this one in the
-		// app, is the same program built without a console, so no console
-		// window opens at logon.
-		args = []string{"agent", "start"}
-		exe = winsys.WindowlessTwin(exe)
-	}
+	exe, args := serviceProgram(exe)
 	return service.Spec{
 		Name:        name,
 		Description: "berth agent",
@@ -65,9 +56,7 @@ func ensureAgent(l laptop) (*agent.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Windows has no supervisor to ask: its service only runs `agent start`
-	// at logon, which is this.
-	if service.Installed(spec) && runtime.GOOS != "windows" {
+	if service.Installed(spec) && serviceSupervises {
 		if err := service.Start(spec); err != nil {
 			return nil, err
 		}
@@ -161,12 +150,7 @@ func agentCommand(l laptop, args []string) error {
 		if err != nil {
 			return err
 		}
-		if runtime.GOOS == "windows" {
-			// A Run value starts it at sign-in only: nothing restarts it.
-			fmt.Printf("Installed %s\nThe agent now starts when you sign in to Windows; berth stop still stops it.\n", path)
-			return nil
-		}
-		fmt.Printf("Installed %s\nThe agent now starts at login and restarts after a crash; berth stop still stops it.\n", path)
+		fmt.Printf("Installed %s\n%s\n", path, agentInstalledNote)
 		return nil
 	case "restart":
 		// What the app runs as it starts (--if-stale): an agent older than

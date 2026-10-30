@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -222,11 +221,7 @@ set -s extended-keys on
 func NewSessions(dir string) (*Sessions, error) {
 	path := filepath.Join(dir, "tmux.conf")
 	s := &Sessions{Config: path, Commands: filepath.Join(dir, "commands")}
-	config := tmuxConfig
-	if runtime.GOOS == "windows" {
-		// Programs for Windows (Git's less, say) know no tmux-256color.
-		config = strings.Replace(config, `"tmux-256color"`, `"xterm-256color"`, 1)
-	}
+	config := tmuxConfigFor(tmuxConfig)
 	if b, err := os.ReadFile(path); err != nil || string(b) != config {
 		if err := statefile.Write(path, []byte(config)); err != nil {
 			return nil, err
@@ -474,14 +469,10 @@ func (s *Sessions) create(ctx context.Context, name, location, dir, command, age
 	return sess, nil
 }
 
-// sessionShell is the shell a session runs in: on Windows, PowerShell
-// (pwsh, else Windows PowerShell), which has no SHELL to name it.
+// sessionShell is the shell a session runs in.
 func sessionShell() string {
-	if runtime.GOOS == "windows" {
-		if p, err := exec.LookPath("pwsh.exe"); err == nil {
-			return p
-		}
-		return "powershell.exe"
+	if s := platformShell(); s != "" {
+		return s
 	}
 	if s := os.Getenv("SHELL"); s != "" {
 		return s

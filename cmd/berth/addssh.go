@@ -23,6 +23,7 @@ import (
 	"github.com/cosscom/shipyard/internal/pairing"
 	"github.com/cosscom/shipyard/internal/sshsetup"
 	"github.com/cosscom/shipyard/internal/trust"
+	"github.com/cosscom/shipyard/internal/winsys"
 	"github.com/cosscom/shipyard/internal/wire"
 )
 
@@ -182,7 +183,7 @@ func addSSHSteps(l laptop, args []string) error {
 	// Windows' ssh can't share one (no ControlMaster): there each step logs
 	// in itself, which a key or an SSH agent answers without asking.
 	tmp := "/tmp"
-	if !sharedSSH {
+	if !winsys.SharedSSH {
 		tmp = os.TempDir()
 	}
 	control, err := os.MkdirTemp(tmp, "cpssh")
@@ -190,7 +191,7 @@ func addSSHSteps(l laptop, args []string) error {
 		return err
 	}
 	defer os.RemoveAll(control)
-	if sharedSSH {
+	if winsys.SharedSSH {
 		sshArgs = append([]string{"-o", "ControlPath=" + filepath.Join(control, "%C")}, sshArgs...)
 	}
 	fail := func(stderr string, agent *sshsetup.Agent) *sshsetup.Failure {
@@ -235,7 +236,7 @@ func addSSHSteps(l laptop, args []string) error {
 			return connectFailed(sshsetup.AuthFailure(host, cfg.Port, offered, first.Detail))
 		}
 	}
-	if sharedSSH {
+	if winsys.SharedSSH {
 		defer exec.Command("ssh", append(append([]string{}, sshArgs...), "-O", "exit", target)...).Run()
 	}
 	ssh := func(stdin []byte, remote string) ([]byte, error) {
@@ -599,10 +600,6 @@ func proxyCommand(exe, network string) string {
 	return fmt.Sprintf("ProxyCommand=%s network proxy %s %%h %%p", shellQuote(exe), shellQuote(network))
 }
 
-// sharedSSH says whether ssh here can share one connection between the
-// steps (ControlMaster). Windows' ssh can't.
-const sharedSSH = runtime.GOOS != "windows"
-
 // openMaster authenticates once and leaves a shared connection in the
 // background, returning ssh's stderr when it fails. That goes to a file, not
 // a pipe: the backgrounded ssh keeps it open, and waiting on a pipe would
@@ -616,7 +613,7 @@ func openMaster(sshArgs []string, target string, env []string, dir string, appro
 	}
 	defer errFile.Close()
 	args := append(append([]string{"-v", "-o", "ControlMaster=yes", "-o", "ControlPersist=120", "-f", "-N"}, sshArgs...), target)
-	if !sharedSSH {
+	if !winsys.SharedSSH {
 		args = append(append([]string{"-v"}, sshArgs...), target, "exit")
 	}
 	cmd := exec.Command("ssh", args...)

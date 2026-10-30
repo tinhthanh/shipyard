@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -180,14 +179,8 @@ func newConvID() string {
 // is limited to about 100 bytes and a state folder's can be longer. The
 // folder is the box user's alone.
 func hostSocket(id string) (string, error) {
-	if runtime.GOOS == "windows" {
-		// The user's own temporary folder, which only they can open; a
-		// Windows file has no Unix owner or mode to check.
-		dir := filepath.Join(os.TempDir(), "berth")
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return "", err
-		}
-		return filepath.Join(dir, id+".sock"), nil
+	if p, ok, err := platformHostSocket(id); ok {
+		return p, err
 	}
 	dir := filepath.Join("/tmp", "berth-"+strconv.Itoa(os.Getuid()))
 	if err := os.MkdirAll(dir, 0o700); err != nil {
