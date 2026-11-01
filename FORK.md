@@ -23,7 +23,9 @@ the fork adds files of its own, and upstream's files only call into them.
   pull request to winget's community repository for `tinhthanh.Vetgo`
   (secret `WINGET_TOKEN`), and the Homebrew formulas `vetgo` and `berthd` in
   github.com/tinhthanh/homebrew-tap (scripts/homebrew-formulas.py; secret
-  `HOMEBREW_TAP_TOKEN`, or `WINGET_TOKEN`). Upstream's `release.yml` stays as upstream has it
+  `HOMEBREW_TAP_TOKEN`, or `WINGET_TOKEN`), and the npm package `vetgo`
+  with its `@vetgo/cli-*` builds (scripts/npm-packages.py; npm's trusted
+  publishing, no token). Upstream's `release.yml` stays as upstream has it
   and is turned off in this repository (`gh workflow disable release.yml`).
 - **Docs:** `docs/windows/`, and `docs/changelog-fork.mdx`.
 
