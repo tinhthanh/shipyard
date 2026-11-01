@@ -21,7 +21,9 @@ the fork adds files of its own, and upstream's files only call into them.
 - **Releases:** `.github/workflows/fork-release.yml`, on `vX.Y.Z-fork.N`
   tags: the CLI and daemons, the Windows app and its update feed, then a
   pull request to winget's community repository for `tinhthanh.Vetgo`
-  (secret `WINGET_TOKEN`). Upstream's `release.yml` stays as upstream has it
+  (secret `WINGET_TOKEN`), and the Homebrew formulas `vetgo` and `berthd` in
+  github.com/tinhthanh/homebrew-tap (scripts/homebrew-formulas.py; secret
+  `HOMEBREW_TAP_TOKEN`, or `WINGET_TOKEN`). Upstream's `release.yml` stays as upstream has it
   and is turned off in this repository (`gh workflow disable release.yml`).
 - **Docs:** `docs/windows/`, and `docs/changelog-fork.mdx`.
 
