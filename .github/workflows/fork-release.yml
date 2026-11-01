@@ -21,7 +21,7 @@ name: fork-release
 # writes the formulas for this release (scripts/homebrew-formulas.py) to the
 # tap at github.com/tinhthanh/homebrew-tap, with HOMEBREW_TAP_TOKEN (or
 # WINGET_TOKEN): a token of that account that can push to the tap. The npm
-# job publishes vetgo and its @vetgo/cli-* packages (scripts/npm-packages.py)
+# job publishes vetgo-cli and its vetgo-cli-* packages (scripts/npm-packages.py)
 # through npm's trusted publishing: npm trusts this workflow, set up on each
 # package's page on npmjs.com, and no token is kept here.
 on:
@@ -262,7 +262,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - name: Publish vetgo and its platform packages
+      - name: Publish vetgo-cli and its platform packages
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -277,7 +277,7 @@ jobs:
           # The platform packages first, so vetgo's optional dependencies are
           # there when it is. One already out at this version (a re-run) is
           # left as it is.
-          for d in "$RUNNER_TEMP"/npm/cli-* "$RUNNER_TEMP/npm/vetgo"; do
+          for d in "$RUNNER_TEMP"/npm/cli-* "$RUNNER_TEMP/npm/vetgo-cli"; do
             name=$(node -p "require('$d/package.json').name")
             if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is out already"; continue; fi
             (cd "$d" && npm publish --access public --tag latest)
