@@ -9,6 +9,18 @@ menu bar, and the app says "this computer" where the Mac app says "this Mac".
 
 ## Install
 
+In PowerShell:
+
+```powershell
+irm https://tinhthanh.github.io/shipyard/install.ps1 | iex
+```
+
+It downloads the latest release's installer, checks it against the sha256
+GitHub records for it, installs it for your user (no administrator) and
+opens the app. A file PowerShell downloads isn't marked as from the
+internet, so SmartScreen doesn't stop it to ask. For another release, set
+`$env:VETGO_VERSION = "v0.3.31-fork.3"` first.
+
 With winget, once its community repository lists it:
 
 ```powershell

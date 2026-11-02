@@ -27,6 +27,10 @@ the fork adds files of its own, and upstream's files only call into them.
   with its `vetgo-cli-*` builds (scripts/npm-packages.py; npm's trusted
   publishing, no token). Upstream's `release.yml` stays as upstream has it
   and is turned off in this repository (`gh workflow disable release.yml`).
+- **One-line installers:** `scripts/install.ps1` (the Windows app) and
+  `scripts/install-cli.sh` (berth on macOS and Linux), with `site/install.sh`
+  rewritten for this repository, served at https://tinhthanh.github.io/shipyard/ by
+  `.github/workflows/pages.yml` (GitHub Pages).
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).
