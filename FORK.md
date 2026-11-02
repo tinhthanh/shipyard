@@ -27,7 +27,9 @@ the fork adds files of its own, and upstream's files only call into them.
   with its `vetgo-cli-*` builds (scripts/npm-packages.py; npm's trusted
   publishing, no token). Upstream's `release.yml` stays as upstream has it
   and is turned off in this repository (`gh workflow disable release.yml`).
-- **Docs:** `docs/windows/`, and `docs/changelog-fork.mdx`.
+- **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
+  (the fork's front page on GitHub, with how to install; `README.md` stays
+  upstream's).
 
 ## Rules
 
