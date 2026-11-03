@@ -228,18 +228,30 @@ jobs:
           persist-credentials: false
       - name: Write the tap's formulas
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN || secrets.WINGET_TOKEN }}
+          # A deploy key with write access to the tap (secret HOMEBREW_TAP_KEY),
+          # or a token that can push there (HOMEBREW_TAP_TOKEN).
+          TAP_KEY: ${{ secrets.HOMEBREW_TAP_KEY }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          if [ -z "$TAP_TOKEN" ]; then echo "::notice::no HOMEBREW_TAP_TOKEN: the tap is left as it is"; exit 0; fi
           gh release download "$TAG" --pattern checksums.txt --dir "$RUNNER_TEMP"
           tap="$RUNNER_TEMP/tap"
-          # The token goes in an askpass helper, never the URL or the log.
-          printf '#!/bin/sh\necho "$TAP_TOKEN"\n' > "$RUNNER_TEMP/askpass" && chmod 700 "$RUNNER_TEMP/askpass"
-          export GIT_ASKPASS="$RUNNER_TEMP/askpass" GIT_TERMINAL_PROMPT=0
-          git -c credential.username=x-access-token clone -q https://x-access-token@github.com/tinhthanh/homebrew-tap.git "$tap"
+          if [ -n "$TAP_KEY" ]; then
+            # GitHub's host keys from its API (over HTTPS), not trusted on first use.
+            curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' >"$RUNNER_TEMP/known_hosts"
+            (umask 077 && printf '%s\n' "$TAP_KEY" >"$RUNNER_TEMP/tap_key")
+            export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+            git clone -q git@github.com:tinhthanh/homebrew-tap.git "$tap"
+          elif [ -n "$TAP_TOKEN" ]; then
+            # The token goes in an askpass helper, never the URL or the log.
+            printf '#!/bin/sh\necho "$TAP_TOKEN"\n' > "$RUNNER_TEMP/askpass" && chmod 700 "$RUNNER_TEMP/askpass"
+            export GIT_ASKPASS="$RUNNER_TEMP/askpass" GIT_TERMINAL_PROMPT=0
+            git -c credential.username=x-access-token clone -q https://x-access-token@github.com/tinhthanh/homebrew-tap.git "$tap"
+          else
+            echo "::notice::no HOMEBREW_TAP_KEY or HOMEBREW_TAP_TOKEN: the tap is left as it is"; exit 0
+          fi
           python3 scripts/homebrew-formulas.py "$TAG" "$GH_REPO" "$RUNNER_TEMP/checksums.txt" "$tap"
           cd "$tap"
           git add -A
@@ -280,5 +292,10 @@ jobs:
           for d in "$RUNNER_TEMP"/npm/cli-* "$RUNNER_TEMP/npm/vetgo-cli"; do
             name=$(node -p "require('$d/package.json').name")
             if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version is out already"; continue; fi
-            (cd "$d" && npm publish --access public --tag latest)
+            # Sigstore can answer 409 to a publish npm retried itself, after
+            # the first attempt went out: what counts is whether it's there.
+            if ! (cd "$d" && npm publish --access public --tag latest); then
+              for _ in 1 2 3 4 5 6; do sleep 30; npm view "$name@$version" version >/dev/null 2>&1 && break; done
+              npm view "$name@$version" version >/dev/null 2>&1 || { echo "::error::$name@$version didn't publish"; exit 1; }
+            fi
           done
