@@ -14,6 +14,11 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **A resumed chat agent no longer looks busy forever.** An agent carried
+  on without a new prompt (after its box restarted, or its conversation was
+  opened again) showed as working, with a timer counting up, until someone
+  sent it something. It now shows as idle at its prompt. (Sent upstream as
+  cosscom/shipyard#217.)
 - **Install in one line.** On Windows, in PowerShell: `irm
   https://tinhthanh.github.io/shipyard/install.ps1 | iex` downloads the app's
   installer, checks it, installs it and opens the app; SmartScreen doesn't
