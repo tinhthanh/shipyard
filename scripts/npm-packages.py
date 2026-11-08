@@ -13,8 +13,9 @@ per package to OUTDIR:
   vetgo-cli-darwin-amd64    tmux builds it puts on boxes (as its archive
   vetgo-cli-linux-arm64     has them, and on a Mac the Mac berthd builds
   vetgo-cli-linux-amd64     too, for `berth upgrade` of Mac boxes)
-  vetgo-cli-win32-amd64     berth.exe and berthw.exe (scripts/windows-cli-archive.sh),
-  vetgo-cli-win32-arm64     with the Linux and Mac daemons
+  vetgo-cli-windows-amd64   berth.exe and berthw.exe (scripts/windows-cli-archive.sh),
+  vetgo-cli-windows-arm64   with the Linux and Mac daemons. Named "windows", not
+                            npm's "win32": npm's spam check refuses vetgo-cli-win32-*
 
 As esbuild does: vetgo-cli lists the platform packages as optional dependencies,
 npm installs only the one whose os and cpu match, and vetgo-cli's bin starts the
@@ -40,7 +41,8 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 
 const arch = { arm64: "arm64", x64: "amd64" }[process.arch];
-const pkg = `vetgo-cli-${process.platform}-${arch}`;
+const os = process.platform === "win32" ? "windows" : process.platform;
+const pkg = `vetgo-cli-${os}-${arch}`;
 const exe = process.platform === "win32" ? "berth.exe" : "berth";
 let bin;
 try {
@@ -111,7 +113,8 @@ def main(argv):
         shutil.rmtree(outdir)
     optional = {}
     for os_name, arch, npm_cpu in PLATFORMS:
-        name = f"vetgo-cli-{os_name}-{arch}"
+        # The package's name says windows; npm's os field is win32.
+        name = f"vetgo-cli-{'windows' if os_name == 'win32' else os_name}-{arch}"
         d = outdir / f"cli-{os_name}-{arch}"
         bin_dir = d / "bin"
         bin_dir.mkdir(parents=True)
@@ -124,10 +127,10 @@ def main(argv):
             for a in ("arm64", "amd64"):
                 extract(archives / f"berthd-darwin-{a}.tar.gz", bin_dir, {"berthd": f"berthd-darwin-{a}"})
         pkg = {"name": name, **common(repo, version),
-               "description": f"berth for {os_name} {arch}, installed by the vetgo-cli package",
+               "description": f"berth for {'windows' if os_name == 'win32' else os_name} {arch}, installed by the vetgo-cli package",
                "os": [os_name], "cpu": [npm_cpu], "files": ["bin"], "preferUnplugged": True}
         (d / "package.json").write_text(json.dumps(pkg, indent=2) + "\n")
-        (d / "README.md").write_text(f"# {name}\n\nThe `berth` build for {os_name} {arch}. Install [`vetgo-cli`](https://www.npmjs.com/package/vetgo-cli) rather than this.\n")
+        (d / "README.md").write_text(f"# {name}\n\nThe `berth` build for {'windows' if os_name == 'win32' else os_name} {arch}. Install [`vetgo-cli`](https://www.npmjs.com/package/vetgo-cli) rather than this.\n")
         optional[name] = version
     d = outdir / "vetgo-cli"
     (d / "bin").mkdir(parents=True)

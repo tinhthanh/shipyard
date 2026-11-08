@@ -31,7 +31,7 @@ the fork adds files of its own, and upstream's files only call into them.
   `berth-windows-{amd64,arm64}.zip` (berth.exe and berthw.exe, the build
   without a console the agent starts from at sign-in, paired in
   `internal/winsys`), which `scripts/install-cli.ps1`, the npm packages
-  `vetgo-cli-win32-*` and the Scoop bucket github.com/tinhthanh/scoop-bucket
+  `vetgo-cli-windows-*` and the Scoop bucket github.com/tinhthanh/scoop-bucket
   (`scripts/scoop-manifest.py`; secret `SCOOP_BUCKET_KEY`, a write deploy
   key) install.
 - **One-line installers:** `scripts/install.ps1` (the Windows app),
