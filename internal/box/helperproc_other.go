@@ -1,4 +1,4 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package box
 
@@ -7,7 +7,9 @@ import (
 	"time"
 )
 
-// Helpers run on Linux and macOS boxes.
+// Helpers run on Linux, macOS and Windows boxes.
+const helperExe = ""
+
 func helperPlatformOK() bool { return false }
 
 func helperSysProcAttr() *syscall.SysProcAttr { return nil }
