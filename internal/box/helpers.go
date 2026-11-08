@@ -428,6 +428,9 @@ func (h *Helpers) noteAttached(plugin string, svc HelperService, changed bool) {
 }
 
 func (h *Helpers) binPath(rec helperRecord) string {
+	if !helperBinPerVersion {
+		return filepath.Join(h.Dir, rec.Plugin, "bin", rec.Name+helperExe)
+	}
 	return filepath.Join(h.Dir, rec.Plugin, "bin", rec.Version, rec.Name+helperExe)
 }
 

@@ -10,6 +10,9 @@ import (
 // helperExe is the suffix a helper's program needs to be started (none here).
 const helperExe = ""
 
+// helperBinPerVersion: the program sits in bin/<version>/.
+const helperBinPerVersion = true
+
 // helperPlatformOK says this box can run helpers.
 func helperPlatformOK() bool { return true }
 

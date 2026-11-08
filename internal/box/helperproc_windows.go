@@ -17,6 +17,13 @@ import (
 // only runs a file by its extension.
 const helperExe = ".exe"
 
+// helperBinPerVersion: on Windows a helper's program keeps one path across
+// updates (bin\<name>.exe), since Windows Firewall remembers a program's
+// network permission by its path and would ask again after every update.
+// Only one version is ever kept and the old one is stopped first, so the
+// path is free when the new one moves in.
+const helperBinPerVersion = false
+
 // helperPlatformOK says this box can run helpers.
 func helperPlatformOK() bool { return true }
 
