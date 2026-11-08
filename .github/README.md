@@ -64,7 +64,7 @@ into `%LOCALAPPDATA%\vetgo-cli`, added to your PATH; in Git Bash the
 irm https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex
 ```
 
-with Scoop:
+with Scoop (which needs git to add a bucket: `scoop install git`, once):
 
 ```powershell
 scoop bucket add vetgo https://github.com/tinhthanh/scoop-bucket
