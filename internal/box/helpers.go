@@ -428,7 +428,10 @@ func (h *Helpers) noteAttached(plugin string, svc HelperService, changed bool) {
 }
 
 func (h *Helpers) binPath(rec helperRecord) string {
-	return filepath.Join(h.Dir, rec.Plugin, "bin", rec.Version, rec.Name)
+	if !helperBinPerVersion {
+		return filepath.Join(h.Dir, rec.Plugin, "bin", rec.Name+helperExe)
+	}
+	return filepath.Join(h.Dir, rec.Plugin, "bin", rec.Version, rec.Name+helperExe)
 }
 
 // readRecord reads what was installed for a plugin. The file is checked as
