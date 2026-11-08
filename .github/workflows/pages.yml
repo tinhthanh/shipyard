@@ -1,6 +1,7 @@
 # The fork's one-line installers, at https://tinhthanh.github.io/shipyard/:
 #   install.ps1      the Windows app        irm …/install.ps1 | iex
 #   install-cli.sh   berth on macOS, Linux  curl -fsSL …/install-cli.sh | sh
+#   install-cli.ps1  berth on Windows       irm …/install-cli.ps1 | iex
 #   install.sh       berthd on a box        curl -fsSL …/install.sh | sh
 # Each fetches the latest release when it runs, so a release needs no deploy;
 # this runs when the scripts change.
@@ -12,12 +13,14 @@ on:
     paths:
       - scripts/install.ps1
       - scripts/install-cli.sh
+      - scripts/install-cli.ps1
       - site/install.sh
       - .github/workflows/pages.yml
   pull_request:
     paths:
       - scripts/install.ps1
       - scripts/install-cli.sh
+      - scripts/install-cli.ps1
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -36,9 +39,11 @@ jobs:
       - name: Check the scripts
         shell: pwsh
         run: |
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/install.ps1", [ref]$null, [ref]$errors) | Out-Null
-          if ($errors) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }
+          foreach ($f in "install.ps1", "install-cli.ps1") {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile("$PWD/scripts/$f", [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) { $errors | ForEach-Object { Write-Error "${f}: $_" }; exit 1 }
+          }
       - run: shellcheck scripts/install-cli.sh && sh -n scripts/install-cli.sh && dash -n scripts/install-cli.sh
       - name: Build the site
         env:
@@ -46,7 +51,7 @@ jobs:
         run: |
           base="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO#*/}"
           mkdir _site
-          cp scripts/install.ps1 scripts/install-cli.sh _site/
+          cp scripts/install.ps1 scripts/install-cli.sh scripts/install-cli.ps1 _site/
           # install.sh as the release has it (fork-release.yml), with this
           # site's address in the commands it prints.
           sed -e "s#^repo=\"cosscom/shipyard\"#repo=\"$REPO\"#" -e "s#github.com/cosscom/shipyard/#github.com/$REPO/#" \
@@ -63,6 +68,7 @@ jobs:
           <body><h1>Install Vetgo</h1>
           <p>Windows app (PowerShell):</p><pre>irm $base/install.ps1 | iex</pre>
           <p>The berth command on macOS or Linux:</p><pre>curl -fsSL $base/install-cli.sh | sh</pre>
+          <p>The berth command on Windows (PowerShell):</p><pre>irm $base/install-cli.ps1 | iex</pre>
           <p>A box (berthd, on the server):</p><pre>curl -fsSL $base/install.sh | sh</pre>
           <p>Each installs the latest release, checked against its sha256. Source and other ways to install:
           <a href="https://github.com/$REPO">github.com/$REPO</a>.</p></body></html>

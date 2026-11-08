@@ -36,6 +36,24 @@ signed with a code-signing certificate yet: **More info → Run anyway**.
 Installed this way, the app updates itself from the fork's releases: it
 checks when it opens and every few hours, and offers **Restart to update**.
 
+### The CLI alone
+
+`berth`, the CLI and laptop agent, without the app (for a server, or if
+you'd rather not run the app), in PowerShell:
+
+```powershell
+irm https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex
+```
+
+It puts `berth.exe` and `berthw.exe` (the same build without a console,
+which the agent starts from when you sign in) in `%LOCALAPPDATA%\vetgo-cli`
+and adds that folder to your PATH, with no administrator. Or with Scoop
+(`scoop bucket add vetgo https://github.com/tinhthanh/scoop-bucket`, then
+`scoop install vetgo/vetgo`), or npm (`npm install -g vetgo-cli`; run
+`berth stop` before updating it). Then `berth agent install` starts the
+agent when you sign in. The release's `berth-windows-amd64.zip` and
+`-arm64.zip` hold the same files.
+
 ## Build from source
 
 Build it on Windows with Go, Node and pnpm, Rust (MSVC) and the Visual

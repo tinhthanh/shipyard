@@ -11,9 +11,13 @@ import "strings"
 // consoleNames are Shipyard's programs built without a console, which
 // Windows starts with no window (at sign-in, from the Run key), and the
 // console build of each, beside it: what a console program they start, or a
-// program run in a console (a session's), must be.
+// program run in a console (a session's), must be. The app carries
+// berth-cli.exe (its berth.exe is the app itself); the CLI on its own
+// (berth-windows-*.zip, npm, scripts/install-cli.ps1) is berth.exe, with
+// berthw.exe beside it, as python.exe has pythonw.exe.
 var consoleNames = map[string]string{
 	"berth-agent.exe": "berth-cli.exe",
+	"berthw.exe":      "berth.exe",
 	"berthd-bg.exe":   "berthd.exe",
 }
 

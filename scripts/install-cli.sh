@@ -1,5 +1,6 @@
 #!/bin/sh
 # Installs Vetgo's berth command (the CLI and laptop agent) on macOS or Linux
+# (in Git Bash on Windows, it runs install-cli.ps1)
 # from the fork's latest release, in one line (served at
 # https://tinhthanh.github.io/shipyard/install-cli.sh by
 # .github/workflows/pages.yml):
@@ -51,7 +52,13 @@ fi
 case $(uname -s) in
 Linux) os=linux ;;
 Darwin) os=darwin ;;
-*) die "berth runs on Linux and macOS, not $(uname -s). On Windows: irm https://tinhthanh.github.io/shipyard/install.ps1 | iex" ;;
+MINGW* | MSYS* | CYGWIN*)
+	# Git Bash and the like on Windows: the PowerShell installer does it,
+	# into %LOCALAPPDATA%\vetgo-cli on your Windows PATH.
+	command -v powershell.exe >/dev/null 2>&1 || die "this needs powershell.exe; or run in PowerShell: irm https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex"
+	exec powershell.exe -NoProfile -Command "irm https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex"
+	;;
+*) die "berth runs on Linux, macOS and Windows, not $(uname -s)" ;;
 esac
 case $(uname -m) in
 x86_64 | amd64) arch=amd64 ;;
