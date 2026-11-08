@@ -5,8 +5,10 @@ import "testing"
 func TestTheConsoleBuildOfAProgramWithoutOne(t *testing.T) {
 	for in, want := range map[string]string{
 		"berth-agent.exe": "berth-cli.exe",
+		"berthw.exe":      "berth.exe",
 		"BERTHD-BG.EXE":   "berthd.exe",
 		"berth-cli.exe":   "",
+		"berth.exe":       "",
 		"berthd.exe":      "",
 		"berth":           "",
 	} {
@@ -19,6 +21,7 @@ func TestTheConsoleBuildOfAProgramWithoutOne(t *testing.T) {
 func TestTheBuildWithoutAConsoleOfAConsoleProgram(t *testing.T) {
 	for in, want := range map[string]string{
 		"berth-cli.exe":   "berth-agent.exe",
+		"berth.exe":       "berthw.exe",
 		"BERTHD.EXE":      "berthd-bg.exe",
 		"berth-agent.exe": "",
 		"berth":           "",

@@ -50,11 +50,29 @@ brew tap tinhthanh/tap && brew trust tinhthanh/tap
 brew install tinhthanh/tap/vetgo
 ```
 
-or with npm (Node 18 or later):
+or with npm (Node 18 or later; macOS, Linux and Windows):
 
 ```sh
 npm install -g vetgo-cli
 ```
+
+**`berth` on Windows**, without the app, in PowerShell (no administrator;
+into `%LOCALAPPDATA%\vetgo-cli`, added to your PATH; in Git Bash the
+`install-cli.sh` line above runs it):
+
+```powershell
+irm https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex
+```
+
+with Scoop:
+
+```powershell
+scoop bucket add vetgo https://github.com/tinhthanh/scoop-bucket
+scoop install vetgo/vetgo
+```
+
+or with npm, as above. On Windows, `berth stop` before an npm update:
+Windows can't replace a program the agent runs from.
 
 Each gives the `berth` command with the berthd builds it puts on boxes.
 Start the laptop agent, and have it start when you log in, with
@@ -80,5 +98,7 @@ instead.
 | winget | Windows app | `winget install tinhthanh.Vetgo` |
 | Homebrew | `berth` / `berthd` | `brew install tinhthanh/tap/vetgo` / `…/berthd` |
 | One line | `berth` | `curl -fsSL https://tinhthanh.github.io/shipyard/install-cli.sh \| sh` |
-| npm | `berth` | `npm install -g vetgo-cli` |
+| One line (PowerShell) | `berth` on Windows | `irm https://tinhthanh.github.io/shipyard/install-cli.ps1 \| iex` |
+| Scoop | `berth` on Windows | `scoop install vetgo/vetgo` (after `scoop bucket add vetgo https://github.com/tinhthanh/scoop-bucket`) |
+| npm | `berth` (macOS, Linux, Windows) | `npm install -g vetgo-cli` |
 | install.sh | `berthd` on a box | `curl -fsSL https://tinhthanh.github.io/shipyard/install.sh \| sh` |

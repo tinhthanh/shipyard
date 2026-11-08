@@ -14,6 +14,12 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **berth on Windows without the app.** `irm
+  https://tinhthanh.github.io/shipyard/install-cli.ps1 | iex` installs the CLI and
+  laptop agent in PowerShell, with no administrator; `install-cli.sh` runs it
+  from Git Bash. `npm install -g vetgo-cli` now works on Windows too, and
+  Scoop installs it from the `vetgo` bucket. Each release carries
+  `berth-windows-amd64.zip` and `-arm64.zip`.
 - **A resumed chat agent no longer looks busy forever.** An agent carried
   on without a new prompt (after its box restarted, or its conversation was
   opened again) showed as working, with a timer counting up, until someone

@@ -27,8 +27,16 @@ the fork adds files of its own, and upstream's files only call into them.
   with its `vetgo-cli-*` builds (scripts/npm-packages.py; npm's trusted
   publishing, no token). Upstream's `release.yml` stays as upstream has it
   and is turned off in this repository (`gh workflow disable release.yml`).
-- **One-line installers:** `scripts/install.ps1` (the Windows app) and
-  `scripts/install-cli.sh` (berth on macOS and Linux), with `site/install.sh`
+- **Windows CLI:** `scripts/windows-cli-archive.sh` builds
+  `berth-windows-{amd64,arm64}.zip` (berth.exe and berthw.exe, the build
+  without a console the agent starts from at sign-in, paired in
+  `internal/winsys`), which `scripts/install-cli.ps1`, the npm packages
+  `vetgo-cli-windows-*` and the Scoop bucket github.com/tinhthanh/scoop-bucket
+  (`scripts/scoop-manifest.py`; secret `SCOOP_BUCKET_KEY`, a write deploy
+  key) install.
+- **One-line installers:** `scripts/install.ps1` (the Windows app),
+  `scripts/install-cli.sh` (berth on macOS and Linux) and
+  `scripts/install-cli.ps1` (berth on Windows), with `site/install.sh`
   rewritten for this repository, served at https://tinhthanh.github.io/shipyard/ by
   `.github/workflows/pages.yml` (GitHub Pages).
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`

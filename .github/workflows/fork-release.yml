@@ -85,6 +85,10 @@ jobs:
         run: |
           tar -xzf dist/berthd-linux-amd64.tar.gz -C "$RUNNER_TEMP" berthd
           "$RUNNER_TEMP/berthd" version | tee /dev/stderr | grep -q "^berthd $GITHUB_REF_NAME "
+      - name: Windows CLI archives
+        # berth-windows-{amd64,arm64}.zip, added to checksums.txt
+        # (scripts/install-cli.ps1, the npm and Scoop packages).
+        run: scripts/windows-cli-archive.sh "$GITHUB_REF_NAME"
       - name: install.sh for this repository
         env:
           REPO: ${{ github.repository }}
@@ -101,9 +105,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.tar.gz dist/checksums.txt dist/install.sh --clobber
+            gh release upload "$TAG" dist/*.tar.gz dist/*.zip dist/checksums.txt dist/install.sh --clobber
           else
-            gh release create "$TAG" dist/*.tar.gz dist/checksums.txt dist/install.sh --verify-tag --draft --title "Shipyard $TAG" --generate-notes
+            gh release create "$TAG" dist/*.tar.gz dist/*.zip dist/checksums.txt dist/install.sh --verify-tag --draft --title "Shipyard $TAG" --generate-notes
           fi
 
   windows:
@@ -259,6 +263,38 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "vetgo and berthd ${TAG#v}"
           git push -q origin HEAD:main
 
+  scoop:
+    # berth for Windows in the bucket at github.com/tinhthanh/scoop-bucket
+    # (scripts/scoop-manifest.py), pushed with that repository's write
+    # deploy key (secret SCOOP_BUCKET_KEY). After publish, like homebrew.
+    needs: [publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Write the bucket's manifest
+        env:
+          BUCKET_KEY: ${{ secrets.SCOOP_BUCKET_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ -z "$BUCKET_KEY" ]; then echo "::notice::no SCOOP_BUCKET_KEY: the bucket is left as it is"; exit 0; fi
+          gh release download "$TAG" --pattern checksums.txt --dir "$RUNNER_TEMP"
+          # GitHub's host keys from its API (over HTTPS), not trusted on first use.
+          curl -fsSL https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com " + .' >"$RUNNER_TEMP/known_hosts"
+          (umask 077 && printf '%s\n' "$BUCKET_KEY" >"$RUNNER_TEMP/bucket_key")
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/bucket_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts"
+          bucket="$RUNNER_TEMP/bucket"
+          git clone -q git@github.com:tinhthanh/scoop-bucket.git "$bucket"
+          python3 scripts/scoop-manifest.py "$TAG" "$GH_REPO" "$RUNNER_TEMP/checksums.txt" "$bucket"
+          cd "$bucket"
+          git add -A
+          if git diff --cached --quiet; then echo "the bucket already has $TAG"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "vetgo ${TAG#v}"
+          git push -q origin HEAD:main
+
   npm:
     needs: [publish]
     runs-on: ubuntu-latest
@@ -283,7 +319,7 @@ jobs:
           # Trusted publishing needs npm 11.5.1 or later.
           npm install -g npm@11.6.2
           mkdir -p "$RUNNER_TEMP/archives"
-          gh release download "$TAG" --dir "$RUNNER_TEMP/archives" --pattern 'berth-*.tar.gz' --pattern 'berthd-darwin-*.tar.gz'
+          gh release download "$TAG" --dir "$RUNNER_TEMP/archives" --pattern 'berth-*.tar.gz' --pattern 'berth-windows-*.zip' --pattern 'berthd-darwin-*.tar.gz'
           python3 scripts/npm-packages.py "$TAG" "$GH_REPO" "$RUNNER_TEMP/archives" "$RUNNER_TEMP/npm"
           version="${TAG#v}"
           # The platform packages first, so vetgo's optional dependencies are
