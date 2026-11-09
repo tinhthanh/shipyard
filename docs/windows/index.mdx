@@ -49,7 +49,8 @@ It puts `berth.exe` and `berthw.exe` (the same build without a console,
 which the agent starts from when you sign in) in `%LOCALAPPDATA%\vetgo-cli`
 and adds that folder to your PATH, with no administrator. Or with Scoop
 (`scoop bucket add vetgo https://github.com/tinhthanh/scoop-bucket`, then
-`scoop install vetgo/vetgo`), or npm (`npm install -g vetgo-cli`; run
+`scoop install vetgo/vetgo`; Scoop adds a bucket with git, so `scoop install
+git` first if you haven't), or npm (`npm install -g vetgo-cli`; run
 `berth stop` before updating it). Then `berth agent install` starts the
 agent when you sign in. The release's `berth-windows-amd64.zip` and
 `-arm64.zip` hold the same files.
