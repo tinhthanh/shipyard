@@ -37,6 +37,15 @@ struct Login: Decodable, Equatable, Identifiable, Sendable {
     // the most used of the others (a week).
     var outer: PlanWindow? { windows.first }
     var inner: PlanWindow? { windows.dropFirst().max(by: { $0.used < $1.used }) }
+
+    // The windows the card lists: those with something used (at least 1%
+    // shown), or the first alone when none has, so the login isn't empty.
+    var shown: [PlanWindow] {
+        let used = windows.filter { ($0.used * 100).rounded() >= 1 }
+        return used.isEmpty ? Array(windows.prefix(1)) : used
+    }
+    // How close it is to a limit: its most used window.
+    var most: Double { windows.map(\.used).max() ?? 0 }
 }
 
 struct Agent: Decodable, Equatable, Identifiable, Sendable {
@@ -61,6 +70,14 @@ struct BarState: Decodable, Equatable, Sendable {
     var signedOut: [String] = []
     var waiting: [Agent] = []
     var working: [Agent] = []
+
+    // The card's order: the login nearest a limit first; ties keep
+    // Shipyard's order (the rings keep it always).
+    var cardLogins: [Login] {
+        logins.enumerated().sorted { a, b in
+            a.element.most != b.element.most ? a.element.most > b.element.most : a.offset < b.offset
+        }.map(\.element)
+    }
 }
 
 struct Message: Decodable, Sendable {

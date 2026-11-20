@@ -88,12 +88,16 @@ final class BarController {
             // Within the screen below the menu bar, so the card never runs
             // under it.
             let width = Layout.card + Layout.gap + Layout.dockWidth + Layout.cardShadow * 2
-            let height = min(visible.height, 760)
+            // As tall as the screen allows: a card with many logins scrolls
+            // them in what it has.
+            let height = visible.height
             return CGRect(x: f.maxX - width, y: visible.midY - height / 2, width: width, height: height)
         case .notch:
             let open = (model.notch?.width ?? 12) + Layout.wing(model.state) * 2 + 40
             let width = max(640, open)
-            let height = min(f.height * 0.8, 640)
+            // From the top down to the Dock: the card hangs under the notch,
+            // and its logins scroll when there are more than fit.
+            let height = f.maxY - visible.minY
             return CGRect(x: f.midX - width / 2, y: f.maxY - height, width: width, height: height)
         }
     }
