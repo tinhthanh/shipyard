@@ -39,6 +39,11 @@ the fork adds files of its own, and upstream's files only call into them.
   `scripts/install-cli.ps1` (berth on Windows), with `site/install.sh`
   rewritten for this repository, served at https://tinhthanh.github.io/shipyard/ by
   `.github/workflows/pages.yml` (GitHub Pages).
+- **An account per task:** `internal/box/taskaccounts.go` (the request's
+  `accounts`, checked against the box's account folders, set on the session
+  it starts) and `app/src/components/conversation/account-pick.tsx` (New
+  task's Account picker), with seams in `api.go`, `tasks.go`, `secrets.go`,
+  `start-work.ts`, `api.ts` and `task-composer.tsx`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).
