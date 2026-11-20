@@ -19,8 +19,6 @@ enum Layout {
     static let notchRing: CGFloat = 22
     // A screen without a notch: the bar folds into a lip under the top edge.
     static let lip = CGSize(width: 120, height: 5)
-    // The card lists this many logins, then says how many more.
-    static let cardLogins = 5
     // Room around the card for its shadow, which takes the pointer too, so
     // a click there isn't lost in a pixel that is neither card nor screen.
     static let cardShadow: CGFloat = 22
@@ -100,8 +98,11 @@ struct BarView: View {
         .position(x: size.width - Layout.dockWidth / 2 - 2, y: size.height / 2)
 
         if model.card {
+            // Offered the panel's height less the shadow's room: the logins
+            // scroll when the card would be taller.
             Card(state: model.state)
                 .background(GeometryReader { g in Color.clear.preference(key: CardFrameKey.self, value: g.frame(in: .named("panel"))) })
+                .frame(height: size.height - Layout.cardShadow * 2)
                 .position(x: size.width - Layout.dockWidth - Layout.gap - Layout.card / 2, y: size.height / 2)
                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(x: 14)).combined(with: .scale(scale: 0.97, anchor: .trailing)), removal: .opacity))
         }
@@ -150,7 +151,9 @@ struct BarView: View {
                     .background(GeometryReader { g in Color.clear.preference(key: CardFrameKey.self, value: g.frame(in: .named("panel"))) })
                     .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -10)).combined(with: .scale(scale: 0.97, anchor: .top)), removal: .opacity))
             }
-            .frame(width: size.width, height: size.height, alignment: .top)
+            // The shadow's room below; the card is offered the rest, and its
+            // logins scroll when it would be taller.
+            .frame(width: size.width, height: size.height - Layout.cardShadow, alignment: .top)
         }
     }
 }
@@ -276,6 +279,8 @@ struct Spinner: View {
 // The card: each login's windows with when they reset, then the agents that
 // need you and those working, a click from opening.
 struct Card: View {
+    // Takes the height it needs, or what it is offered when that is less:
+    // the logins scroll in what the sign-in note and the agents leave.
     var state: BarState
 
     var body: some View {
@@ -295,39 +300,8 @@ struct Card: View {
                 Text(state.usage ? "No plan limits read yet." : "Turn on the Usage & accounts plugin in Shipyard to see plan limits here.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            ForEach(state.logins.prefix(Layout.cardLogins)) { l in
-                VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        AgentGlyph(agent: l.agent).font(.system(size: 10, weight: .bold))
-                        Text(l.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
-                    }
-                    if let d = l.detail, !d.isEmpty {
-                        Text(d).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                    }
-                    ForEach(l.windows, id: \.self) { w in
-                        VStack(spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text(w.name).font(.system(size: 11)).lineLimit(1)
-                                Spacer(minLength: 4)
-                                TimelineView(.periodic(from: .now, by: 30)) { t in
-                                    // 0: a window no request has started yet.
-                                    Text(w.resets > 0 ? "resets \(resetsIn(w.resets, now: t.date))" : "not started").font(.system(size: 10)).foregroundStyle(.secondary)
-                                }
-                                Text("\(Int((w.used * 100).rounded()))%").font(.system(size: 11).monospacedDigit()).frame(width: 34, alignment: .trailing)
-                            }
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.1))
-                                    Capsule().fill(tone(w.used)).frame(width: g.size.width * min(1, w.used))
-                                }
-                            }
-                            .frame(height: 4)
-                        }
-                    }
-                }
-            }
-            if state.logins.count > Layout.cardLogins {
-                Text("+\(state.logins.count - Layout.cardLogins) more logins in Shipyard's Usage").font(.system(size: 9)).foregroundStyle(.tertiary)
+            if !state.logins.isEmpty {
+                Logins(logins: state.cardLogins)
             }
             section("Need you", state.waiting, Color(red: 0.98, green: 0.75, blue: 0.14))
             section("Working", state.working, Color(red: 0.22, green: 0.74, blue: 0.97))
@@ -374,5 +348,66 @@ struct RowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(configuration.isPressed ? 0.14 : 0)))
+    }
+}
+
+// The card's logins, in a scroll view as tall as they are, or as tall as the
+// card has room for when they don't all fit.
+struct Logins: View {
+    var logins: [Login]
+    @State private var height: CGFloat = 0
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(logins) { LoginRows(login: $0) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { g in Color.clear.preference(key: ContentHeightKey.self, value: g.size.height) })
+        }
+        .frame(maxHeight: height)
+        .onPreferenceChange(ContentHeightKey.self) { height = $0 }
+    }
+}
+
+struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+struct LoginRows: View {
+    var login: Login
+
+    var body: some View {
+        let l = login
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                AgentGlyph(agent: l.agent).font(.system(size: 10, weight: .bold))
+                Text(l.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+            }
+            if let d = l.detail, !d.isEmpty {
+                Text(d).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+            }
+            ForEach(l.shown, id: \.self) { w in
+                VStack(spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(w.name).font(.system(size: 11)).lineLimit(1)
+                        Spacer(minLength: 4)
+                        TimelineView(.periodic(from: .now, by: 30)) { t in
+                            // 0: a window no request has started yet.
+                            Text(w.resets > 0 ? "resets \(resetsIn(w.resets, now: t.date))" : "not started").font(.system(size: 10)).foregroundStyle(.secondary)
+                        }
+                        Text("\(Int((w.used * 100).rounded()))%").font(.system(size: 11).monospacedDigit()).frame(width: 34, alignment: .trailing)
+                    }
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.1))
+                            Capsule().fill(tone(w.used)).frame(width: g.size.width * min(1, w.used))
+                        }
+                    }
+                    .frame(height: 4)
+                }
+            }
+        }
     }
 }

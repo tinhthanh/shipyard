@@ -28,6 +28,22 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(resetsIn(at(52 * 60), now: now), "in 2d 4h")
     }
 
+    func testTheCardListsUsedWindowsAndTheBusiestLoginFirst() {
+        let w = { (n: String, used: Double, resets: Double) in PlanWindow(name: n, minutes: 300, used: used, resets: resets) }
+        let idle = Login(agent: "claude", login: "idle", name: "idle", windows: [w("5h", 0, 0), w("week", 0.004, 1), w("week (Fable)", 0, 1)])
+        let busy = Login(agent: "claude", login: "busy", name: "busy", windows: [w("5h", 0, 1), w("week", 0.36, 1), w("week (Fable)", 0, 1)])
+        let some = Login(agent: "codex", login: "some", name: "some", windows: [w("5h", 0.12, 1), w("week", 0.29, 1)])
+        // Nothing used: its first window alone, so it isn't empty.
+        XCTAssertEqual(idle.shown.map(\.name), ["5h"])
+        XCTAssertEqual(busy.shown.map(\.name), ["week"])
+        XCTAssertEqual(some.shown.map(\.name), ["5h", "week"])
+        var s = BarState()
+        s.logins = [idle, some, busy]
+        XCTAssertEqual(s.cardLogins.map(\.login), ["busy", "some", "idle"])
+        // The rings keep Shipyard's order.
+        XCTAssertEqual(s.logins.map(\.login), ["idle", "some", "busy"])
+    }
+
     func testTheDockGrowsWithWhatItShows() {
         var s = BarState()
         let empty = Layout.dockHeight(s)
