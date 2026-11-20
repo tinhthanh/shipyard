@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,12 @@ func TestATaskRunsWithTheAccountItPicks(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	c, _ := servedBox(t)
+	var bx *Box
+	c, _ := servedBox(t, func(b *Box) { bx = b })
+	// The app offers the picker only to a box that says it takes accounts.
+	if caps := bx.Capabilities(); !slices.Contains(caps, "task.accounts") {
+		t.Fatalf("capabilities = %v", caps)
+	}
 	repo := gitRepo(t)
 	call(t, c, "POST", "/v1/locations", "", map[string]string{"name": "acme", "path": repo}, nil)
 	// The project's own pick, which the task's overrides.

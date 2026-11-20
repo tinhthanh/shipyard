@@ -28,7 +28,9 @@ function kindOf(box: string, location: string, agent: string): Kind | undefined 
 export function useAccountPick(box: string, location: string, picks: AgentPick[], on: boolean) {
   const usage = usePrefs((p) => p.enabledPlugins.includes("usage") && !p.disabledPlugins.includes("usage"));
   const client = useStore((s) => s.client);
-  const kind = on && picks.length === 1 && box && location ? kindOf(box, location, picks[0].agent) : undefined;
+  // An older berthd ignores "accounts" and would start the project's account.
+  const takes = useStore((s) => !!s.boxes[box]?.info?.capabilities?.includes("task.accounts"));
+  const kind = on && takes && picks.length === 1 && box && location ? kindOf(box, location, picks[0].agent) : undefined;
   const key = usage && client && kind ? `accounts:${box}` : "accounts:off";
   const { data } = useWidgetDataIn<Accounts | null>(
     pluginStorage("usage"),

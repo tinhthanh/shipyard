@@ -40,6 +40,8 @@ export interface StartDraft {
   worktree?: { name?: string; branch?: string; base?: string; pr?: number; ref?: string; command?: string };
   attempts?: AttemptOptions;
   from?: { kind: "handoff" | "review"; box: string; session: string };
+  // The agent's account for this task alone (account-pick.tsx).
+  accounts?: Record<string, string>;
 }
 
 export interface AttemptOptions {
@@ -121,7 +123,7 @@ export async function startWork(d: StartDraft): Promise<boolean> {
       toastManager.add({ type: "success", title: `Created ${wt.name}`, description: `${wt.branch ?? ""} on ${d.box}` });
       return true;
     }
-    const how = { agent: pick.agent, prompt: d.text || undefined, model: pick.model || undefined, effort: pick.effort || undefined, ...structuredLaunch(d.box, pick.agent, presets.find((p) => p.id === pick.agent)) };
+    const how = { agent: pick.agent, prompt: d.text || undefined, model: pick.model || undefined, effort: pick.effort || undefined, ...structuredLaunch(d.box, pick.agent, presets.find((p) => p.id === pick.agent)), accounts: d.accounts };
     if (d.where === "new") {
       const name = d.worktree?.name || freeName(d.box, d.location, d.text ? slug(d.text) : randomName());
       const res = await client.box<TaskResult>(d.box, "POST", "tasks", {

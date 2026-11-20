@@ -20,6 +20,11 @@ import (
 
 type accountsKey struct{}
 
+// taskAccountCaps says a box takes "accounts": one that doesn't would start
+// the session with the project's account and say nothing (an unknown field
+// is ignored), so the app offers the picker only where this is listed.
+var taskAccountCaps = []string{"task.accounts"}
+
 // withAccounts is r carrying the account variables picks asks for. Each
 // must be one of that agent's account folders on this box
 // (integrations.Accounts); anything else is refused before anything starts.

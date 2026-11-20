@@ -279,6 +279,8 @@ type TaskRequest struct {
 	Open string `json:"open,omitempty"`
 	// Title names the work; without one, the prompt's first line does.
 	Title string `json:"title,omitempty"`
+	// Accounts picks the agent's account for this task (taskaccounts.go).
+	Accounts map[string]string `json:"accounts,omitempty"`
 }
 
 type Task struct {
@@ -290,6 +292,10 @@ func (b *Box) addTask(w http.ResponseWriter, r *http.Request) error {
 	var req TaskRequest
 	if err := decodeLimit(r, &req, maxPromptBody); err != nil {
 		return err
+	}
+	r, aerr := b.withAccounts(r, req.Accounts)
+	if aerr != nil {
+		return aerr
 	}
 	if req.Location == "" || req.Name == "" {
 		return badRequest("a task needs a location and a name")

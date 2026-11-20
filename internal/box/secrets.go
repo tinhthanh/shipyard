@@ -629,6 +629,7 @@ func (b *Box) createAgentSession(ctx context.Context, name, location, dir, comma
 // tmux options (a structured agent's: claudedriver.go).
 func (b *Box) createAgentSessionWith(ctx context.Context, name, location, dir, command, agent string, extraEnv []string, labels map[string]string) (Session, error) {
 	env, wrap := b.sessionEnv(ctx, dir)
+	env = append(env, accountEnv(ctx)...) // the request's own account wins (taskaccounts.go)
 	return b.Sessions.create(ctx, name, location, dir, command, agent, append(env, extraEnv...), wrap, labels)
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AgentIcon, StatusDot } from "@/components/agent-glyph";
 import { Scene } from "@/components/art/scenes";
 import { AttemptsOptions, type AttemptValues, SendOptions, type SendValues, WorktreeOptions, type WorktreeValues } from "@/components/conversation/composer-options";
+import { useAccountPick } from "@/components/conversation/account-pick";
 import { AddProjectItem, AgentsPicker, type Chosen, DefaultBoxItem, entryKey, expand, Pick, SavedPrompts, TargetsPicker, toChosen } from "@/components/conversation/composer-pickers";
 import { useBranches, useResolve } from "@/components/new-worktree/use-resolve";
 import { withDefaults } from "@/components/prompts/shared";
@@ -196,6 +197,7 @@ function StartBody({ draft, text, setText, tabs, fixed, dialog, autoFocus, place
   const sel: Chosen = Object.keys(live).length ? live : presets[0] ? { [presets[0].id]: { models: [""], effort: "" } } : {};
   const picks = noAgent ? [] : expand(sel, from ? 1 : copies).slice(0, from ? 1 : undefined);
   const attempts = picks.length > 1;
+  const account = useAccountPick(box, locName, picks, !attempts);
   useEffect(() => onKind?.(noAgent ? "worktree" : attempts ? "attempts" : "start"), [onKind, noAgent, attempts]);
 
   // A hand-off or a review starts from what the agent should read.
@@ -383,6 +385,7 @@ function StartBody({ draft, text, setText, tabs, fixed, dialog, autoFocus, place
         : undefined,
       attempts: attempts ? { ...att, base: draft.base ?? (fixed ? fixed.branch : undefined) } : undefined,
       from,
+      accounts: account.accounts,
     };
     const ok = await startWork(d);
     setBusy(false);
@@ -609,6 +612,7 @@ function StartBody({ draft, text, setText, tabs, fixed, dialog, autoFocus, place
           )}
           {(!pinned || from?.kind === "handoff") && !attempts && <Pick label="Where" icon={<GitBranchIcon />} value={where} options={whereOptions} onPick={(v) => setWhere(v as "new" | "main" | "here")} />}
           <div className="ml-auto flex min-w-0 items-center gap-1">
+            {account.element}
             <AgentsPicker
               presets={presets}
               sel={sel}

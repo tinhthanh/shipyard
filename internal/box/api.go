@@ -709,12 +709,18 @@ type SessionRequest struct {
 	// what it asks.
 	Driver string `json:"driver,omitempty"`
 	Mode   string `json:"mode,omitempty"`
+	// Accounts picks the agent's account for this session (taskaccounts.go).
+	Accounts map[string]string `json:"accounts,omitempty"`
 }
 
 func (b *Box) addSession(w http.ResponseWriter, r *http.Request) error {
 	var req SessionRequest
 	if err := decodeLimit(r, &req, maxPromptBody); err != nil {
 		return err
+	}
+	r, aerr := b.withAccounts(r, req.Accounts)
+	if aerr != nil {
+		return aerr
 	}
 	if _, err := tmuxPath(); err != nil {
 		return err
