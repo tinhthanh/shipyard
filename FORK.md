@@ -44,6 +44,12 @@ the fork adds files of its own, and upstream's files only call into them.
   it starts) and `app/src/components/conversation/account-pick.tsx` (New
   task's Account picker), with seams in `api.go`, `tasks.go`, `secrets.go`,
   `start-work.ts`, `api.ts` and `task-composer.tsx`.
+- **Prompt suggestions:** `internal/box/promptsuggest.go` (asks a
+  structured Claude for `--prompt-suggestions`, keeps the latest, `GET
+  /v1/sessions/{name}/suggestion`) and
+  `app/src/components/conversation/prompt-suggestion.ts` (grey in Reply, Tab
+  takes it), with seams in `claudedriver.go`, `api.go`, `upgrade.go` and
+  `conversation-pane.tsx`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).

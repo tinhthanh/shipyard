@@ -224,6 +224,7 @@ func (b *Box) Mount(s *wire.Server) {
 	route("POST /v1/sessions/{name}/attach", b.attach)
 	route("GET /v1/sessions/{name}/screen", b.screen)
 	route("GET /v1/sessions/{name}/draft", b.draft)
+	route("GET /v1/sessions/{name}/suggestion", b.suggestion) // promptsuggest.go
 	route("GET /v1/sessions/{name}/transcript", b.transcript)
 	route("GET /v1/sessions/{name}/transcript/tool/{id}", b.toolDetail)
 	route("POST /v1/sessions/{name}/attachments", b.sessionAttachment)

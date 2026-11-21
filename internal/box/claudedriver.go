@@ -115,7 +115,7 @@ func (b *Box) launchClaudeIn(p AgentPreset, model, effort, mode, resume, dir, so
 		words = append(words, shellQuote(w))
 	}
 	words = append(words, "--dir", shellQuote(dir), "--socket", shellQuote(sock), "--", base)
-	for _, f := range claudeStructuredFlags(claudeMode) {
+	for _, f := range append(claudeStructuredFlags(claudeMode), suggestFlags(base)...) { // promptsuggest.go
 		words = append(words, shellQuote(f))
 	}
 	if resume != "" {
@@ -238,6 +238,9 @@ type claudeConv struct {
 	queue []func()
 	kick  chan struct{}
 	gone  bool
+
+	// nextAsk is the next prompt Claude guesses (promptsuggest.go).
+	nextAsk string
 }
 
 // claudeDriver holds the structured sessions berthd follows.
@@ -384,6 +387,7 @@ type streamLine struct {
 	Parent         *string         `json:"parent_tool_use_id"`
 	IsReplay       bool            `json:"isReplay"`
 	IsError        bool            `json:"is_error"`
+	Suggestion     string          `json:"suggestion"` // promptsuggest.go
 	Message        json.RawMessage `json:"message"`
 	Event          *struct {
 		Type  string `json:"type"`
@@ -460,6 +464,9 @@ func (c *claudeConv) apply(e agenthost.Entry, live bool) {
 		}
 	}
 	helper := l.Parent != nil && *l.Parent != ""
+	if !helper {
+		c.noteSuggestion(l) // promptsuggest.go
+	}
 	switch l.Type {
 	case "system":
 		if l.Subtype == "init" || l.PermissionMode != "" {
