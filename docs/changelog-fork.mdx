@@ -14,6 +14,14 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **Tab takes Claude's guess at your next prompt.** After each turn of a
+  Claude Code chat (Labs → Structured agents), the Reply box shows in grey
+  what Claude thinks you'll ask next, as its own terminal does; press Tab to
+  put it in, then Enter to send or change it first. Typing anything else
+  hides it. Needs the box upgraded and a Claude Code that offers prompt
+  suggestions. Each guess is a short extra request to the model; to stop
+  them, set `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false` in the box's or the
+  project's environment.
 - **Pick the account for one task.** New task has an Account picker beside
   Agents (with the Usage & accounts plugin on, and two or more Claude Code
   or Codex accounts on the box): the task's agent signs in with that account,

@@ -15,6 +15,7 @@ import { RepoRefs } from "@/components/conversation/repo-refs";
 import { PixelLoader } from "@/components/pixel-loader";
 import { useComposerMenu } from "@/components/conversation/command-menu";
 import { LiveScreen, useLiveScreen } from "@/components/conversation/live-screen";
+import { usePromptSuggestion } from "@/components/conversation/prompt-suggestion";
 import { QuestionsContext } from "@/components/conversation/question-form";
 import { ResumePicker } from "@/components/conversation/resume-picker";
 import { toastError } from "@/components/error-note";
@@ -789,6 +790,7 @@ function Reply({ onSend, onFail, who, mode, blocked, hint, attach, agent }: { on
   const input = useRef<HTMLTextAreaElement>(null);
   const to = attach && "session" in attach ? attach.session : undefined;
   const recall = usePromptRecall(attach?.box, to, text, setText, input);
+  const suggest = usePromptSuggestion(attach?.box, to, mode === "send" && !blocked && !hint, text); // fork: prompt-suggestion
   // Sends what is typed, or a draft put in from elsewhere (a quote).
   const go = (draft = text) => {
     const t = withAttachments(draft.trim(), att.paths);
@@ -856,6 +858,7 @@ function Reply({ onSend, onFail, who, mode, blocked, hint, attach, agent }: { on
           onSelect={menu.onSelect}
           onKeyDown={(e) => {
             if (menu.onKeyDown(e)) return;
+            if (suggest.onKeyDown(e, setText)) return;
             if (recall(e)) return;
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -863,7 +866,7 @@ function Reply({ onSend, onFail, who, mode, blocked, hint, attach, agent }: { on
             }
           }}
           aria-label="Reply"
-          placeholder={placeholder}
+          placeholder={suggest.placeholder(placeholder)}
         />
         <InputGroupAddon align="inline-end" className="me-0! self-end pr-1.5 pb-1.5">
           <Tip
