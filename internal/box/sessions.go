@@ -77,6 +77,8 @@ type Session struct {
 	// Code's own screen), or "chat" for one in its terminal now
 	// (switch.go).
 	Switch string `json:"switch,omitempty"`
+	// Account is the account folder its agent signs in with (sessionaccount.go).
+	Account string `json:"account,omitempty"`
 	// Driver is how berthd reaches the session's agent (driver.go):
 	// "terminal" for every agent today. Empty when it runs no agent.
 	Driver string `json:"driver,omitempty"`

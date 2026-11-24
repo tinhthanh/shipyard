@@ -1,4 +1,4 @@
-import { CircleAlertIcon, GaugeIcon, KeyRoundIcon, OctagonXIcon, PlayIcon, RotateCwIcon, SquareIcon, SquareTerminalIcon, TriangleAlertIcon, WebhookIcon } from "lucide-react";
+import { CircleAlertIcon, GaugeIcon, KeyRoundIcon, OctagonXIcon, PlayIcon, RotateCwIcon, SquareIcon, SquareTerminalIcon, TriangleAlertIcon, UserRoundIcon, WebhookIcon } from "lucide-react";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,9 @@ export interface ChatActions {
   send?(text: string): Promise<void> | void;
   showTerminal?(): void;
   startAgain?(): void;
+  // Opens the dialog that moves a Claude conversation to another account
+  // (account-switch.tsx): a usage limit's other step.
+  otherAccount?(): void;
 }
 
 const Scope = createContext<ChatActions | undefined>(undefined);
@@ -121,13 +124,24 @@ function nextStep(kind: NoticeKind, scope: ChatActions | undefined, retry: () =>
     case "api_error":
     case "rate_limit":
     case "limit":
-    case "stop_failure":
-      return scope?.send ? (
+    case "stop_failure": {
+      const again = scope?.send ? (
         <Button size="sm" variant="outline" loading={busy} onClick={() => void retry()}>
           <RotateCwIcon />
           Try again
         </Button>
       ) : null;
+      if (kind !== "limit" || !scope?.otherAccount) return again;
+      return (
+        <span className="flex flex-wrap justify-end gap-1.5">
+          <Button size="sm" variant="outline" data-testid="limit-other-account" onClick={scope.otherAccount}>
+            <UserRoundIcon />
+            Use another account
+          </Button>
+          {again}
+        </span>
+      );
+    }
     case "exited":
       // Starting again is offered just below, where the reply box was: the
       // card's step is finding out why.

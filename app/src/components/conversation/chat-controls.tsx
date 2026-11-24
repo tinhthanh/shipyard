@@ -19,6 +19,7 @@ import { ArtifactsChip, useArtifacts } from "@/components/conversation/artifacts
 import { CrewCard } from "@/components/conversation/crew-card";
 import { teammatesOf } from "@/lib/agent-messages";
 import { NoticeCard } from "@/components/conversation/notice-card";
+import { AccountChip, canSwitchAccount, openAccountSwitch } from "@/components/conversation/account-switch";
 import { TodoCard } from "@/components/conversation/todo-card";
 import { toastError } from "@/components/error-note";
 import { Tip } from "@/components/tip";
@@ -97,7 +98,7 @@ export function ChatControls({ box, session, agent, state, asking, stateSince, d
   // The helpers it sent out (Labs), docked with its task list.
   const labs = usePrefs((p) => p.labs);
   const crew = useConversations((s) => s.crew[keyOf(box, session)]);
-  const scope = { who, send: onSend, showTerminal: onShowTerminal, startAgain: onStartAgain };
+  const scope = { who, send: onSend, showTerminal: onShowTerminal, startAgain: onStartAgain, otherAccount: agent === "claude" && canSwitchAccount(box) ? () => openAccountSwitch(box, session) : undefined };
 
   const stop = async () => {
     if (stopping) return;
@@ -150,6 +151,7 @@ export function ChatControls({ box, session, agent, state, asking, stateSince, d
               <ModeChip box={box} session={session} agent={agent} sig={sig} screenMode={controls?.mode} onSwitched={refresh} waiting={asking} supported={supported} who={who} />
               <ModelChip box={box} session={session} agent={agent} sig={sig} screenEffort={controls?.effort} busy={working || asking} items={items} />
               <ContextChip box={box} session={session} sig={sig} busy={working || asking} />
+              <AccountChip box={box} session={session} agent={agent} className={chip} />
               <BackgroundChip box={box} session={session} jobs={sig?.background} who={who} />
             </>
           )}

@@ -294,6 +294,9 @@ export const boxApi = {
   // chat (Session.switch).
   switchSession: (c: Client, box: string, name: string, to: "terminal" | "chat") =>
     c.box<Session>(box, "POST", `sessions/${encodeURIComponent(name)}/switch`, { to }),
+  // Carries a Claude conversation on with another account ("session.account.switch").
+  switchAccount: (c: Client, box: string, name: string, account: string, force = false) =>
+    c.box<Session>(box, "POST", `sessions/${encodeURIComponent(name)}/account`, { account, force }),
   // Names a session's work; "" clears its title.
   // renameWorktree gives a worktree a display name ("" clears it), on boxes
   // that list "worktree.titles" (lib/worktree-names).

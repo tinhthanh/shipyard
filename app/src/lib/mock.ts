@@ -22,6 +22,7 @@ import { mockShell } from "@/lib/mock-shell";
 import { mockServiceAttach, wireMockServices } from "@/lib/mock-services";
 import { mockIssueTitle } from "@/lib/mock-issues";
 import { usageCall, usageExec } from "@/lib/mock-usage";
+import { mockAccountCall } from "@/lib/mock-session-account";
 import { initMockQueue, mockSetBoxOnline, queueCall } from "@/lib/mock-queue";
 import { computersBoxCall, computersCall, initMockComputers } from "@/lib/mock-computers";
 import { initMockLocalBox, localBoxCall, localBoxFolders, localBoxStream } from "@/lib/mock-local-box";
@@ -171,7 +172,7 @@ const mockPrompted = new Set<string>();
 
 const sessions: Record<string, Session[]> = {
   devl: [
-    { name: "checkout-fix-claude", title: "Fix checkout webhook retries", location: "shop/checkout-fix", dir: "/home/me/work/shop-checkout-fix", command: "claude", created: ago(52), attached: 0, exited: false, agent: "claude", agent_state: "waiting", state_since: ago(4), ask: { tool: "Bash", input: "pnpm prisma migrate dev --name idempotency_key", why: "The fix needs a column for idempotency keys" } },
+    { name: "checkout-fix-claude", title: "Fix checkout webhook retries", location: "shop/checkout-fix", dir: "/home/me/work/shop-checkout-fix", command: "claude", created: ago(52), attached: 0, exited: false, agent: "claude", account: "work", agent_state: "waiting", state_since: ago(4), ask: { tool: "Bash", input: "pnpm prisma migrate dev --name idempotency_key", why: "The fix needs a column for idempotency keys" } },
     // The worktree's dev server, a service in a terminal of its own.
     { name: "svc-shop-checkout-fix-web", title: "Next.js", location: "shop/checkout-fix", dir: "/home/me/work/shop-checkout-fix", command: "pnpm dev --port $BERTH_PORT", created: ago(50), attached: 0, exited: false, service: "web" },
     { name: "qa-deck-codex", title: "Build the QA deck for the release", location: "shop/qa-deck", dir: "/home/me/work/shop-qa-deck", command: "codex", created: ago(18), attached: 1, exited: false, agent: "codex", agent_state: "running", state_since: ago(2) },
@@ -714,6 +715,8 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
   const turnCheck = turnCheckCall(box, method, path, body, delay);
   if (turnCheck) return turnCheck;
   const usage = usageCall(box, method, path, body, delay);
+  const moved = mockAccountCall(sessions[box], method, path, body, delay); // the fork's session accounts
+  if (moved) return moved;
   if (usage) return usage;
   const wts = worktreesCall(box, method, path, body, { locations, sessions }, emit, delay);
   if (wts) return wts;
@@ -787,7 +790,7 @@ function boxCall(box: string, method: string, path: string, body?: unknown): Pro
       home: HOME,
       // gpu runs an older berthd (mockBuilds): it can't keep worktree names,
       // and its agent browser has no tabs.
-      capabilities: ["diff", "turns", "queue", "ask", "answer", "journal", "runs", "exec.detach", "browser", "browser.devtools", "titles", "sample", "service.terminal", "session.home", "agents.install", "artifacts", "processes", ...(box === "gpu" ? [] : ["worktree.titles", "agents.paths", "browser.tabs"]), ...(structuredDemo ? ["driver.claude", "conversations", "sessions.past"] : [])],
+      capabilities: ["diff", "turns", "queue", "ask", "answer", "journal", "runs", "exec.detach", "browser", "browser.devtools", "titles", "sample", "service.terminal", "session.home", "agents.install", "artifacts", "processes", "session.account", "session.account.switch", ...(box === "gpu" ? [] : ["worktree.titles", "agents.paths", "browser.tabs"]), ...(structuredDemo ? ["driver.claude", "conversations", "sessions.past"] : [])],
       // Claude Code from npm under nvm, as the person's shell finds it;
       // Codex from Shipyard's own installer.
       agent_paths: [

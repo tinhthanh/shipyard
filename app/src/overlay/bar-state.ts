@@ -26,7 +26,7 @@ export interface BarState {
 interface Row {
   key: string;
   box: string;
-  session: { name: string };
+  session: { name: string; account?: string };
   agent: string;
   title: string;
   where: string;
@@ -41,6 +41,6 @@ export function barState(usage: boolean, logins: LoginLimits[], rows: Row[], sig
     rows
       .filter((r) => r.state === state)
       .slice(0, MAX)
-      .map((r) => ({ key: r.key, box: r.box, session: r.session.name, agent: r.agent, title: r.title, where: r.where }));
+      .map((r) => ({ key: r.key, box: r.box, session: r.session.name, agent: r.agent, title: r.title, where: [r.where, r.session.account].filter(Boolean).join(" · ") }));
   return { usage, logins: usage ? logins : [], signedOut: usage ? signedOut : [], waiting: pick("waiting"), working: pick("running") };
 }

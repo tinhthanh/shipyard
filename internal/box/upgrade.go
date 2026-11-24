@@ -226,6 +226,8 @@ func (b *Box) Capabilities() []string {
 		caps = append(caps, "journal")
 	}
 	caps = append(caps, taskAccountCaps...) // taskaccounts.go
+	// sessionaccount.go
+	caps = append(caps, sessionAccountCaps...)
 	// promptsuggest.go
 	caps = append(caps, promptSuggestionCaps...)
 	if b.Sessions != nil {

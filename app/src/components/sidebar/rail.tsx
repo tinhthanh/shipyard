@@ -160,6 +160,7 @@ export function AgentCard({ e }: { e: RailAgent }) {
         <span className="truncate">{e.wt.main ? `${e.project} · main checkout` : place(e)}</span>
         <span className="ml-auto shrink-0 font-mono text-tag">{e.box}</span>
       </span>
+      {e.session.account && <span data-testid="rail-card-account" className="truncate text-muted-foreground">Signed in as {e.session.account}</span>}
       {/* A renamed worktree's own name, which its branch and folder keep. */}
       {!e.wt.main && e.wt.title && <span className="truncate font-mono text-tag text-muted-foreground">{e.wt.name}</span>}
       {!e.wt.main && !e.away && <span className="text-tag text-muted-foreground/80">Right-click or F2 to rename the worktree</span>}

@@ -11,6 +11,7 @@ import { ChatControls } from "@/components/conversation/chat-controls";
 import { ConversationView, type EditActions, QueuedBubble } from "@/components/conversation/conversation-view";
 import { FileLinks } from "@/components/conversation/file-links";
 import { ChatScope } from "@/components/conversation/notice-card";
+import { canSwitchAccount, openAccountSwitch } from "@/components/conversation/account-switch";
 import { RepoRefs } from "@/components/conversation/repo-refs";
 import { PixelLoader } from "@/components/pixel-loader";
 import { useComposerMenu } from "@/components/conversation/command-menu";
@@ -592,7 +593,7 @@ export function ConversationPane({ box, session, agent: remembered, visible, onS
             <PixelLoader label="Reading the conversation…" />
           </div>
         ) : (
-          <ChatScope value={{ who, send: reply, showTerminal: onShowTerminal, startAgain: again }}>
+          <ChatScope value={{ who, send: reply, showTerminal: onShowTerminal, startAgain: again, otherAccount: agent === "claude" && canSwitchAccount(box) ? () => openAccountSwitch(box, session) : undefined }}>
             <QuestionsContext value={{ live: formAsk ? openQ?.tool : undefined, canAnswer: canAnswer && agent === "claude", stuck: stuckNow, submit: submitQuestions }}>
               <FileLinks worktree={worktreeRef}>
                 <RepoRefs repo={repo}>

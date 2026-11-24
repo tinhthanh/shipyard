@@ -234,6 +234,7 @@ func (b *Box) Mount(s *wire.Server) {
 	route("GET /v1/sessions/{name}/controls", b.sessionControls)
 	route("POST /v1/sessions/{name}/mode", b.setMode)
 	route("POST /v1/sessions/{name}/switch", b.switchSession)
+	route("POST /v1/sessions/{name}/account", b.switchAccount) // sessionaccount.go
 	route("GET /v1/sessions/{name}/wait", b.waitForSession)
 	route("GET /v1/sessions/{name}/turns", b.listTurns)
 	route("GET /v1/sessions/{name}/queue", b.listQueue)
