@@ -46,6 +46,60 @@ struct Login: Decodable, Equatable, Identifiable, Sendable {
     }
     // How close it is to a limit: its most used window.
     var most: Double { windows.map(\.used).max() ?? 0 }
+
+    // Which to use first (Priority below).
+    func priority(now: Date = Date()) -> Priority { Priority(self, now: now) }
+}
+
+// Priority says which login to use first, so that the least of a plan goes
+// unused. What is lost is the week: what is left of it when it resets is
+// gone, while a session (5h) comes back within hours. So:
+//
+//   need     what is left of the week over the hours until it resets: the
+//            share an hour it must burn from now on to use it all. A week
+//            ending soon with much left needs the most.
+//   headroom what is left of the session now: a login whose 5h is nearly
+//            spent can't take the work, however much its week needs it.
+//   score    need × headroom; the highest goes first.
+//
+// A login with a window at 95% or more is full: it goes last, the one back
+// soonest first. A model's own week ("week (Fable)") only limits that model,
+// so it counts for neither. A window no request has started has its whole
+// length ahead of it.
+struct Priority: Equatable {
+    static let full = 0.95
+
+    var score: Double
+    // % of the week to use an hour from now on, to use it all.
+    var need: Double
+    // What is left of the session (5h) now; 1 with none.
+    var headroom: Double
+    // When a full login is back, in ms since 1970; nil when it isn't full.
+    var backAt: Double?
+
+    init(_ l: Login, now: Date) {
+        let at = now.timeIntervalSince1970 * 1000
+        let plain = l.windows.filter { !$0.name.contains("(") }
+        let pool = plain.isEmpty ? l.windows : plain
+        let week = pool.max { $0.minutes != $1.minutes ? $0.minutes < $1.minutes : $0.used < $1.used }
+        let session = pool.min { $0.minutes < $1.minutes }.flatMap { s in week.map { s.minutes < $0.minutes } == true ? s : nil }
+        let hours = { (w: PlanWindow) in w.resets > 0 ? max(0.25, (w.resets - at) / 3_600_000) : w.minutes / 60 }
+        need = week.map { max(0, 1 - $0.used) / hours($0) } ?? 0
+        headroom = session.map { max(0, 1 - $0.used) } ?? 1
+        score = need * headroom
+        let blocking = pool.filter { $0.used >= Self.full }
+        backAt = blocking.isEmpty ? nil : blocking.map { $0.resets > 0 ? $0.resets : at }.max()
+    }
+
+    // First to use first: the open by score, then the full by when they're back.
+    static func before(_ a: Priority, _ b: Priority) -> Bool? {
+        switch (a.backAt, b.backAt) {
+        case (nil, .some): return true
+        case (.some, nil): return false
+        case let (.some(x), .some(y)): return x != y ? x < y : nil
+        case (nil, nil): return a.score != b.score ? a.score > b.score : nil
+        }
+    }
 }
 
 struct Agent: Decodable, Equatable, Identifiable, Sendable {
@@ -71,12 +125,12 @@ struct BarState: Decodable, Equatable, Sendable {
     var waiting: [Agent] = []
     var working: [Agent] = []
 
-    // The card's order: the login nearest a limit first; ties keep
+    // The card's order: the login to use first first (Priority); ties keep
     // Shipyard's order (the rings keep it always).
-    var cardLogins: [Login] {
-        logins.enumerated().sorted { a, b in
-            a.element.most != b.element.most ? a.element.most > b.element.most : a.offset < b.offset
-        }.map(\.element)
+    func cardLogins(now: Date = Date()) -> [(login: Login, priority: Priority)] {
+        logins.enumerated().map { (i: $0.offset, l: $0.element, p: $0.element.priority(now: now)) }
+            .sorted { a, b in Priority.before(a.p, b.p) ?? (a.i < b.i) }
+            .map { ($0.l, $0.p) }
     }
 }
 

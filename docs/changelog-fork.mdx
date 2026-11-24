@@ -14,6 +14,15 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **The floating bar's card says which login to use next.** The card is wider,
+  with the logins on the left and the agents that need you or are working on
+  the right. The logins are in the order to use them: first the one whose week
+  resets soonest with the most left (what is left of a week when it resets is
+  lost), held back when its 5-hour window is nearly spent. The first says
+  "use next", the others their place, with the share of the week an hour each
+  needs to be used up (less when its 5 hours are partly spent); a login at 95%
+  of a window goes last, saying when it is back.
+
 - **Tab takes Claude's guess at your next prompt.** After each turn of a
   Claude Code chat (Labs → Structured agents), the Reply box shows in grey
   what Claude thinks you'll ask next, as its own terminal does; press Tab to

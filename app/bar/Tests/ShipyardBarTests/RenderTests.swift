@@ -9,15 +9,15 @@ final class RenderTests: XCTestCase {
     func testSnapshots() throws {
         guard let dir = ProcessInfo.processInfo.environment["BAR_SNAPSHOTS"] else { throw XCTSkip("BAR_SNAPSHOTS not set") }
         let cases: [(String, Place, Bool, Bool, CGSize, Message)] = [
-            ("edge-shut", .edge, false, false, CGSize(width: 380, height: 420), Demo.state),
-            ("edge-open", .edge, true, false, CGSize(width: 380, height: 420), Demo.state),
-            ("edge-card", .edge, true, true, CGSize(width: 380, height: 420), Demo.state),
-            ("notch-shut", .notch, false, false, CGSize(width: 640, height: 360), Demo.state),
-            ("notch-open", .notch, true, false, CGSize(width: 640, height: 360), Demo.state),
-            ("notch-card", .notch, true, true, CGSize(width: 640, height: 360), Demo.state),
+            ("edge-shut", .edge, false, false, CGSize(width: 660, height: 420), Demo.state),
+            ("edge-open", .edge, true, false, CGSize(width: 660, height: 420), Demo.state),
+            ("edge-card", .edge, true, true, CGSize(width: 660, height: 420), Demo.state),
+            ("notch-shut", .notch, false, false, CGSize(width: 700, height: 360), Demo.state),
+            ("notch-open", .notch, true, false, CGSize(width: 700, height: 360), Demo.state),
+            ("notch-card", .notch, true, true, CGSize(width: 700, height: 360), Demo.state),
             // More logins than fit: they scroll between the sign-in note and the agents.
-            ("notch-card-many", .notch, true, true, CGSize(width: 640, height: 520), many),
-            ("edge-card-many", .edge, true, true, CGSize(width: 380, height: 520), many),
+            ("notch-card-many", .notch, true, true, CGSize(width: 700, height: 520), many),
+            ("edge-card-many", .edge, true, true, CGSize(width: 660, height: 520), many),
         ]
         for (name, place, open, card, size, state) in cases {
             let model = BarModel()
