@@ -1,5 +1,6 @@
 import { ActivityIcon, ListPlusIcon, PaletteIcon, ArchiveIcon, ArrowUpCircleIcon, ArrowUpRightIcon, BotIcon, CheckIcon, FolderInputIcon, MergeIcon, PackageIcon, PencilIcon, PinIcon, PinOffIcon, PlusIcon, ServerIcon, SplitIcon, CodeXmlIcon, CopyIcon, EllipsisIcon, ExternalLinkIcon, FolderOpenIcon, GitBranchIcon, GitCompareArrowsIcon, GitBranchPlusIcon, GitPullRequestIcon, GlobeIcon, HomeIcon, LinkIcon, PlayIcon, RotateCwIcon, Settings2Icon, SquareIcon, SquareTerminalIcon, StethoscopeIcon, Trash2Icon, UnplugIcon, WorkflowIcon, WrenchIcon, BellOffIcon, UsersRoundIcon, HistoryIcon } from "lucide-react";
 import { type ComponentProps, createContext, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode, type TouchEvent, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { pinAction } from "@/components/sidebar/project-pins";
 
 import { AgentIcon } from "@/components/agent-glyph";
 import { EditorMenuItems } from "@/components/editors/editor-menu";
@@ -768,6 +769,7 @@ export function projectGroupActions(p: Project): Action[] {
     });
   } else if (def) items.push(item("Project settings", <Settings2Icon />, () => st.setView({ kind: "project", box: def.box.name, location: def.loc.name })));
   items.push(...teamActions(p.members.map((m) => ({ box: m.box.name, loc: m.loc }))));
+  items.push(pinAction(p));
 
   // How Shipyard shows it: its name, its section, and which projects it joins.
   const organise: Action[] = [

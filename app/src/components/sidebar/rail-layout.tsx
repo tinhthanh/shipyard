@@ -9,6 +9,7 @@ import { switchTo, useIdle, usePicked } from "@/components/sidebar/columns";
 import { ink, inkScale } from "@/components/sidebar/ink";
 import { MoreItems, type NavItem, useArrangedNav } from "@/components/sidebar/nav";
 import { AwayWord, PlaceTip, ProjectTreeRows, RowButton, type SidebarPrefs, summary, useProjectTree } from "@/components/sidebar/projects";
+import { ProjectSwitcher, useRailProjects } from "@/components/sidebar/project-pins";
 import { SidebarResizeHandle } from "@/components/sidebar/resize-handle";
 import { RowLayer } from "@/components/sidebar/row-layer";
 import { SkillsNotices } from "@/components/sidebar/skills-notice";
@@ -134,6 +135,7 @@ export function FoldedRail() {
 // foot.
 function ProjectRail({ projects, picked, folded }: { projects: Project[]; picked?: string; folded?: boolean }) {
   const { pinned, more } = useArrangedNav();
+  const railProjects = useRailProjects(projects, picked);
   // Projects of one GitHub owner have the same avatar; a letter tells them
   // apart.
   const shared = useMemo(() => {
@@ -160,7 +162,7 @@ function ProjectRail({ projects, picked, folded }: { projects: Project[]; picked
       </div>
       <span aria-hidden className="my-2.5 h-px w-5 shrink-0 bg-sidebar-border" />
       <div role="group" aria-label="Projects" className="-mx-px flex min-h-0 w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto px-px pt-0.5 pb-1 [scrollbar-width:none]">
-        {projects.map((p) => (
+        {railProjects.map((p) => (
           <ProjectTile key={p.id} project={p} selected={p.id === picked} shared={shared.has(p.id)} folded={!!folded} />
         ))}
         <Tip label="Add a project…" side="right">
@@ -398,6 +400,7 @@ function ProjectSheet({ project: p, prefs, update }: { project: Project; prefs: 
       <ContextRow items={() => projectGroupActions(p)} className="group/row relative shrink-0 rounded-none data-popup-open:bg-transparent">
         <div data-testid="tasks-heading" className={cn("flex items-center gap-2.5 pt-3.5 pb-2.5", lanes.box)}>
           <Avatar project={p} />
+          <ProjectSwitcher current={p} avatar={(q) => <Avatar project={q} size={24} />}>
           <div className="flex min-w-0 flex-1 flex-col">
             <h2 id={id} className={cn("truncate font-semibold text-subtitle leading-5 tracking-[-0.01em]", ink.strong)}>
               {p.name}
@@ -406,6 +409,7 @@ function ProjectSheet({ project: p, prefs, update }: { project: Project; prefs: 
               {count === 1 ? "1 worktree" : `${count} worktrees`} · {boxes}
             </span>
           </div>
+          </ProjectSwitcher>
           {!online && <AwayWord boxes={p.members.map((m) => m.box)} />}
           <span className="flex shrink-0 items-center">
             {onNew && (

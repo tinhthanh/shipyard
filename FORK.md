@@ -50,6 +50,10 @@ the fork adds files of its own, and upstream's files only call into them.
   `app/src/components/conversation/prompt-suggestion.ts` (grey in Reply, Tab
   takes it), with seams in `claudedriver.go`, `api.go`, `upgrade.go` and
   `conversation-pane.tsx`.
+- **Pinned projects:** `app/src/components/sidebar/project-pins.tsx` (the
+  rail lists only pinned projects once one is, the sheet heading's project
+  switcher, the pin item in a project's menu) and `app/e2e/project-pins.spec.ts`,
+  with seams in `rail-layout.tsx` and `actions.tsx`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).
