@@ -35,3 +35,8 @@ test("a long list is cut short", () => {
   const many = Array.from({ length: 50 }, (_, i) => row("running", `s${i}`));
   assert.equal(barState(true, [], many).working.length, 20);
 });
+
+test("an agent's row says which account it signs in with", () => {
+  const s = barState(true, [], [{ ...row("running", "b"), session: { name: "b", account: "thanh-5x" } }]);
+  assert.equal(s.working[0].where, "shop · devl · thanh-5x");
+});

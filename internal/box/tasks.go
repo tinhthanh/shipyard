@@ -418,6 +418,7 @@ func (b *Box) enrich(ctx context.Context, all []Session) []Session {
 			continue
 		}
 		s.Driver = b.driverFor(*s).Kind()
+		s.Account = b.sessionAccount(ctx, *s) // sessionaccount.go
 		switch {
 		case s.Driver == DriverClaude:
 			s.Switch = "terminal"

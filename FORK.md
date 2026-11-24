@@ -54,6 +54,16 @@ the fork adds files of its own, and upstream's files only call into them.
   rail lists only pinned projects once one is, the sheet heading's project
   switcher, the pin item in a project's menu) and `app/e2e/project-pins.spec.ts`,
   with seams in `rail-layout.tsx` and `actions.tsx`.
+- **Session accounts:** `internal/box/sessionaccount.go` (each session's
+  `account`, `POST /v1/sessions/{name}/account`, which copies the Claude
+  conversation to the other account's folder and starts it again there
+  with `--resume`) and `app/src/components/conversation/account-switch.tsx`
+  (the account chip, the dialog, the limit notice's step), with
+  `app/src/lib/mock-session-account.ts`; seams in `sessions.go`,
+  `tasks.go` (enrich), `api.go`, `upgrade.go`, `api.ts`, the SDK's
+  `types.ts`, `chat-controls.tsx`, `conversation-pane.tsx`,
+  `notice-card.tsx`, `rail.tsx`, `App.tsx`, `mock.ts` and the floating
+  bar's `bar-state.ts`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).

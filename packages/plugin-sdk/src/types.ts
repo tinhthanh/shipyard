@@ -232,6 +232,9 @@ export interface Session {
   // "terminal", to Claude Code's own screen, or "chat", back from it. POST
   // sessions/{name}/switch with { to } switches it.
   switch?: "terminal" | "chat";
+  // The account folder its agent signs in with ("thanh-5x", "default"),
+  // on boxes with the "session.account" capability.
+  account?: string;
   // The systemd scope its processes run in, on boxes where sessions get
   // one (Linux with systemd), and what they use: memory (bytes, page cache
   // included), its ceiling if the box sets one (Settings → Boxes), processor
