@@ -12,7 +12,12 @@ enum Layout {
     static let ring: CGFloat = 32
     static let ringGap: CGFloat = 10
     static let count: CGFloat = 24
-    static let card: CGFloat = 288
+    // The card: the logins on the left, the agents on the right.
+    static let loginsColumn: CGFloat = 288
+    static let agentsColumn: CGFloat = 236
+    static let cardPad: CGFloat = 12
+    static let columnGap: CGFloat = 12
+    static let card: CGFloat = loginsColumn + agentsColumn + columnGap * 2 + 0.5 + cardPad * 2
     static let gap: CGFloat = 10
     // The notch bar's wings, either side of the notch.
     static let wingPad: CGFloat = 12
@@ -276,14 +281,32 @@ struct Spinner: View {
     }
 }
 
-// The card: each login's windows with when they reset, then the agents that
-// need you and those working, a click from opening.
+// The card: each login's windows with when they reset, the one to use first
+// on top, beside the agents that need you and those working, a click from
+// opening.
 struct Card: View {
     // Takes the height it needs, or what it is offered when that is less:
-    // the logins scroll in what the sign-in note and the agents leave.
+    // the logins scroll in what the sign-in note leaves.
     var state: BarState
 
     var body: some View {
+        HStack(alignment: .top, spacing: Layout.columnGap) {
+            logins.frame(width: Layout.loginsColumn, alignment: .topLeading)
+            Color.clear.frame(width: 0.5, height: 0)
+            agents.frame(width: Layout.agentsColumn, alignment: .topLeading)
+        }
+        // The rule between the columns, as tall as the taller of them.
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 0.5).padding(.leading, Layout.loginsColumn + Layout.columnGap)
+        }
+        .padding(Layout.cardPad)
+        .frame(width: Layout.card, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(dockFill))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.09), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+    }
+
+    private var logins: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !state.signedOut.isEmpty {
                 Button { Outbox.open(nil) } label: {
@@ -301,34 +324,40 @@ struct Card: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if !state.logins.isEmpty {
-                Logins(logins: state.cardLogins)
+                // Ordered as the card opens, and as new readings come.
+                Logins(logins: state.cardLogins())
             }
+        }
+    }
+
+    private var agents: some View {
+        VStack(alignment: .leading, spacing: 10) {
             section("Need you", state.waiting, Color(red: 0.98, green: 0.75, blue: 0.14))
+            if !state.waiting.isEmpty && !state.working.isEmpty { Divider().overlay(Color.white.opacity(0.08)) }
             section("Working", state.working, Color(red: 0.22, green: 0.74, blue: 0.97))
             if state.waiting.isEmpty && state.working.isEmpty {
                 Text("No agent is working.").font(.system(size: 11)).foregroundStyle(.secondary)
             }
         }
-        .padding(12)
-        .frame(width: Layout.card, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(dockFill))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.09), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
     }
+
+    // As many as the column has room for beside the logins, near enough.
+    private static let rows = 10
 
     @ViewBuilder private func section(_ title: String, _ rows: [Agent], _ dot: Color) -> some View {
         if !rows.isEmpty {
-            Divider().overlay(Color.white.opacity(0.08))
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(title) · \(rows.count)").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                ForEach(rows.prefix(5)) { a in
+                ForEach(rows.prefix(Self.rows)) { a in
                     Button { Outbox.open(a) } label: {
-                        HStack(spacing: 6) {
-                            Circle().fill(dot).frame(width: 5, height: 5)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Circle().fill(dot).frame(width: 5, height: 5).alignmentGuide(.firstTextBaseline) { $0[.bottom] }
                             AgentGlyph(agent: a.agent).font(.system(size: 9, weight: .bold))
-                            Text(a.title).font(.system(size: 11)).lineLimit(1)
-                            Spacer(minLength: 4)
-                            Text(a.place).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1).frame(maxWidth: 96, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(a.title).font(.system(size: 11)).lineLimit(1)
+                                Text(a.place).font(.system(size: 9)).foregroundStyle(.tertiary).lineLimit(1).truncationMode(.middle)
+                            }
+                            Spacer(minLength: 0)
                         }
                         .padding(.vertical, 3)
                         .padding(.horizontal, 4)
@@ -336,8 +365,8 @@ struct Card: View {
                     }
                     .buttonStyle(RowStyle())
                 }
-                if rows.count > 5 {
-                    Text("+\(rows.count - 5) more").font(.system(size: 9)).foregroundStyle(.tertiary).padding(.leading, 4)
+                if rows.count > Self.rows {
+                    Text("+\(rows.count - Self.rows) more").font(.system(size: 9)).foregroundStyle(.tertiary).padding(.leading, 4)
                 }
             }
         }
@@ -354,13 +383,15 @@ struct RowStyle: ButtonStyle {
 // The card's logins, in a scroll view as tall as they are, or as tall as the
 // card has room for when they don't all fit.
 struct Logins: View {
-    var logins: [Login]
+    var logins: [(login: Login, priority: Priority)]
     @State private var height: CGFloat = 0
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 10) {
-                ForEach(logins) { LoginRows(login: $0) }
+                ForEach(Array(logins.enumerated()), id: \.element.login.id) { i, l in
+                    LoginRows(login: l.login, priority: l.priority, rank: i + 1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(GeometryReader { g in Color.clear.preference(key: ContentHeightKey.self, value: g.size.height) })
@@ -377,6 +408,9 @@ struct ContentHeightKey: PreferenceKey {
 
 struct LoginRows: View {
     var login: Login
+    var priority: Priority
+    // Its place in the order to use them, from 1.
+    var rank: Int
 
     var body: some View {
         let l = login
@@ -384,6 +418,8 @@ struct LoginRows: View {
             HStack(spacing: 6) {
                 AgentGlyph(agent: l.agent).font(.system(size: 10, weight: .bold))
                 Text(l.name).font(.system(size: 12, weight: .medium)).lineLimit(1)
+                Spacer(minLength: 4)
+                tag
             }
             if let d = l.detail, !d.isEmpty {
                 Text(d).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
@@ -408,6 +444,34 @@ struct LoginRows: View {
                     .frame(height: 4)
                 }
             }
+        }
+        // A full login can't take work now: it steps back.
+        .opacity(priority.backAt == nil ? 1 : 0.55)
+    }
+
+    // "use next" on the first, its rank on the others, or when a full one
+    // is back; its score, the share of its week an hour it needs held back
+    // by what is left of its 5h, to say why.
+    @ViewBuilder private var tag: some View {
+        if let back = priority.backAt {
+            TimelineView(.periodic(from: .now, by: 30)) { t in
+                Text("full · back \(resetsIn(back, now: t.date))").font(.system(size: 9, weight: .medium)).foregroundStyle(Color(red: 0.97, green: 0.44, blue: 0.44))
+            }
+        } else {
+            HStack(spacing: 5) {
+                Text(String(format: "%.1f%%/h", priority.score * 100)).font(.system(size: 9).monospacedDigit()).foregroundStyle(.tertiary)
+                if rank == 1 {
+                    Text("use next").font(.system(size: 9, weight: .semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color(red: 0.2, green: 0.78, blue: 0.45).opacity(0.22)))
+                        .foregroundStyle(Color(red: 0.45, green: 0.9, blue: 0.6))
+                } else {
+                    Text("#\(rank)").font(.system(size: 9, weight: .medium).monospacedDigit()).foregroundStyle(.secondary)
+                }
+            }
+            .help(priority.headroom < 1
+                ? String(format: "Its week needs %.1f%% an hour from now on to be used up before it resets; %.0f%% of its 5h is left.", priority.need * 100, priority.headroom * 100)
+                : String(format: "Its week needs %.1f%% an hour from now on to be used up before it resets.", priority.need * 100))
         }
     }
 }

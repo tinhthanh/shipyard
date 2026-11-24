@@ -39,9 +39,39 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(some.shown.map(\.name), ["5h", "week"])
         var s = BarState()
         s.logins = [idle, some, busy]
-        XCTAssertEqual(s.cardLogins.map(\.login), ["busy", "some", "idle"])
         // The rings keep Shipyard's order.
         XCTAssertEqual(s.logins.map(\.login), ["idle", "some", "busy"])
+    }
+
+    // The card's logins from a real afternoon: the one whose week ends
+    // soonest with most left goes first; a nearly spent 5h holds one back;
+    // a full week goes last, whatever else it has.
+    func testTheCardPutsTheLoginToUseFirstOnTop() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        let at = { (h: Double) in (2_000_000 + h * 3600) * 1000 }
+        let five = { (used: Double, h: Double) in PlanWindow(name: "5h", minutes: 300, used: used, resets: at(h)) }
+        let week = { (used: Double, h: Double) in PlanWindow(name: "week", minutes: 10080, used: used, resets: at(h)) }
+        let login = { (n: String, w: [PlanWindow]) in Login(agent: "claude", login: n, name: n, windows: w) }
+        var s = BarState()
+        s.logins = [
+            login("full", [week(0.96, 25)]),
+            login("half5h", [five(0.59, 2), week(0.45, 102)]),
+            login("slow", [week(0.54, 116)]),
+            login("spent5h", [five(0.97, 1), week(0.06, 72)]),
+            login("soon", [week(0.10, 33), PlanWindow(name: "week (Fable)", minutes: 10080, used: 0.14, resets: at(33))]),
+            login("fresh", [five(0.02, 4.5), week(0.13, 138)]),
+            login("nhat", [five(0.04, 3.3), week(0.01, 41)]),
+        ]
+        let order = s.cardLogins(now: now)
+        XCTAssertEqual(order.map(\.login.login), ["soon", "nhat", "fresh", "slow", "half5h", "spent5h", "full"])
+        // 90% left over 33h.
+        XCTAssertEqual(order[0].priority.need, 0.9 / 33, accuracy: 1e-9)
+        // Full: back when the 5h resets, before the week that is.
+        XCTAssertEqual(order[5].priority.backAt, at(1))
+        XCTAssertEqual(order[6].priority.backAt, at(25))
+        // A window no request has started has its whole length ahead.
+        let unstarted = login("u", [PlanWindow(name: "week", minutes: 10080, used: 0, resets: 0)]).priority(now: now)
+        XCTAssertEqual(unstarted.need, 1 / 168, accuracy: 1e-9)
     }
 
     func testTheDockGrowsWithWhatItShows() {
