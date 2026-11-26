@@ -320,14 +320,17 @@ func TestSleepDurable(t *testing.T) {
 	dir := t.TempDir()
 	h := &fakeHost{}
 	e, stop := newEngine(t, dir, h)
-	s, _, _ := e.Start(Request{Flow: []Step{{Kind: "sleep", Duration: "400ms"}, {Kind: "notify", Title: "woke"}}})
-	time.Sleep(100 * time.Millisecond)
+	// A second slept before the restart, a second left: resumed, it ends
+	// about a second after; started over, two. The margin between is wide
+	// enough for a slow runner under -race.
+	s, _, _ := e.Start(Request{Flow: []Step{{Kind: "sleep", Duration: "2s"}, {Kind: "notify", Title: "woke"}}})
+	time.Sleep(time.Second)
 	stop()
 	began := time.Now()
 	e2, stop2 := newEngine(t, dir, h)
 	defer stop2()
 	waitStatus(t, e2, s.ID, Succeeded)
-	if el := time.Since(began); el > 390*time.Millisecond {
+	if el := time.Since(began); el > 1800*time.Millisecond {
 		t.Fatalf("the sleep started over: %v", el)
 	}
 }
