@@ -52,7 +52,7 @@ func platformArchive(p *listedPlugin) bool {
 	if len(p.Archives) == 0 || p.Archive != nil {
 		return true
 	}
-	for _, key := range platformKeys(runtime.GOOS, runtime.GOARCH) {
+	for _, key := range platformKeys(goos, goarch) {
 		if a, ok := p.Archives[key]; ok {
 			p.Archive = &a
 			return true
@@ -60,6 +60,9 @@ func platformArchive(p *listedPlugin) bool {
 	}
 	return false
 }
+
+// goos and goarch are this computer's, for a test to change.
+var goos, goarch = runtime.GOOS, runtime.GOARCH
 
 // platformKeys are the names a build for os/arch may be listed under, best
 // first.
@@ -135,18 +138,12 @@ func (a *Agent) unpackArchive(ctx context.Context, registry *url.URL, p MarketPl
 		return nil, marketErr(http.StatusBadGateway, "plugin_mismatch", "the archive of %s does not match the listing's checksum; nothing was installed", p.ID)
 	}
 	stage := root.Name()
-	unpacked, err := os.MkdirTemp(filepath.Dir(stage), ".plugin-"+p.ID+"-x-")
+	unpacked, folder, err := unpackFolder(filepath.Dir(stage), p.ID, data)
+	if unpacked != "" {
+		defer os.RemoveAll(unpacked)
+	}
 	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(unpacked)
-	if err := box.UnpackPlugin(unpacked, bytes.NewReader(data)); err != nil {
 		return nil, marketErr(http.StatusBadGateway, "plugin_invalid", "%s can't be installed: %v", p.ID, err)
-	}
-	folder := filepath.Join(unpacked, p.ID)
-	entries, err := os.ReadDir(unpacked)
-	if err != nil || len(entries) != 1 || entries[0].Name() != p.ID || !entries[0].IsDir() {
-		return nil, marketErr(http.StatusBadGateway, "plugin_invalid", "%s can't be installed: its archive holds more than its %s folder", p.ID, p.ID)
 	}
 	inner, err := os.ReadDir(folder)
 	if err != nil {
@@ -157,8 +154,39 @@ func (a *Agent) unpackArchive(ctx context.Context, registry *url.URL, p MarketPl
 			return nil, err
 		}
 	}
+	files, err := hashFolder(root)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := root.Stat(hooks.PluginManifest); err != nil {
+		return nil, marketErr(http.StatusBadGateway, "plugin_invalid", "%s can't be installed: its archive has no %s", p.ID, hooks.PluginManifest)
+	}
+	return files, nil
+}
+
+// unpackFolder unpacks a plugin's archive into a new folder in parent and
+// returns that folder (for the caller to remove, even on an error) and the
+// plugin's folder inside it: the archive's one top folder, named id.
+func unpackFolder(parent, id string, data []byte) (unpacked, folder string, err error) {
+	unpacked, err = os.MkdirTemp(parent, ".plugin-"+id+"-x-")
+	if err != nil {
+		return "", "", err
+	}
+	if err := box.UnpackPlugin(unpacked, bytes.NewReader(data)); err != nil {
+		return unpacked, "", err
+	}
+	entries, err := os.ReadDir(unpacked)
+	if err != nil || len(entries) != 1 || entries[0].Name() != id || !entries[0].IsDir() {
+		return unpacked, "", fmt.Errorf("its archive holds more than its %s folder", id)
+	}
+	return unpacked, filepath.Join(unpacked, id), nil
+}
+
+// hashFolder is every regular file in root, hashed as installedPlugin
+// hashes them.
+func hashFolder(root *os.Root) ([]sourceFile, error) {
 	var files []sourceFile
-	err = fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil || !d.Type().IsRegular() {
 			return err
 		}
@@ -173,11 +201,5 @@ func (a *Agent) unpackArchive(ctx context.Context, registry *url.URL, p MarketPl
 		files = append(files, sourceFile{Path: name, SHA256: sum, Size: info.Size()})
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	if _, err := root.Stat(hooks.PluginManifest); err != nil {
-		return nil, marketErr(http.StatusBadGateway, "plugin_invalid", "%s can't be installed: its archive has no %s", p.ID, hooks.PluginManifest)
-	}
-	return files, nil
+	return files, err
 }
