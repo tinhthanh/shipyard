@@ -109,6 +109,9 @@ type pluginTools struct {
 	// Settings are switches for its tools (GET and PUT
 	// /v1/plugins/{id}/settings), if it has any.
 	Settings *PluginSetupInfo `json:"settings,omitempty"`
+	// IconURL is the plugin's icon as a data: URL, from its manifest's
+	// "icon" (pluginicon.go).
+	IconURL string `json:"icon_url,omitempty"`
 }
 
 // pluginToolsManifest is how a plugin's manifest lists them.
@@ -117,6 +120,7 @@ type pluginToolsManifest struct {
 	Skills   map[string]json.RawMessage `json:"skills"`
 	Setup    *PluginSetupInfo           `json:"setup"`
 	Settings *PluginSetupInfo           `json:"settings"`
+	Icon     string                     `json:"icon"`
 }
 
 func (m pluginToolsManifest) tools() pluginTools {

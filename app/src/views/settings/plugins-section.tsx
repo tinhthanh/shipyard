@@ -245,7 +245,7 @@ function MarketRow({ plugin: p, was, onChanged, onStale }: { plugin: MarketPlugi
   );
 }
 
-function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; status?: { state: string; error?: string }; onChanged(): void }) {
+export function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; status?: { state: string; error?: string }; onChanged(): void }) {
   const [removing, setRemoving] = useState(false);
   // Never on until you allow it, and off again when it changes.
   const enabled = p.enabled === true;
@@ -411,7 +411,7 @@ function PluginRow({ plugin: p, status, onChanged }: { plugin: PluginInfo; statu
   );
 }
 
-function BuiltinRow({ plugin: p, status, replaced, onChanged }: { plugin: PluginInfo; status?: { state: string; error?: string }; replaced: boolean; onChanged(): void }) {
+export function BuiltinRow({ plugin: p, status, replaced, onChanged }: { plugin: PluginInfo; status?: { state: string; error?: string }; replaced: boolean; onChanged(): void }) {
   const off = usePrefs((s) => !builtinOn(p, s));
   const state = replaced || off ? "off" : status?.error ? "failed" : (status?.state ?? "loading");
   return (

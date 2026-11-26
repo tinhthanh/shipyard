@@ -23,7 +23,13 @@ its SHA-256 is worked out (and held to the .sha256 when there is one) and
 its manifest read for the name and description, and has to give the
 release's version.
 
---upload puts index.json on the "registry" release (made, not as the
+Every plugin should have an icon: its manifest's "icon" (a .svg, .png or
+.webp in its folder, at most 64 KB). It is taken out of the archive and put
+beside index.json as <id>-<version>-icon.<ext>, listed as "icon": {"url",
+"sha256", "size"}; a plugin without one is listed with a warning, and the
+app draws its first letter.
+
+--upload puts index.json and the icons on the "registry" release (made, not as the
 latest, when there is none), replacing the one there. It needs gh signed in
 with write access to the repository.
 """
@@ -32,6 +38,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -41,6 +48,10 @@ import urllib.request
 
 TAG = re.compile(r"^([a-z0-9][a-z0-9-]{0,47})-v([0-9A-Za-z][0-9A-Za-z.+-]{0,63})$")
 REGISTRY_TAG = "registry"
+ICON_MAX = 64 << 10
+ICON_TYPES = (".svg", ".png", ".webp")
+# The icons to put beside index.json, by asset name.
+icons = {}
 MAX_ARCHIVE = 256 << 20
 
 
@@ -62,6 +73,36 @@ def download(url, limit):
     return data
 
 
+def file_of(data, plugin_id, name):
+    """A file of the plugin's folder in its archive, or None."""
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
+        for member in (f"{plugin_id}/{name}", f"./{plugin_id}/{name}"):
+            try:
+                m = t.getmember(member)
+            except KeyError:
+                continue
+            if m.isfile() and m.size <= ICON_MAX:
+                f = t.extractfile(m)
+                return f.read() if f else None
+    return None
+
+
+def icon_of(data, plugin_id, version, manifest):
+    """The listing's "icon" for a plugin, its bytes kept in icons, or None."""
+    name = str(manifest.get("icon") or "").strip()
+    ext = os.path.splitext(name)[1].lower()
+    if not name or ext not in ICON_TYPES or name.startswith(("/", "..")) or "\\" in name:
+        print(f"plugin-registry: warning: {plugin_id} {version} has no icon (\"icon\" in berth-plugin.json: a .svg, .png or .webp, at most 64 KB)", file=sys.stderr)
+        return None
+    body = file_of(data, plugin_id, os.path.normpath(name))
+    if not body:
+        print(f"plugin-registry: warning: {plugin_id} {version}: its icon {name} isn't in the archive or is over 64 KB", file=sys.stderr)
+        return None
+    asset = f"{plugin_id}-{version}-icon{ext}"
+    icons[asset] = body
+    return {"url": asset, "sha256": hashlib.sha256(body).hexdigest(), "size": len(body)}
+
+
 def manifest_of(data, plugin_id):
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as t:
         tops = {m.name.lstrip("./").split("/", 1)[0] for m in t.getmembers() if m.name.strip("./")}
@@ -78,7 +119,7 @@ def manifest_of(data, plugin_id):
 
 
 def archive(release, asset, plugin_id, version):
-    """An archive as the listing gives it, checked, and its manifest."""
+    """An archive as the listing gives it, checked, its manifest and bytes."""
     assets = {a["name"]: a for a in release["assets"]}
     name = asset["name"]
     data = download(asset["browser_download_url"], MAX_ARCHIVE)
@@ -91,7 +132,7 @@ def archive(release, asset, plugin_id, version):
     m = manifest_of(data, plugin_id)
     if m.get("id", plugin_id) != plugin_id or m.get("version") != version:
         raise ValueError(f"{name}'s manifest is {m.get('id', plugin_id)} {m.get('version')}, not {plugin_id} {version}")
-    return {"url": f"../{release['tag_name']}/{name}", "sha256": digest, "size": len(data)}, m
+    return {"url": f"../{release['tag_name']}/{name}", "sha256": digest, "size": len(data)}, m, data
 
 
 def entry(release, plugin_id, version):
@@ -108,20 +149,24 @@ def entry(release, plugin_id, version):
             plain = a
     if not plain and not per_platform:
         raise ValueError(f"no {plugin_id}-{version}.tar.gz or {plugin_id}-{version}-<os>-<arch>.tar.gz")
-    manifest = None
+    manifest, first = None, None
     out = {"id": plugin_id, "version": version}
     if per_platform:
         out["archives"] = {}
         # A Mac's build first: its manifest describes the plugin.
         for platform in sorted(per_platform, key=lambda p: (not p.startswith("darwin"), p)):
-            out["archives"][platform], m = archive(release, per_platform[platform], plugin_id, version)
-            manifest = manifest or m
+            out["archives"][platform], m, data = archive(release, per_platform[platform], plugin_id, version)
+            if manifest is None:
+                manifest, first = m, data
     else:
-        out["archive"], manifest = archive(release, plain, plugin_id, version)
+        out["archive"], manifest, first = archive(release, plain, plugin_id, version)
     meta = {"id": plugin_id, "name": manifest.get("name") or plugin_id, "version": version}
     for key in ("description", "author", "homepage"):
         if manifest.get(key):
             meta[key] = manifest[key]
+    icon = icon_of(first, plugin_id, version, manifest)
+    if icon:
+        meta["icon"] = icon
     return {**meta, **out}
 
 
@@ -156,7 +201,7 @@ def upload(repo, path):
         gh("release", "create", REGISTRY_TAG, "-R", repo, "--title", "Plugin listing",
            "--notes", "The plugin listing the Vetgo app browses (Settings → Plugins). Written by tinhthanh/shipyard's scripts/plugin-registry.py; not a release to download.",
            "--latest=false")
-    gh("release", "upload", REGISTRY_TAG, path, "-R", repo, "--clobber")
+    gh("release", "upload", REGISTRY_TAG, path, *[os.path.join(os.path.dirname(path), n) for n in icons], "-R", repo, "--clobber")
 
 
 def main():
@@ -175,6 +220,9 @@ def main():
         # gh names the asset after the file: it has to be index.json.
         with tempfile.TemporaryDirectory() as d:
             path = f"{d}/index.json"
+            for n, body in icons.items():
+                with open(os.path.join(d, n), "wb") as f:
+                    f.write(body)
             with open(path, "w") as f:
                 json.dump(doc, f, indent=2, ensure_ascii=False)
                 f.write("\n")

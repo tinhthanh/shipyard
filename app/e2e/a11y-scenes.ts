@@ -1,5 +1,6 @@
 
 import { type App, expect } from "./fixtures";
+import { openPlugin } from "./plugin-store";
 
 // The app's screens and states, as the accessibility checks (a11y.spec.ts)
 // visit them: each scene opens the app on the mock fixtures and gets one
@@ -730,7 +731,7 @@ export const scenes: Scene[] = [
       await app.open({ theme, params: { helper: "held" } });
       await app.page.getByRole("dialog", { name: "Leadline has changed" }).getByRole("button", { name: "Not now" }).click();
       const body = await app.openSettings("plugins");
-      await expect(body.getByTestId("plugin-helper-held")).toBeVisible();
+      await expect((await openPlugin(app.page, body, "leadline")).getByTestId("plugin-helper-held")).toBeVisible();
     },
   },
   {

@@ -568,6 +568,7 @@ func (a *Agent) plugins() []PluginInfo {
 			p.Name, p.Version, p.Description, p.Main, p.Themes = raw.Name, raw.Version, raw.Description, raw.Main, raw.Themes
 			p.Hooks = len(raw.Hooks)
 			p.pluginTools = raw.tools()
+			p.IconURL = pluginIconURL(dir, raw.pluginToolsManifest.Icon) // pluginicon.go
 		}
 		// The folder name is the ID, so it is always a safe path segment.
 		if p.Name == "" {

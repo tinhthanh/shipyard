@@ -77,6 +77,13 @@ the fork adds files of its own, and upstream's files only call into them.
   offered. vetgo-releases runs a copy of the script hourly
   and on each release, after mirroring chrome and computer from their own
   repositories (its `mirrors.json`, `scripts/mirror-plugins.py`).
+- **Plugins page and icons:** `app/src/views/settings/plugin-store/`
+  (Settings → Plugins as a search, a filter, your plugins, a Discover grid
+  and a sheet per plugin holding upstream's rows; `plugin-icons.tsx`) with
+  `app/e2e/plugin-store.ts`, and `internal/agent/pluginicon.go` (a
+  manifest's or listing's `icon`, handed to the app as a data: URL); seams
+  in `settings-view.tsx`, `plugins-section.tsx` (PluginRow and BuiltinRow
+  exported), `ui.go`, `plugintools.go` and `marketplace.go`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).
