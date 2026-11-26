@@ -41,7 +41,7 @@ import (
 // is why consent stays with the person.
 
 // DefaultPluginRegistry is the listing the app browses.
-const DefaultPluginRegistry = "https://berthd.app/plugins/index.json"
+const DefaultPluginRegistry = forkPluginRegistry // the fork's own (marketarchive.go)
 
 const (
 	// marketFresh is how long a fetched listing stands.
@@ -83,6 +83,8 @@ type listedPlugin struct {
 	Author      string       `json:"author,omitempty"`
 	Homepage    string       `json:"homepage,omitempty"`
 	Files       []MarketFile `json:"files"`
+
+	Archive *MarketArchive `json:"archive,omitempty"` // marketarchive.go
 }
 
 // MarketPlugin is a listed plugin with what this computer has of it.
@@ -121,6 +123,7 @@ type pluginSource struct {
 	Version  string       `json:"version"`
 	At       time.Time    `json:"at"`
 	Files    []sourceFile `json:"files"`
+	Archive  string       `json:"archive,omitempty"` // its archive's SHA-256 (marketarchive.go)
 }
 
 type sourceFile struct {
@@ -291,6 +294,9 @@ func checkListed(registry *url.URL, p listedPlugin) (size int64, problem string)
 	if !pluginVersionPattern.MatchString(p.Version) {
 		return 0, "the listing gives it no usable version"
 	}
+	if p.Archive != nil {
+		return checkArchive(registry, p)
+	}
 	if len(p.Files) == 0 {
 		return 0, "the listing gives it no files"
 	}
@@ -457,7 +463,7 @@ func sameFiles(installed []sourceFile, listed []MarketFile) bool {
 func merge(p MarketPlugin, st installedPlugin) MarketPlugin {
 	p.Installed, p.InstalledVersion = st.present, st.version
 	p.ByHand = st.present && !st.managed
-	p.Update = st.managed && (st.source.Version != p.Version || !sameFiles(st.source.Files, p.Files))
+	p.Update = st.managed && (st.source.Version != p.Version || !listedSame(st.source, p))
 	return p
 }
 
@@ -539,6 +545,9 @@ func (a *Agent) installPlugin(ctx context.Context, id, version string, replace b
 	}
 	defer root.Close()
 	files := make([]sourceFile, 0, len(p.Files))
+	if files, err = a.archiveFiles(ctx, registry, p, root, files); err != nil { // marketarchive.go
+		return p, err
+	}
 	for _, f := range p.Files {
 		u, err := fileURL(registry, f.URL)
 		if err != nil {
@@ -603,7 +612,7 @@ func (a *Agent) installPlugin(ctx context.Context, id, version string, replace b
 	// still fits when the manifest and main module are the same bytes, but
 	// other files may have changed: unless this put back exactly what was
 	// there, it is forgotten, and the person is asked again.
-	unchanged := before.managed && sameFiles(before.source.Files, p.Files)
+	unchanged := before.managed && listedSame(before.source, p)
 	forgot := false
 	if !unchanged && hooks.PluginEnabled(dest) {
 		if err := hooks.ForbidPlugin(dest); err != nil {
@@ -617,7 +626,7 @@ func (a *Agent) installPlugin(ctx context.Context, id, version string, replace b
 	if !unchanged {
 		a.helperPluginReplaced(id, forgot)
 	}
-	sources[id] = pluginSource{Registry: safeURL(registry), Version: p.Version, At: a.cfg.Now().UTC(), Files: files}
+	sources[id] = pluginSource{Registry: safeURL(registry), Version: p.Version, At: a.cfg.Now().UTC(), Files: files, Archive: p.archiveSum()}
 	if err := a.writePluginSources(sources); err != nil {
 		return p, err
 	}

@@ -14,6 +14,14 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **Settings → Plugins lists Vetgo's own plugins.** The listing is now read
+  from [vetgo-releases](https://github.com/tinhthanh/vetgo-releases/releases)
+  (vglink, mobile, …), not upstream's, so these install and update with one
+  click instead of pasting a release link into **Install from URL**. A
+  plugin there can be listed by its release `.tar.gz`; its SHA-256 and size
+  are checked before anything is installed, and its programs stay runnable.
+  `BERTH_PLUGIN_REGISTRY` still points the app at another listing.
+
 - **See which account each Claude chat signs in with, and move it to
   another.** Under the reply box, a chip names the account the session
   uses; it is on the agent's card on the rail and its row on the floating

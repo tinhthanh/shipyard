@@ -64,6 +64,13 @@ the fork adds files of its own, and upstream's files only call into them.
   `types.ts`, `chat-controls.tsx`, `conversation-pane.tsx`,
   `notice-card.tsx`, `rail.tsx`, `App.tsx`, `mock.ts` and the floating
   bar's `bar-state.ts`.
+- **Plugin listing:** `internal/agent/marketarchive.go` (the default
+  listing is `index.json` on the `registry` release of
+  github.com/tinhthanh/vetgo-releases, not upstream's berthd.app; a listed
+  plugin may give its release `.tar.gz` as `archive`) and
+  `scripts/plugin-registry.py` (writes that `index.json` from the
+  `<id>-v<version>` releases there; `--upload` puts it on the release), with
+  seams in `marketplace.go`.
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).
