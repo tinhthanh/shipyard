@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -112,6 +114,51 @@ func TestAPluginListedByItsArchiveInstallsAndUpdates(t *testing.T) {
 	write(t, filepath.Join(dir, "dist", "index.js"), "mine")
 	if e := m.entry(t, "phone"); !e.ByHand {
 		t.Fatalf("after a change by hand = %+v", e)
+	}
+}
+
+func TestAPluginBuiltPerPlatformInstallsThisComputersBuild(t *testing.T) {
+	r := newRegistry(t)
+	here := platformKeys(runtime.GOOS, runtime.GOARCH)[0]
+	// This computer's build, and another's whose files say "elsewhere".
+	mine := r.archived(t, "phone", "0.1.0", phone("0.1.0"))
+	elsewhere := phone("0.1.0")
+	elsewhere["phone/dist/index.js"] = "elsewhere"
+	other := r.archived(t, "phone-other", "0.1.0", elsewhere)
+	perPlatform := map[string]any{"id": "phone", "name": "Acme phone", "version": "0.1.0", "archives": map[string]any{
+		here: mine["archive"], "plan9-mips": other["archive"],
+	}}
+	// A plugin built only for another computer isn't listed here.
+	onlyElsewhere := map[string]any{"id": "camera", "version": "0.1.0", "archives": map[string]any{"plan9-mips": other["archive"]}}
+	r.publishRegistry(perPlatform, onlyElsewhere)
+	m := newMarketAgent(t, r.registryURL())
+
+	for _, p := range m.listed(t, "?fresh=1").Plugins {
+		if p.ID == "camera" {
+			t.Fatalf("camera is listed: %+v", p)
+		}
+	}
+	if status, body := m.call(t, "POST", "/v1/marketplace/phone/install", ""); status != 200 {
+		t.Fatalf("install = %d %s", status, body)
+	}
+	if b, _ := os.ReadFile(filepath.Join(m.pluginDir("phone"), "dist", "index.js")); string(b) == "elsewhere" {
+		t.Fatal("another computer's build was installed")
+	}
+	if e := m.entry(t, "phone"); !e.Installed || e.Update {
+		t.Fatalf("after install = %+v", e)
+	}
+}
+
+func TestAMacTakesAUniversalBuild(t *testing.T) {
+	p := listedPlugin{Archives: map[string]MarketArchive{"darwin-universal": {URL: "u"}, "linux-arm64": {URL: "l"}}}
+	if keys := platformKeys("darwin", "arm64"); !slices.Contains(keys, "darwin-universal") || keys[0] != "darwin-arm64" {
+		t.Fatalf("keys = %v", keys)
+	}
+	if keys := platformKeys("linux", "arm64"); slices.Contains(keys, "darwin-universal") {
+		t.Fatalf("keys = %v", keys)
+	}
+	if runtime.GOOS == "darwin" && (!platformArchive(&p) || p.Archive.URL != "u") {
+		t.Fatalf("archive = %+v", p.Archive)
 	}
 }
 

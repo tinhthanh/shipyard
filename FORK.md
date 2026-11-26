@@ -67,10 +67,13 @@ the fork adds files of its own, and upstream's files only call into them.
 - **Plugin listing:** `internal/agent/marketarchive.go` (the default
   listing is `index.json` on the `registry` release of
   github.com/tinhthanh/vetgo-releases, not upstream's berthd.app; a listed
-  plugin may give its release `.tar.gz` as `archive`) and
+  plugin may give its release `.tar.gz` as `archive`, or one per platform as
+  `archives`, of which a computer is offered only its own) and
   `scripts/plugin-registry.py` (writes that `index.json` from the
   `<id>-v<version>` releases there; `--upload` puts it on the release), with
-  seams in `marketplace.go`.
+  seams in `marketplace.go`. vetgo-releases runs a copy of the script hourly
+  and on each release, after mirroring chrome and computer from their own
+  repositories (its `mirrors.json`, `scripts/mirror-plugins.py`).
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
   (the fork's front page on GitHub, with how to install; `README.md` stays
   upstream's).

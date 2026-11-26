@@ -84,7 +84,8 @@ type listedPlugin struct {
 	Homepage    string       `json:"homepage,omitempty"`
 	Files       []MarketFile `json:"files"`
 
-	Archive *MarketArchive `json:"archive,omitempty"` // marketarchive.go
+	Archive  *MarketArchive           `json:"archive,omitempty"` // marketarchive.go
+	Archives map[string]MarketArchive `json:"archives,omitempty"`
 }
 
 // MarketPlugin is a listed plugin with what this computer has of it.
@@ -371,6 +372,9 @@ func (a *Agent) listing(ctx context.Context, fresh bool) ([]MarketPlugin, *url.U
 			continue
 		}
 		seen[p.ID] = true
+		if !platformArchive(&p) { // not built for this computer (marketarchive.go)
+			continue
+		}
 		if p.Name == "" {
 			p.Name = p.ID
 		}

@@ -4,13 +4,16 @@
     scripts/plugin-registry.py [--repo OWNER/NAME] [--out index.json] [--upload]
 
 Each plugin there is released as <id>-v<version> with <id>-<version>.tar.gz
-(its folder, <id>/ at the top, with berth-plugin.json) and usually a
-.sha256 beside it. This lists the newest published release of each plugin
-(drafts and pre-releases are skipped) by its archive, the way the laptop
-agent reads a listing (internal/agent/marketarchive.go):
+(its folder, <id>/ at the top, with berth-plugin.json), or one such archive
+per platform named <id>-<version>-<os>-<arch>.tar.gz (a Mac's may be
+darwin-universal), usually with a .sha256 beside each. This lists the newest
+published release of each plugin (drafts and pre-releases are skipped) by
+its archives, the way the laptop agent reads a listing
+(internal/agent/marketarchive.go):
 
-  {"plugins": [{"id", "name", "description", "version", "author",
-                "homepage", "archive": {"url", "sha256", "size"}}]}
+  {"plugins": [{"id", "name", "description", "version", "author", "homepage",
+                "archive": {"url", "sha256", "size"}            # one for all, or
+                "archives": {"<os>-<arch>": {"url", "sha256", "size"}}}]}
 
 The archive's url is relative to the listing, which lives on the release
 tagged "registry" in the same repository
@@ -74,14 +77,11 @@ def manifest_of(data, plugin_id):
     raise ValueError("the archive has no berth-plugin.json")
 
 
-def entry(release, plugin_id, version):
-    tag = release["tag_name"]
+def archive(release, asset, plugin_id, version):
+    """An archive as the listing gives it, checked, and its manifest."""
     assets = {a["name"]: a for a in release["assets"]}
-    name = f"{plugin_id}-{version}.tar.gz"
-    a = assets.get(name)
-    if not a:
-        raise ValueError(f"no {name}")
-    data = download(a["browser_download_url"], MAX_ARCHIVE)
+    name = asset["name"]
+    data = download(asset["browser_download_url"], MAX_ARCHIVE)
     digest = hashlib.sha256(data).hexdigest()
     side = assets.get(name + ".sha256")
     if side:
@@ -90,13 +90,39 @@ def entry(release, plugin_id, version):
             raise ValueError(f"{name} is {digest}, its .sha256 says {want}")
     m = manifest_of(data, plugin_id)
     if m.get("id", plugin_id) != plugin_id or m.get("version") != version:
-        raise ValueError(f"its manifest is {m.get('id', plugin_id)} {m.get('version')}, not {plugin_id} {version}")
-    out = {"id": plugin_id, "name": m.get("name") or plugin_id, "version": version}
+        raise ValueError(f"{name}'s manifest is {m.get('id', plugin_id)} {m.get('version')}, not {plugin_id} {version}")
+    return {"url": f"../{release['tag_name']}/{name}", "sha256": digest, "size": len(data)}, m
+
+
+def entry(release, plugin_id, version):
+    """A plugin's listing: by its one archive (<id>-<version>.tar.gz, for
+    every computer), or by one per platform (<id>-<version>-<os>-<arch>.tar.gz,
+    a Mac's maybe darwin-universal), of which the agent takes its own."""
+    pattern = re.compile(re.escape(f"{plugin_id}-{version}") + r"(?:-([a-z0-9]+-[a-z0-9]+))?\.tar\.gz$")
+    plain, per_platform = None, {}
+    for a in release["assets"]:
+        m = pattern.fullmatch(a["name"])
+        if m and m.group(1):
+            per_platform[m.group(1)] = a
+        elif m:
+            plain = a
+    if not plain and not per_platform:
+        raise ValueError(f"no {plugin_id}-{version}.tar.gz or {plugin_id}-{version}-<os>-<arch>.tar.gz")
+    manifest = None
+    out = {"id": plugin_id, "version": version}
+    if per_platform:
+        out["archives"] = {}
+        # A Mac's build first: its manifest describes the plugin.
+        for platform in sorted(per_platform, key=lambda p: (not p.startswith("darwin"), p)):
+            out["archives"][platform], m = archive(release, per_platform[platform], plugin_id, version)
+            manifest = manifest or m
+    else:
+        out["archive"], manifest = archive(release, plain, plugin_id, version)
+    meta = {"id": plugin_id, "name": manifest.get("name") or plugin_id, "version": version}
     for key in ("description", "author", "homepage"):
-        if m.get(key):
-            out[key] = m[key]
-    out["archive"] = {"url": f"../{tag}/{name}", "sha256": digest, "size": len(data)}
-    return out
+        if manifest.get(key):
+            meta[key] = manifest[key]
+    return {**meta, **out}
 
 
 def listing(repo):

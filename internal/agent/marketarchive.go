@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/cosscom/shipyard/internal/box"
 	"github.com/cosscom/shipyard/internal/hooks"
@@ -24,7 +25,8 @@ import (
 // browsed: the fork ships none of its plugins.
 //
 // A listed plugin may give its release archive ("archive") instead of its
-// files one by one. The archive is held to the same rules as a listed file
+// files one by one, or one archive per platform ("archives"), of which this
+// computer's is taken (platformArchive). The archive is held to the same rules as a listed file
 // (on the registry's own address, exactly the size and SHA-256 the listing
 // gives) and unpacked as Install from URL unpacks one (box.UnpackPlugin:
 // nothing outside the folder, programs stay executable).
@@ -40,6 +42,34 @@ type MarketArchive struct {
 
 // maxMarketArchive is the largest archive taken, as for Install from URL.
 const maxMarketArchive = maxURLPlugin
+
+// platformArchive picks, for a plugin built for each platform ("archives",
+// by "<os>-<arch>", a Mac's also as "darwin-universal"), the archive for
+// this computer and lists it as the plugin's archive. It reports false for
+// a plugin with builds, none of them for this computer: it isn't listed
+// here at all, rather than listed as one that can't be installed.
+func platformArchive(p *listedPlugin) bool {
+	if len(p.Archives) == 0 || p.Archive != nil {
+		return true
+	}
+	for _, key := range platformKeys(runtime.GOOS, runtime.GOARCH) {
+		if a, ok := p.Archives[key]; ok {
+			p.Archive = &a
+			return true
+		}
+	}
+	return false
+}
+
+// platformKeys are the names a build for os/arch may be listed under, best
+// first.
+func platformKeys(goos, goarch string) []string {
+	keys := []string{goos + "-" + goarch}
+	if goos == "darwin" {
+		keys = append(keys, "darwin-universal")
+	}
+	return keys
+}
 
 // checkArchive is checkListed for a plugin listed by its archive.
 func checkArchive(registry *url.URL, p listedPlugin) (int64, string) {
