@@ -478,6 +478,7 @@ func (a *Agent) marketplace(ctx context.Context, fresh bool) (Marketplace, error
 		return Marketplace{}, err
 	}
 	sources := a.readPluginSources()
+	sources = a.adoptInstalled(ctx, registry, entries, sources) // marketadopt.go
 	out := Marketplace{Registry: safeURL(registry), Host: registry.Host, Fetched: at, Plugins: make([]MarketPlugin, 0, len(entries))}
 	for _, p := range entries {
 		out.Plugins = append(out.Plugins, merge(p, a.installedPlugin(p.ID, sources)))

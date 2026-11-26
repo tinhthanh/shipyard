@@ -71,7 +71,10 @@ the fork adds files of its own, and upstream's files only call into them.
   `archives`, of which a computer is offered only its own) and
   `scripts/plugin-registry.py` (writes that `index.json` from the
   `<id>-v<version>` releases there; `--upload` puts it on the release), with
-  seams in `marketplace.go`. vetgo-releases runs a copy of the script hourly
+  seams in `marketplace.go`; `internal/agent/marketadopt.go` takes as the
+  listing's a plugin installed by hand whose files are exactly a release's
+  (the listed one, or `../<id>-v<version>/` beside it), so its updates are
+  offered. vetgo-releases runs a copy of the script hourly
   and on each release, after mirroring chrome and computer from their own
   repositories (its `mirrors.json`, `scripts/mirror-plugins.py`).
 - **Docs:** `docs/windows/`, `docs/changelog-fork.mdx`, and `.github/README.md`
