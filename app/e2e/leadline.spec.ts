@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { type App, expect, mockOnly, test } from "./fixtures";
+import { closeSheet, openPlugin } from "./plugin-store";
 
 // Leadline (plugins/leadline): what a worktree's code did in development,
 // as four panels on the worktree, read from a helper on its box. In mock
@@ -412,7 +413,7 @@ test("allowing a plugin that carries a program says it can install and run it on
   mockOnly("changes what is allowed");
   await app.open();
   const section = await app.openSettings("plugins");
-  const row = section.locator('[data-testid=plugin-row][data-plugin="leadline"]');
+  const row = await openPlugin(app.page, section, "leadline");
   await expect(row.getByTestId("plugin-helper")).toHaveText("It can also install and run a program, berth-leadline, on the boxes you turn it on for.");
   await expect(row).toContainText("Panel: Queries");
   await expect(section.locator('[data-testid=market-plugin][data-plugin="leadline"]')).toContainText("Installed");
@@ -434,13 +435,14 @@ test("allowing a plugin that carries a program says it can install and run it on
 
 // A plugin's program doesn't outlive it. In mock mode berth-leadline runs
 // on devl, is off on gpu, and old-vps is offline (src/lib/mock-helper.ts).
-const leadlineRow = (section: Locator) => section.locator('[data-testid=plugin-row][data-plugin="leadline"]');
+// Its controls are in the sheet its item opens (e2e/plugin-store.ts).
+const leadlineRow = (page: Page, section: Locator) => openPlugin(page, section, "leadline");
 
 test("turning off a plugin that carries a program says which boxes it stops on, and stops it there", async ({ app }) => {
   mockOnly("removes a helper");
   await app.open();
   const section = await app.openSettings("plugins");
-  const row = leadlineRow(section);
+  const row = await leadlineRow(app.page, section);
   await row.getByRole("switch", { name: "Turn off Leadline" }).click();
 
   const confirm = app.page.getByRole("alertdialog", { name: "Turn off Leadline?" });
@@ -465,6 +467,7 @@ test("turning off a plugin that carries a program says which boxes it stops on, 
   await row.getByRole("switch", { name: "Turn on Leadline" }).click();
   await app.page.getByRole("dialog", { name: "Allow Leadline?" }).getByRole("button", { name: "Allow and turn on" }).click();
   await expect(row.getByRole("switch", { name: "Turn off Leadline" })).toBeVisible();
+  await closeSheet(app.page);
   const screen = await openLeadline(app.page);
   await expect(box(screen, "devl")).toHaveAttribute("data-state", "off");
   await expect(box(screen, "devl").getByRole("button", { name: "Turn on…" })).toBeVisible();
@@ -474,7 +477,7 @@ test("removing a plugin that carries a program says its program and what it reco
   mockOnly("removes a helper and its data");
   await app.open();
   const section = await app.openSettings("plugins");
-  const row = leadlineRow(section);
+  const row = await leadlineRow(app.page, section);
   await row.getByRole("button", { name: "Remove…" }).click();
 
   const confirm = app.page.getByRole("alertdialog", { name: "Remove Leadline?" });
@@ -492,7 +495,7 @@ test("a plugin with no program is turned off without asking", async ({ app }) =>
   mockOnly("changes what is allowed");
   await app.open();
   const section = await app.openSettings("plugins");
-  const row = section.locator('[data-testid=plugin-row][data-plugin="acme-deploys"]');
+  const row = await openPlugin(app.page, section, "acme-deploys");
   await row.getByRole("switch", { name: "Turn on Deploy board" }).click();
   await app.page.getByRole("dialog", { name: "Allow Deploy board?" }).getByRole("button", { name: "Allow and turn on" }).click();
   await row.getByRole("switch", { name: "Turn off Deploy board" }).click();
@@ -513,7 +516,7 @@ test("a plugin that changed says its program is still running while it waits for
   await expect(consent).toHaveCount(0);
 
   const section = await app.openSettings("plugins");
-  const row = leadlineRow(section);
+  const row = await leadlineRow(app.page, section);
   await expect(row.getByRole("switch", { name: "Turn on Leadline" })).toHaveAttribute("aria-checked", "false");
   const held = row.getByTestId("plugin-helper-held");
   await expect(held).toContainText("berth-leadline is still running on devl while this waits for your review.");

@@ -17,7 +17,7 @@ import { IntegrationsSection } from "@/views/settings/integrations-section";
 import { LabsSection } from "@/views/settings/labs-section";
 import { NotificationsSection } from "@/views/settings/notifications-section";
 import { PhoneSection } from "@/views/settings/phone-section";
-import { PluginsSection } from "@/views/settings/plugins-section";
+import { PluginStore } from "@/views/settings/plugin-store/plugin-store"; // the fork's Plugins page
 import { ShortcutsSection } from "@/views/settings/shortcuts-section";
 import { TerminalSection } from "@/views/settings/terminal-section";
 
@@ -35,7 +35,7 @@ const SECTIONS: { id: SettingsSectionId; title: string; icon: ComponentType<{ cl
   { id: "phone", title: "Phone", icon: SmartphoneIcon, Component: PhoneSection },
   { id: "agents", title: "Agents", icon: BotIcon, Component: AgentsSection },
   { id: "integrations", title: "Integrations", icon: CableIcon, Component: IntegrationsSection },
-  { id: "plugins", title: "Plugins", icon: PuzzleIcon, Component: PluginsSection },
+  { id: "plugins", title: "Plugins", icon: PuzzleIcon, Component: PluginStore },
   { id: "shortcuts", title: "Shortcuts", icon: KeyboardIcon, Component: ShortcutsSection },
   { id: "labs", title: "Labs", icon: FlaskConicalIcon, Component: LabsSection },
   { id: "about", title: "About", icon: InfoIcon, Component: AboutSection },

@@ -86,6 +86,8 @@ type listedPlugin struct {
 
 	Archive  *MarketArchive           `json:"archive,omitempty"` // marketarchive.go
 	Archives map[string]MarketArchive `json:"archives,omitempty"`
+	Icon     *MarketArchive           `json:"icon,omitempty"`     // pluginicon.go
+	IconURL  string                   `json:"icon_url,omitempty"` // set by the agent, never the listing
 }
 
 // MarketPlugin is a listed plugin with what this computer has of it.
@@ -382,6 +384,7 @@ func (a *Agent) listing(ctx context.Context, fresh bool) ([]MarketPlugin, *url.U
 		if h, err := url.Parse(p.Homepage); err != nil || h.Scheme != "https" || h.Host == "" {
 			p.Homepage = ""
 		}
+		p.IconURL = a.listedIconURL(ctx, registry, p.Icon) // pluginicon.go
 		e := MarketPlugin{listedPlugin: p}
 		e.Size, e.Error = checkListed(registry, p)
 		entries = append(entries, e)

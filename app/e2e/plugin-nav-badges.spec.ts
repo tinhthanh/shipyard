@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, mockOnly, test } from "./fixtures";
+import { closeSheet, openPlugin } from "./plugin-store";
 
 // A plugin sidebar item's useCount (SidebarItem.useCount, components/
 // sidebar/nav.tsx): its count on the item's row, on More's row while the
@@ -112,8 +113,12 @@ test("a count that throws while its plugin turns off leaves the sidebar's other 
   await expect(more.getByTestId("nav-badge")).toHaveText("3");
 
   const plugins = await app.openSettings("plugins");
-  await plugins.getByRole("switch", { name: "Turn off Teardown" }).click();
-  await expect(plugins.getByRole("switch", { name: "Turn on Teardown" })).toBeVisible();
+  // A built-in: under the Built in filter.
+  await plugins.getByRole("button", { name: "Built in", exact: true }).click();
+  const row = await openPlugin(page, plugins, "teardown");
+  await row.getByRole("switch", { name: "Turn off Teardown" }).click();
+  await expect(row.getByRole("switch", { name: "Turn on Teardown" })).toBeVisible();
+  await closeSheet(page);
 
   // The other plugin's count is back once plugins reload, and ⌘K still opens.
   await expect(more.getByTestId("nav-badge")).toHaveText("3");
