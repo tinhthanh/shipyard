@@ -40,7 +40,7 @@ PC becomes a box (WSL, or Windows itself with Labs).
 Homebrew:
 
 ```sh
-brew tap tinhthanh/tap
+brew tap tinhthanh/tap && brew trust tinhthanh/tap
 brew install --cask tinhthanh/tap/vetgo-app
 ```
 

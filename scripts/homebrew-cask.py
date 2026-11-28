@@ -33,14 +33,17 @@ cask "vetgo-app" do
   desc "Run coding agents on your own boxes (a fork of Shipyard)"
   homepage "https://github.com/{repo}"
 
-  depends_on macos: :big_sur
+  depends_on :macos
 
   app "Vetgo.app"
 
   # Signed for development, not notarized: Gatekeeper would refuse the app as
   # downloaded. Taken off once releases are notarized.
-  postflight do
-    system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{{appdir}}/Vetgo.app"]
+  postflight_steps default_base: :appdir do
+    run "/usr/bin/xattr",
+        args:           ["-dr", "com.apple.quarantine", "Vetgo.app"],
+        chdir:          ".",
+        writable_paths: ["Vetgo.app"]
   end
 
   caveats <<~EOS
