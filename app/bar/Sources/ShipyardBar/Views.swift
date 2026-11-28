@@ -180,13 +180,21 @@ struct Rings: View {
             ForEach(Array(logins.enumerated()), id: \.element.id) { i, l in
                 Button { Outbox.open(nil) } label: { Ring(login: l, size: size) }
                     .buttonStyle(.plain)
-                    .help("\(l.name)" + (l.detail.map { " (\($0))" } ?? "") + ": " + l.windows.map { "\($0.name) \(Int(($0.used * 100).rounded()))%" }.joined(separator: ", "))
+                    .help(Rings.tip(l))
                     .scaleEffect(open ? 1 : 0.6)
                     .opacity(open ? 1 : 0)
                     .animation(Motion.stagger(i), value: open)
             }
         }
         if vertical { VStack(spacing: spacing) { stack } } else { HStack(spacing: spacing) { stack } }
+    }
+
+    // A login's tooltip, built apart from the view: inline, its string sum
+    // was more than an older Swift (Xcode 16 in CI) type-checks in time.
+    static func tip(_ l: Login) -> String {
+        let detail: String = l.detail.map { " (\($0))" } ?? ""
+        let windows: [String] = l.windows.map { w in "\(w.name) \(Int((w.used * 100).rounded()))%" }
+        return l.name + detail + ": " + windows.joined(separator: ", ")
     }
 }
 
