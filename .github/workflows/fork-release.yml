@@ -213,6 +213,13 @@ jobs:
           path: bin
       - run: chmod +x bin/tmux-linux-amd64 bin/tmux-linux-arm64
       - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: The newest Xcode
+        # The image's default can be a release behind; the floating bar
+        # (app/bar) builds with what the team's Macs have.
+        run: |
+          x=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$x"
+          xcodebuild -version
       - name: Signing identity
         env:
           P12: ${{ secrets.MAC_SIGNING_P12_BASE64 }}
