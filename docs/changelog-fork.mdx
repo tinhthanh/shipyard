@@ -14,6 +14,12 @@ than in the changelog, which stays as upstream writes it.
 
 ## Unreleased
 
+- **The Mac app installs with Homebrew.** `brew install --cask
+  tinhthanh/tap/vetgo-app` puts Vetgo (Apple silicon and Intel) in
+  Applications, and `brew upgrade --cask vetgo-app` updates it; each release
+  also carries `Vetgo-macos-universal.zip`. It's signed for development and
+  not notarized yet, so the cask takes macOS's quarantine flag off it.
+
 - **Settings → Plugins looks like the plugin pages you know.** A search and
   an **All · Installed · Discover · Built in** filter on top, an **Add**
   menu for Install from URL and reloading, a band when updates are waiting
